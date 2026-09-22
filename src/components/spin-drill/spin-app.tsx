@@ -21,7 +21,7 @@ import {
 } from "@/lib/spin-drill/spots";
 import { loadStore, record, resetSpot, spotStat, type Store } from "@/lib/spin-drill/stats";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "practice" | "strategy" | "hands" | "math" | "stats";
 
@@ -231,6 +231,7 @@ export function SpinApp() {
   const [locked, setLocked] = useState(false);
   const [lastGrade, setLastGrade] = useState<"correct" | "mix" | "wrong" | null>(null);
   const [quiz, setQuiz] = useState<{ checked: boolean; ok: number; guesses: Record<number, string> } | null>(null);
+  const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const st = spotStat(store, spot.id);
@@ -249,11 +250,29 @@ export function SpinApp() {
     setLastGrade(null);
   }
 
+  function clearAdvance() {
+    if (advanceRef.current != null) {
+      window.clearTimeout(advanceRef.current);
+      advanceRef.current = null;
+    }
+  }
+
+  function nextAfter(total: number) {
+    if (total > 0 && total % 8 === 0) {
+      setQuiz({ checked: false, ok: 0, guesses: {} });
+      return;
+    }
+    deal();
+  }
+
+  useEffect(() => () => clearAdvance(), []);
+
   useEffect(() => {
     if (tab === "practice" && !current && !quiz) deal();
   }, [tab]);
 
   function changeSpot(id: string) {
+    clearAdvance();
     const s = findSpot(id);
     setSpotId(id);
     setGroup(s.group);
@@ -278,12 +297,20 @@ export function SpinApp() {
     setLastGrade(g);
     setLocked(true);
     const ok = g !== "wrong";
+    const nextTotal = session.total + 1;
     setStore(record(store, spot.id, current, ok));
     setSession((s) => ({
-      total: s.total + 1,
+      total: nextTotal,
       correct: s.correct + (ok ? 1 : 0),
       streak: ok ? s.streak + 1 : 0,
     }));
+    if (g === "correct") {
+      clearAdvance();
+      advanceRef.current = window.setTimeout(() => {
+        advanceRef.current = null;
+        nextAfter(nextTotal);
+      }, 280);
+    }
   }
 
   useEffect(() => {
@@ -301,12 +328,8 @@ export function SpinApp() {
   });
 
   function afterHand() {
-    if (quiz || !locked) return;
-    if (session.total > 0 && session.total % 8 === 0) {
-      setQuiz({ checked: false, ok: 0, guesses: {} });
-      return;
-    }
-    deal();
+    if (quiz || !locked || advanceRef.current != null) return;
+    nextAfter(session.total);
   }
 
   const sessPct = session.total ? Math.round((session.correct / session.total) * 100) : 0;
@@ -465,7 +488,7 @@ export function SpinApp() {
                       </button>
                     ))}
                   </div>
-                  {locked && current && (
+                  {locked && current && lastGrade !== "correct" && (
                     <div className="mt-4">
                       <MixBars range={spot.range} hand={current} labels={spot.labels} />
                       <button type="button" className="mt-3 h-11 w-full text-sm text-muted" onClick={afterHand}>
