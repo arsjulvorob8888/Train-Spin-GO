@@ -1,0 +1,21 @@
+# Spin Drill on Render — must be a Web Service, not a Static Site.
+# A Static Site looks for index.html and answers plain "Not Found".
+# This app is TanStack Start + Nitro: a Node server on $PORT.
+#
+# Auto-deploy: every push to `main` rebuilds this service.
+services:
+  - type: web
+    name: train-spin-go
+    runtime: node
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: npm install && npm run build:render
+    startCommand: node .output/server/index.mjs
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NITRO_PRESET
+        value: node-server
+      - key: HOST
+        value: "0.0.0.0"
