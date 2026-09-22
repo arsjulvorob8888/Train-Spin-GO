@@ -3,12 +3,14 @@
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
+import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
 import { continueHands, grade, isMix, mixOf, primary, segs, type MixAction } from "@/lib/spin-drill/mix";
 import {
   GROUPS,
   ICM,
+  SEAT_NAME,
   SPOTS,
   STACK,
   findSpot,
@@ -127,7 +129,7 @@ function SpotPills({
 }) {
   const list = spotsIn(group);
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex flex-wrap gap-1.5">
         {GROUPS.map((g) => (
           <button
@@ -144,6 +146,7 @@ function SpotPills({
           </button>
         ))}
       </div>
+      <GroupHint group={group} />
       <div className="flex flex-wrap gap-1.5">
         {list.map((s) => (
           <button
@@ -159,6 +162,7 @@ function SpotPills({
           </button>
         ))}
       </div>
+      <SpotExplain spot={spot} />
     </div>
   );
 }
@@ -182,10 +186,9 @@ function Meta({ spot }: { spot: SpotDef }) {
     <div className="space-y-3 text-sm">
       <div className="rounded-lg border-2 border-ok bg-surface-2 p-3">
         <div className="flex justify-between">
-          <strong>{spot.hero}</strong>
+          <strong>Вы: {SEAT_NAME[spot.hero]}</strong>
           <span className="font-mono">{STACK}</span>
         </div>
-        <p className="mt-2 text-sm text-muted">{spot.detail}</p>
         <p className="mt-1 font-mono text-xs text-subtle">{spot.line}</p>
         <ul className="mt-2 space-y-1 text-sm">
           {spot.actions.map((a) => (
@@ -353,12 +356,9 @@ export function SpinApp() {
             <section className="rounded-2xl border border-border bg-surface p-4">
               <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
               <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <strong>
-                    {spot.hero} vs {spot.vs}
-                  </strong>
-                  <p className="font-mono text-xs text-subtle">{spot.line}</p>
-                </div>
+                <strong>
+                  {spot.hero} vs {spot.vs}
+                </strong>
                 <Legend spot={spot} />
               </div>
               <MixGrid range={spot.range} selected={selected} onPick={setSelected} />
@@ -428,7 +428,7 @@ export function SpinApp() {
                       Скрыть рендж
                     </label>
                   )}
-                  <p className="text-center font-mono text-xs text-subtle">{spot.line}</p>
+                  <p className="text-center text-sm text-muted">{spot.detail}</p>
                   <div className="my-4 flex justify-center gap-3">
                     <PipCard card={cards?.[0]} tilt={-6} />
                     <PipCard card={cards?.[1]} tilt={7} />
