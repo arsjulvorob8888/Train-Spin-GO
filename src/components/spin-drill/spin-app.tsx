@@ -19,7 +19,17 @@ import {
   type SpotDef,
   type SpotGroup,
 } from "@/lib/spin-drill/spots";
-import { loadStore, record, resetSpot, spotStat, type Store } from "@/lib/spin-drill/stats";
+import {
+  chooseHand,
+  dueInPool,
+  isDue,
+  leakHands,
+  loadStore,
+  record,
+  resetSpot,
+  spotStat,
+  type Store,
+} from "@/lib/spin-drill/stats";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -80,21 +90,18 @@ function dealCombo(hand: string): [Face, Face] {
   ];
 }
 
-function pickHand(spot: SpotDef, store: Store, includeFolds: boolean): string {
+function pickHand(spot: SpotDef, store: Store, includeFolds: boolean, avoid?: string) {
   const playable = continueHands(spot.range, ALL);
-  const pool = !includeFolds || Math.random() < 0.62 ? (playable.length ? playable : ALL) : ALL;
+  const base = playable.length ? playable : ALL;
   const st = spotStat(store, spot.id);
-  const weights = pool.map((h) => {
-    const rec = st.hands[h];
-    if (!rec || !rec.total) return 1.4;
-    return 1 + (1 - rec.correct / rec.total) * 3;
-  });
-  let t = Math.random() * weights.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < pool.length; i++) {
-    t -= weights[i]!;
-    if (t <= 0) return pool[i]!;
+  const reps = store.reps ?? 0;
+  let pool = !includeFolds || Math.random() < 0.62 ? [...base] : [...ALL];
+  if (includeFolds) {
+    for (const h of ALL) {
+      if (!pool.includes(h) && isDue(st, h, reps)) pool.push(h);
+    }
   }
-  return pool[pool.length - 1]!;
+  return chooseHand(pool, st, reps, avoid);
 }
 
 function MixBars({ range, hand, labels }: { range: SpotDef["range"]; hand: string; labels: SpotDef["labels"] }) {
@@ -221,7 +228,7 @@ export function SpinApp() {
   const [tab, setTab] = useState<Tab>("strategy");
   const [spotId, setSpotId] = useState("btn");
   const [group, setGroup] = useState<SpotGroup>("BTN");
-  const [store, setStore] = useState<Store>({ spots: {} });
+  const [store, setStore] = useState<Store>({ spots: {}, reps: 0 });
   const [selected, setSelected] = useState("AA");
   const [includeFolds, setIncludeFolds] = useState(true);
   const [hideRange, setHideRange] = useState(false);
@@ -231,21 +238,29 @@ export function SpinApp() {
   const [locked, setLocked] = useState(false);
   const [lastGrade, setLastGrade] = useState<"correct" | "mix" | "wrong" | null>(null);
   const [quiz, setQuiz] = useState<{ checked: boolean; ok: number; guesses: Record<number, string> } | null>(null);
+  const [review, setReview] = useState(false);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const st = spotStat(store, spot.id);
+  const waiting = useMemo(() => {
+    const playable = continueHands(spot.range, ALL);
+    const pool = includeFolds ? ALL : playable.length ? playable : ALL;
+    return dueInPool(st, pool, store.reps ?? 0);
+  }, [spot, st, includeFolds, store.reps]);
+  const leaks = useMemo(() => leakHands(st), [st]);
 
   useEffect(() => {
     setStore(loadStore());
     setHideRange(localStorage.getItem("spin-hide-range") === "1");
   }, []);
 
-  function deal(nextSpot = spot) {
-    const h = pickHand(nextSpot, store, includeFolds);
+  function deal(nextSpot = spot, nextStore = store, avoid?: string) {
+    const picked = pickHand(nextSpot, nextStore, includeFolds, avoid);
     setQuiz(null);
-    setCurrent(h);
-    setCards(dealCombo(h));
+    setReview(picked.review);
+    setCurrent(picked.hand);
+    setCards(dealCombo(picked.hand));
     setLocked(false);
     setLastGrade(null);
   }
@@ -257,12 +272,12 @@ export function SpinApp() {
     }
   }
 
-  function nextAfter(total: number) {
+  function nextAfter(total: number, nextStore: Store = store, avoid?: string) {
     if (total > 0 && total % 8 === 0) {
       setQuiz({ checked: false, ok: 0, guesses: {} });
       return;
     }
-    deal();
+    deal(spot, nextStore, avoid);
   }
 
   useEffect(() => () => clearAdvance(), []);
@@ -280,9 +295,10 @@ export function SpinApp() {
     setLocked(false);
     setLastGrade(null);
     setQuiz(null);
-    const h = pickHand(s, store, includeFolds);
-    setCurrent(h);
-    setCards(dealCombo(h));
+    const picked = pickHand(s, store, includeFolds);
+    setReview(picked.review);
+    setCurrent(picked.hand);
+    setCards(dealCombo(picked.hand));
   }
 
   function changeGroup(g: SpotGroup) {
@@ -298,7 +314,8 @@ export function SpinApp() {
     setLocked(true);
     const ok = g !== "wrong";
     const nextTotal = session.total + 1;
-    setStore(record(store, spot.id, current, ok));
+    const nextStore = record(store, spot.id, current, g);
+    setStore(nextStore);
     setSession((s) => ({
       total: nextTotal,
       correct: s.correct + (ok ? 1 : 0),
@@ -306,9 +323,10 @@ export function SpinApp() {
     }));
     if (g === "correct") {
       clearAdvance();
+      const hand = current;
       advanceRef.current = window.setTimeout(() => {
         advanceRef.current = null;
-        nextAfter(nextTotal);
+        nextAfter(nextTotal, nextStore, hand);
       }, 280);
     }
   }
@@ -329,7 +347,7 @@ export function SpinApp() {
 
   function afterHand() {
     if (quiz || !locked || advanceRef.current != null) return;
-    nextAfter(session.total);
+    nextAfter(session.total, store, current ?? undefined);
   }
 
   const sessPct = session.total ? Math.round((session.correct / session.total) * 100) : 0;
@@ -432,6 +450,7 @@ export function SpinApp() {
                     <span className="font-mono text-sm text-muted">
                       Сессия {session.correct}/{session.total} <b className="text-fg">{sessPct}%</b>
                       {session.streak > 1 ? ` · ${session.streak} подряд` : ""}
+                      {waiting > 0 ? ` · к повтору ${waiting}` : ""}
                     </span>
                     <label className="flex h-11 items-center gap-2 text-sm text-muted">
                       <input type="checkbox" checked={includeFolds} onChange={(e) => setIncludeFolds(e.target.checked)} />
@@ -452,6 +471,9 @@ export function SpinApp() {
                     </label>
                   )}
                   <p className="text-center text-sm text-muted">{spot.detail}</p>
+                  {review ? (
+                    <p className="mt-1 text-center text-sm text-bad">Повтор · в этой руке уже была ошибка</p>
+                  ) : null}
                   <div className="my-4 flex justify-center gap-3">
                     <PipCard card={cards?.[0]} tilt={-6} />
                     <PipCard card={cards?.[1]} tilt={7} />
@@ -555,7 +577,17 @@ export function SpinApp() {
                   <p className="text-sm text-muted">
                     Всего {st.overall.total} · верно {st.overall.correct} ·{" "}
                     {st.overall.total ? ((st.overall.correct / st.overall.total) * 100).toFixed(1) : "—"}%
+                    {waiting > 0 ? ` · к повтору ${waiting}` : ""}
                   </p>
+                  {leaks.length > 0 ? (
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                      {leaks.map((leak) => (
+                        <li key={leak.hand} className="rounded-full bg-surface-2 px-2.5 py-1 font-mono text-xs text-muted">
+                          {leak.hand} {leak.correct}/{leak.total}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 <button
                   type="button"
