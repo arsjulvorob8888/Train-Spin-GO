@@ -2,6 +2,7 @@
 
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
+import { MathDrill } from "@/components/spin-drill/math-drill";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
 import { continueHands, grade, isMix, mixOf, primary, segs, type MixAction } from "@/lib/spin-drill/mix";
@@ -227,9 +228,6 @@ export function SpinApp() {
   const [locked, setLocked] = useState(false);
   const [lastGrade, setLastGrade] = useState<"correct" | "mix" | "wrong" | null>(null);
   const [quiz, setQuiz] = useState<{ checked: boolean; ok: number; guesses: Record<number, string> } | null>(null);
-  const [pot, setPot] = useState(18.5);
-  const [callAmt, setCallAmt] = useState(13);
-  const [eq, setEq] = useState(42);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const st = spotStat(store, spot.id);
@@ -308,9 +306,6 @@ export function SpinApp() {
     deal();
   }
 
-  const need = (callAmt / (pot + callAmt)) * 100;
-  const ev = (eq / 100) * (pot + callAmt) - callAmt;
-  const callOk = eq + 0.05 >= need;
   const sessPct = session.total ? Math.round((session.correct / session.total) * 100) : 0;
 
   const tabs: { id: Tab; label: string }[] = [
@@ -560,19 +555,7 @@ export function SpinApp() {
         )}
 
         {tab === "hands" && <HandsPanel />}
-        {tab === "math" && (
-          <MathPanel
-            pot={pot}
-            callAmt={callAmt}
-            eq={eq}
-            setPot={setPot}
-            setCallAmt={setCallAmt}
-            setEq={setEq}
-            need={need}
-            ev={ev}
-            callOk={callOk}
-          />
-        )}
+        {tab === "math" && <MathDrill />}
       </main>
     </div>
   );
@@ -673,110 +656,6 @@ function HandsPanel() {
             </p>
           </article>
         ))}
-      </div>
-    </section>
-  );
-}
-
-function MathPanel({
-  pot,
-  callAmt,
-  eq,
-  setPot,
-  setCallAmt,
-  setEq,
-  need,
-  ev,
-  callOk,
-}: {
-  pot: number;
-  callAmt: number;
-  eq: number;
-  setPot: (n: number) => void;
-  setCallAmt: (n: number) => void;
-  setEq: (n: number) => void;
-  need: number;
-  ev: number;
-  callOk: boolean;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">Spin & Go · 3-max · 15bb</p>
-      <h2 className="mt-1 font-display text-2xl font-medium">Математика, которая поднимает лимит</h2>
-      <p className="mt-2 max-w-2xl text-muted">
-        На 15bb решения короткие: пуш, колл пуша, фолд. Считайте банк и эквити против диапазона.
-      </p>
-      <div className="mt-6 space-y-6 border-t border-border pt-4">
-        <article>
-          <p className="font-mono text-xl text-raise">01</p>
-          <h3 className="text-lg font-medium">EV</h3>
-          <p className="text-muted">EV = (шанс выиграть × выигрыш) − (шанс проиграть × проигрыш). Одна рука врёт, сотня — нет.</p>
-        </article>
-        <article>
-          <p className="font-mono text-xl text-raise">02</p>
-          <h3 className="text-lg font-medium">Банковые шансы</h3>
-          <p className="my-2 rounded-lg border border-border border-l-raise bg-bg px-3 py-2 font-mono text-sm">
-            Нужное эквити = колл ÷ (банк + колл)
-          </p>
-          <p className="text-muted">Пуш 15bb в ваш рейз 2: доставить ~13, банк после ~31.5 → нужно ≈ 41%.</p>
-        </article>
-        <article>
-          <p className="font-mono text-xl text-raise">03</p>
-          <h3 className="text-lg font-medium">Эквити vs диапазон</h3>
-          <p className="text-muted">AA vs random ~85%. AKo vs 22–99 ~42–48% — на границе колла 40%. J9s vs AQ+ ~35% — фолд.</p>
-        </article>
-        <article>
-          <p className="font-mono text-xl text-raise">04</p>
-          <h3 className="text-lg font-medium">Фолд-эквити пуша</h3>
-          <p className="text-muted">Пушить шире, чем коллировать тот же пуш. Если оппонент уже all-in — фолд-эквити нет, только эквити.</p>
-        </article>
-        <article>
-          <p className="font-mono text-xl text-raise">05</p>
-          <h3 className="text-lg font-medium">ICM в спинах</h3>
-          <p className="text-muted">2x–3x WTA: играйте ближе к чип-EV, коллы шире. Платят 2 места — режьте маргинальные коллы. Базовый чарт: ICM 50/30/20.</p>
-        </article>
-        <article>
-          <h3 className="text-lg font-medium">Калькулятор колла</h3>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <label className="grid gap-1 text-xs text-muted">
-              Банк до колла, bb
-              <input
-                type="number"
-                step={0.5}
-                value={pot}
-                onChange={(e) => setPot(Number(e.target.value))}
-                className="h-11 rounded-lg border border-border bg-bg px-3 font-mono text-fg"
-              />
-            </label>
-            <label className="grid gap-1 text-xs text-muted">
-              Доставить, bb
-              <input
-                type="number"
-                step={0.5}
-                value={callAmt}
-                onChange={(e) => setCallAmt(Number(e.target.value))}
-                className="h-11 rounded-lg border border-border bg-bg px-3 font-mono text-fg"
-              />
-            </label>
-            <label className="grid gap-1 text-xs text-muted">
-              Эквити, %
-              <input
-                type="number"
-                step={0.5}
-                value={eq}
-                onChange={(e) => setEq(Number(e.target.value))}
-                className="h-11 rounded-lg border border-border bg-bg px-3 font-mono text-fg"
-              />
-            </label>
-          </div>
-          <div className={cn("mt-3 rounded-xl p-4", callOk ? "border border-ok" : "border border-bad")}>
-            <p className="font-mono text-4xl font-semibold">{need.toFixed(1)}%</p>
-            <p className="mt-1 text-sm text-muted">
-              EV при {eq}%: {ev >= 0 ? "+" : ""}
-              {ev.toFixed(2)} bb. {callOk ? "Колл плюсовый" : "Фолд. Эквити не хватает."}
-            </p>
-          </div>
-        </article>
       </div>
     </section>
   );
