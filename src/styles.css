@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0c0c0e;
+  --color-bg-elevated: #101014;
+  --color-surface: #141416;
+  --color-surface-2: #1c1c20;
+  --color-fg: #f3f3f4;
+  --color-muted: #9a9aa3;
+  --color-subtle: #6e6e76;
+  --color-border: #2a2a30;
+  --color-accent: #f3f3f4;
+  --color-accent-fg: #0c0c0e;
+  --color-felt: #163528;
+  --color-felt-deep: #0f241c;
+  --color-rail: #3a2a1c;
+  --color-rail-edge: #5a4430;
+  --color-card-face: #f7f4ee;
+  --color-card-ink: #161616;
+  --color-suit-red: #c43b3b;
+  --color-call: #2f9e73;
+  --color-fold: #3d7cb8;
+  --color-raise: #f03c3c;
+  --color-allin: #7d1f1f;
+  --color-ok: #3dba7c;
+  --color-bad: #e25555;
+  --color-check: #2f9e73;
+
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-border-hover: 0 0 0 1px rgba(255, 255, 255, 0.13);
+
+  --grid-template-columns-13: repeat(13, minmax(0, 1fr));
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  body {
+    min-height: 100dvh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.felt-table {
+  background:
+    radial-gradient(ellipse at 50% 45%, color-mix(in oklab, var(--color-felt) 80%, #2a5a40) 0%, var(--color-felt) 42%, var(--color-felt-deep) 100%);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in oklab, #8fd4a8 16%, transparent),
+    inset 0 0 80px rgba(0, 0, 0, 0.35);
+}
+
+.wood-rail {
+  background:
+    radial-gradient(ellipse at 50% 50%, transparent 58%, color-mix(in oklab, var(--color-rail) 70%, #1a120c) 59%, var(--color-rail) 72%, var(--color-rail-edge) 86%, #2a1c12 100%);
+}
+
+.card-face {
+  background: var(--color-card-face);
+  color: var(--color-card-ink);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, #1a1c19 12%, transparent),
+    0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.card-back {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in oklab, var(--color-felt-deep) 80%, #0a0c0a),
+      color-mix(in oklab, var(--color-felt-deep) 80%, #0a0c0a) 6px,
+      color-mix(in oklab, var(--color-felt) 70%, #0a0c0a) 6px,
+      color-mix(in oklab, var(--color-felt) 70%, #0a0c0a) 12px
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-fg) 16%, transparent),
+    0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.hud-glass {
+  background: color-mix(in oklab, var(--color-bg-elevated) 88%, transparent);
+  box-shadow: var(--shadow-border);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.stagger-in > * {
+  animation: rise-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-in > *:nth-child(2) { animation-delay: 40ms; }
+.stagger-in > *:nth-child(3) { animation-delay: 80ms; }
+.stagger-in > *:nth-child(4) { animation-delay: 120ms; }
+.stagger-in > *:nth-child(5) { animation-delay: 160ms; }
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
