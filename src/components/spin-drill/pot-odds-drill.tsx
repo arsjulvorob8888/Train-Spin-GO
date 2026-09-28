@@ -137,6 +137,8 @@ export function PotOddsDrill() {
             эквити
             <br />
             <span className="text-base text-fg">{pct(spot.equity)}</span>
+            <br />
+            против случайной руки
           </p>
         </div>
       </div>
@@ -193,7 +195,7 @@ export function PotOddsDrill() {
               {ok ? "Верно." : "Ошибка."} {spot.enough ? "Эквити хватает для колла." : "Эквити не хватает для колла."}
             </p>
             <p className="mt-1 text-center text-sm leading-relaxed text-muted">
-              {bb(spot.toCall)} / ({bb(spot.pot)} + {bb(spot.toCall)}) = {pct(spot.required)}. У тебя {pct(spot.equity)}.
+              {bb(spot.toCall)} / ({bb(spot.pot)} + {bb(spot.toCall)}) = {pct(spot.required)}. У тебя {pct(spot.equity)} против случайной руки.
             </p>
             <button type="button" className="mt-3 h-11 w-full text-sm text-muted" onClick={next}>
               Следующая раздача
