@@ -251,7 +251,9 @@ const STEPS: { id: string; short: string; title: string; body: ReactNode }[] = [
         <Cards label="Рука" cards={[{ r: "A", s: "s" }, { r: "K", s: "c" }]} />
         <Cards label="Флоп" cards={[{ r: "Q", s: "d" }, { r: "7", s: "h" }, { r: "2", s: "s" }]} />
         <p className="text-sm leading-relaxed text-muted">
-          Туз и король выше всего флопа. В колоде 3 туза и 3 короля — 6 потенциальных аутов, около 24% до ривера.
+          Оверкарта — карта в руке, которая старше всех карт на борде. На Q-7-2 и туз, и король старше дамы:
+          это две оверкарты. Если придёт туз или король, у вас будет пара. В колоде 3 туза и 3 короля — 6
+          потенциальных аутов, около 24% до ривера.
         </p>
         <div className="rounded-xl border border-border p-3">
           <p className="text-sm font-medium">Когда аут грязный</p>
