@@ -390,6 +390,9 @@ export function SpinApp() {
                       : spot.title}
             </span>
           </h1>
+          <a href="/spin-go-checklist.docx" download="spin-go-checklist.docx" className="text-sm text-muted underline">
+            Скачать чек-лист
+          </a>
         </div>
         <nav className="flex flex-wrap rounded-lg bg-surface p-1">
           {tabs.map((t) => (
