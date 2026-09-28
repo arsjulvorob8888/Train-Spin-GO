@@ -4,6 +4,7 @@ import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
 import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-sheet";
+import { EquityDrill } from "@/components/spin-drill/equity-drill";
 import { PotOddsDrill } from "@/components/spin-drill/pot-odds-drill";
 import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
@@ -244,6 +245,7 @@ export function SpinApp() {
   const [review, setReview] = useState(false);
   const [mathPane, setMathPane] = useState<"lesson" | "anchors" | "drill">("lesson");
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
+  const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
@@ -375,7 +377,17 @@ export function SpinApp() {
           <h1 className="font-display text-xl font-medium">
             Spin Drill{" "}
             <span className="font-mono text-sm font-normal text-muted">
-              {tab === "hands" ? "Комбинации" : tab === "math" ? "Математика" : tab === "practice" && practiceMode === "math" ? "Pot Odds" : quiz ? "Квиз" : spot.title}
+              {tab === "hands"
+                ? "Комбинации"
+                : tab === "math"
+                  ? "Математика"
+                  : tab === "practice" && practiceMode === "math"
+                    ? mathDrill === "equity"
+                      ? "Эквити"
+                      : "Pot Odds"
+                    : quiz
+                      ? "Квиз"
+                      : spot.title}
             </span>
           </h1>
         </div>
@@ -445,9 +457,26 @@ export function SpinApp() {
             {practiceMode === "math" ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="flex h-11 items-center rounded-full border border-fg bg-fg px-3 text-sm text-bg">Pot Odds</span>
+                  {(
+                    [
+                      ["odds", "Pot Odds"],
+                      ["equity", "Эквити"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setMathDrill(id)}
+                      className={cn(
+                        "h-11 rounded-full border px-3 text-sm",
+                        mathDrill === id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                <PotOddsDrill />
+                {mathDrill === "equity" ? <EquityDrill /> : <PotOddsDrill />}
               </div>
             ) : (
           <div className={cn("grid gap-5", hideRange ? "lg:grid-cols-1" : "lg:grid-cols-[1fr_minmax(22rem,26rem)]")}>
