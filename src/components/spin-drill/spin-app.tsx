@@ -4,6 +4,7 @@ import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
 import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-sheet";
+import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
@@ -240,7 +241,7 @@ export function SpinApp() {
   const [lastGrade, setLastGrade] = useState<"correct" | "mix" | "wrong" | null>(null);
   const [quiz, setQuiz] = useState<{ checked: boolean; ok: number; guesses: Record<number, string> } | null>(null);
   const [review, setReview] = useState(false);
-  const [mathPane, setMathPane] = useState<"drill" | "anchors">("anchors");
+  const [mathPane, setMathPane] = useState<"lesson" | "anchors" | "drill">("lesson");
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
@@ -616,28 +617,29 @@ export function SpinApp() {
         {tab === "math" && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setMathPane("anchors")}
-                className={cn(
-                  "h-11 rounded-full border px-3 text-sm",
-                  mathPane === "anchors" ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
-                )}
-              >
-                Якоря эквити
-              </button>
-              <button
-                type="button"
-                onClick={() => setMathPane("drill")}
-                className={cn(
-                  "h-11 rounded-full border px-3 text-sm",
-                  mathPane === "drill" ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
-                )}
-              >
-                Задачи
-              </button>
+              {(
+                [
+                  ["lesson", "Дро и EV"],
+                  ["anchors", "Якоря"],
+                  ["drill", "Задачи"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setMathPane(id)}
+                  className={cn(
+                    "h-11 rounded-full border px-3 text-sm",
+                    mathPane === id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            {mathPane === "anchors" ? <EquitySheet hand={current} /> : <MathDrill />}
+            {mathPane === "lesson" && <PostflopLesson />}
+            {mathPane === "anchors" && <EquitySheet hand={current} />}
+            {mathPane === "drill" && <MathDrill />}
           </div>
         )}
       </main>
