@@ -4,7 +4,6 @@ import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
 import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-sheet";
-import { TableChecklist } from "@/components/spin-drill/table-checklist";
 import { EquityDrill } from "@/components/spin-drill/equity-drill";
 import { PotOddsDrill } from "@/components/spin-drill/pot-odds-drill";
 import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
@@ -38,7 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "practice" | "table" | "strategy" | "hands" | "math" | "stats";
+type Tab = "practice" | "strategy" | "hands" | "math" | "stats";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -362,7 +361,6 @@ export function SpinApp() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "practice", label: "Тренировка" },
-    { id: "table", label: "За столом" },
     { id: "strategy", label: "Стратегия" },
     { id: "hands", label: "Комбинации" },
     { id: "math", label: "Математика" },
@@ -381,8 +379,6 @@ export function SpinApp() {
             <span className="font-mono text-sm font-normal text-muted">
               {tab === "hands"
                 ? "Комбинации"
-                : tab === "table"
-                  ? "За столом"
                 : tab === "math"
                   ? "Математика"
                   : tab === "practice" && practiceMode === "math"
@@ -413,8 +409,6 @@ export function SpinApp() {
       </header>
 
       <main className="mx-auto w-full max-w-[1100px] flex-1 p-4 sm:p-5">
-        {tab === "table" && <TableChecklist />}
-
         {tab === "strategy" && (
           <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
