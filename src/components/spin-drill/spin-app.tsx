@@ -390,9 +390,30 @@ export function SpinApp() {
                       : spot.title}
             </span>
           </h1>
-          <a href="/spin-go-checklist.docx" download="spin-go-checklist.docx" className="text-sm text-muted underline">
+          <button
+            type="button"
+            className="text-sm text-muted underline"
+            onClick={() => {
+              void fetch("/spin-go-checklist.docx")
+                .then((res) => res.blob())
+                .then((blob) => {
+                  const url = URL.createObjectURL(
+                    new Blob([blob], {
+                      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    }),
+                  );
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "spin-go-checklist.docx";
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                });
+            }}
+          >
             Скачать чек-лист
-          </a>
+          </button>
         </div>
         <nav className="flex flex-wrap rounded-lg bg-surface p-1">
           {tabs.map((t) => (
