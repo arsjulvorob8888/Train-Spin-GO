@@ -367,6 +367,25 @@ export function SpinApp() {
     { id: "stats", label: "Статистика" },
   ];
 
+  function saveDoc(path: string, filename: string) {
+    void fetch(path)
+      .then((res) => res.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(
+          new Blob([blob], {
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          }),
+        );
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+  }
+
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 sm:px-5">
@@ -390,30 +409,14 @@ export function SpinApp() {
                       : spot.title}
             </span>
           </h1>
-          <button
-            type="button"
-            className="text-sm text-muted underline"
-            onClick={() => {
-              void fetch("/spin-go-checklist.docx")
-                .then((res) => res.blob())
-                .then((blob) => {
-                  const url = URL.createObjectURL(
-                    new Blob([blob], {
-                      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    }),
-                  );
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "spin-go-checklist.docx";
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                  URL.revokeObjectURL(url);
-                });
-            }}
-          >
-            Скачать чек-лист
-          </button>
+          <div className="flex flex-wrap gap-x-4">
+            <button type="button" className="text-sm text-muted underline" onClick={() => saveDoc("/spin-go-checklist.docx", "spin-go-checklist.docx")}>
+              Скачать чек-лист
+            </button>
+            <button type="button" className="text-sm text-muted underline" onClick={() => saveDoc("/spin-go-anchors.docx", "spin-go-anchors.docx")}>
+              Скачать якоря
+            </button>
+          </div>
         </div>
         <nav className="flex flex-wrap rounded-lg bg-surface p-1">
           {tabs.map((t) => (
