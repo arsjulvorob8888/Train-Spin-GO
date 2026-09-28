@@ -8,25 +8,33 @@ function face(c: Card) {
   return { r: RANK_CHARS[c.rank]!, s: SUIT_CHARS[c.suit]! };
 }
 
-function Stack({ pos, stack, tone }: { pos: string; stack: number; tone: "hero" | "villain" }) {
+function Who({
+  role,
+  pos,
+  stack,
+  tone,
+}: {
+  role: string;
+  pos: string;
+  stack: number;
+  tone: "hero" | "villain";
+}) {
   return (
-    <div
-      className={cn(
-        "flex h-11 items-center gap-2 rounded-full pr-3 font-mono text-sm text-fg",
-        tone === "hero" ? "bg-call" : "bg-raise",
-      )}
-    >
-      <span className="flex size-11 items-center justify-center rounded-full bg-bg/25 text-xs">{pos}</span>
-      {bb(stack)} bb
+    <div className={cn("rounded-2xl px-4 py-2 text-center", tone === "hero" ? "bg-call" : "bg-raise")}>
+      <p className="text-sm font-semibold text-fg">{role}</p>
+      <p className="font-mono text-xs text-fg/80">
+        {pos} · {stack <= 0 ? "олл-ин, в стеке ничего" : `в стеке ${bb(stack)} bb`}
+      </p>
     </div>
   );
 }
 
-function FoldSeat({ pos }: { pos: string }) {
+function Money({ label, value, hint, hot }: { label: string; value: string; hint: string; hot?: boolean }) {
   return (
-    <div className="flex h-9 items-center gap-1.5 rounded-full bg-bg/70 pr-2.5 text-xs text-subtle">
-      <span className="flex size-9 items-center justify-center rounded-full bg-surface-2">{pos}</span>
-      фолд
+    <div className={cn("rounded-xl border px-2 py-3 text-center", hot ? "border-fg bg-surface" : "border-border bg-surface-2")}>
+      <p className="text-xs text-subtle">{label}</p>
+      <p className="mt-1 font-mono text-lg text-fg">{value}</p>
+      <p className="mt-1 text-xs text-muted">{hint}</p>
     </div>
   );
 }
@@ -76,75 +84,65 @@ export function PotOddsDrill() {
   const ok = pick === null ? null : pick === spot.enough;
   const sessPct = session.total ? Math.round((session.correct / session.total) * 100) : 0;
   const hidden = 5 - spot.board.length;
-  const dead = Math.round((spot.pot - spot.toCall) * 10) / 10;
-  const [foldL1, foldR1, foldL2, foldR2] = spot.folds;
+  const after = Math.round((spot.pot + spot.toCall) * 10) / 10;
 
   return (
     <div className="mx-auto max-w-xl space-y-3">
       <p className="text-center font-mono text-sm text-muted">
-        Сессия {session.correct}/{session.total} <b className="text-fg">{sessPct}%</b>
+        Spin 3-max · старт 15bb · {session.correct}/{session.total} <b className="text-fg">{sessPct}%</b>
         {session.streak > 1 ? ` · ${session.streak} подряд` : ""}
       </p>
+      <p className="text-center text-sm leading-relaxed text-muted">{spot.story}</p>
 
-      <div className="mx-auto w-full max-w-lg">
-        <div className="flex flex-col items-center gap-1">
-          <Stack pos={spot.villainPos} stack={spot.villainStack} tone="villain" />
-          <p className="font-mono text-sm text-muted">{bb(spot.toCall)} bb</p>
-        </div>
-
-        <div className="mt-2 grid grid-cols-1 items-center gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
-          <div className="hidden flex-col gap-2 sm:flex">
-            <FoldSeat pos={foldL1!} />
-            <FoldSeat pos={foldL2!} />
-          </div>
-
-          <div className="felt-table flex flex-col items-center gap-2 rounded-full px-4 py-8">
-            <p className="font-mono text-xs tracking-wide text-fg/70">{spot.street}</p>
-            <p className="font-mono text-sm text-fg">банк {bb(spot.pot)} bb</p>
-            <div className="flex gap-1">
-              {spot.board.map((c, i) => {
-                const f = face(c);
-                return <MiniCard key={`${f.r}${f.s}${i}`} r={f.r} s={f.s} />;
-              })}
-              {Array.from({ length: hidden }, (_, i) => (
-                <div key={`h${i}`} className="card-back h-14 w-10 rounded-md" />
-              ))}
-            </div>
-            {dead > 0 ? <p className="font-mono text-sm text-fg/70">{bb(dead)} bb уже в банке</p> : null}
-            <p className="text-xs text-fg/60 sm:hidden">фолд: {spot.folds.join(" · ")}</p>
-          </div>
-
-          <div className="hidden flex-col gap-2 sm:flex">
-            <FoldSeat pos={foldR1!} />
-            <FoldSeat pos={foldR2!} />
-          </div>
-        </div>
-
-        <div className="mt-2 flex items-center justify-center gap-3">
-          <div className="flex flex-col items-center gap-1">
-            <div className="relative flex gap-1">
-              <span className="absolute -top-2 -left-3 flex size-6 items-center justify-center rounded-full bg-fg font-mono text-xs text-bg">
-                D
-              </span>
-              {spot.hero.map((c, i) => {
-                const f = face(c);
-                return <MiniCard key={`${f.r}${f.s}${i}`} r={f.r} s={f.s} />;
-              })}
-            </div>
-            <Stack pos={spot.heroPos} stack={spot.heroStack} tone="hero" />
-          </div>
-          <p className="text-right font-mono text-xs leading-tight text-muted">
-            эквити
-            <br />
-            <span className="text-base text-fg">{pct(spot.equity)}</span>
-            <br />
-            против случайной руки
-          </p>
-        </div>
+      <div className="flex flex-col items-center gap-2">
+        <Who role="Противник" pos={spot.villainPos} stack={spot.villainStack} tone="villain" />
+        <p className="text-sm text-muted">{spot.foldPos} уже сбросил</p>
       </div>
 
+      <div className="felt-table mx-auto flex max-w-md flex-col items-center gap-2 rounded-full px-4 py-8">
+        <p className="font-mono text-xs tracking-wide text-fg/70">{spot.street}</p>
+        <div className="flex gap-1">
+          {spot.board.map((c, i) => {
+            const f = face(c);
+            return <MiniCard key={`${f.r}${f.s}${i}`} r={f.r} s={f.s} />;
+          })}
+          {Array.from({ length: hidden }, (_, i) => (
+            <div key={`h${i}`} className="card-back h-14 w-10 rounded-md" />
+          ))}
+        </div>
+        <p className="font-mono text-sm text-fg">сейчас в банке {bb(spot.pot)} bb</p>
+      </div>
+
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex gap-1">
+          {spot.hero.map((c, i) => {
+            const f = face(c);
+            return <MiniCard key={`${f.r}${f.s}${i}`} r={f.r} s={f.s} />;
+          })}
+        </div>
+        <Who role="Вы" pos={spot.heroPos} stack={spot.heroStack} tone="hero" />
+        <p className="text-center font-mono text-sm text-muted">
+          ваша эквити <span className="text-base text-fg">{pct(spot.equity)}</span>
+          <span className="text-subtle"> · против случайной руки</span>
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <Money label="Уже в банке" value={`${bb(spot.potBefore)} bb`} hint="до его ставки" />
+        <Money label="Поставил ещё" value={`${bb(spot.bet)} bb`} hint="противник" />
+        <Money
+          label="Коллировать"
+          value={`${bb(spot.toCall)} bb`}
+          hint={spot.toCall >= spot.heroStack ? "весь ваш стек" : "вам доплатить"}
+          hot
+        />
+      </div>
+      <p className="text-center text-sm text-muted">
+        Сейчас в банке {bb(spot.pot)} bb = {bb(spot.potBefore)} уже было + {bb(spot.bet)} его ставка. После вашего колла будет {bb(after)} bb.
+      </p>
+
       <div className="rounded-2xl border border-border bg-surface p-4">
-        <p className="text-center text-base">Хватит ли эквити, чтобы продолжить?</p>
+        <p className="text-center text-base">Хватит ли эквити, чтобы коллировать {bb(spot.toCall)} bb?</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -177,15 +175,18 @@ export function PotOddsDrill() {
             <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border text-center">
               {(
                 [
-                  [pct(spot.equity), "эквити"],
-                  [pct(spot.villainEquity), "соперник"],
-                  [evText(spot.ev), "EV колла"],
-                  [bb(spot.toCall), "доплатить"],
-                  [bb(spot.pot), "банк"],
+                  [pct(spot.equity), "ваша эквити"],
+                  [pct(spot.villainEquity), "противник"],
+                  [`${evText(spot.ev)} bb`, "EV колла"],
+                  [`${bb(spot.toCall)} bb`, "коллировать"],
+                  [`${bb(spot.pot)} bb`, "банк сейчас"],
                   [pct(spot.required), "нужно"],
                 ] as const
               ).map(([value, label], i) => (
-                <div key={label} className={cn("bg-surface-2 px-2 py-3", i < 3 && "border-b border-border", i % 3 !== 2 && "border-r border-border")}>
+                <div
+                  key={label}
+                  className={cn("bg-surface-2 px-2 py-3", i < 3 && "border-b border-border", i % 3 !== 2 && "border-r border-border")}
+                >
                   <p className={cn("font-mono text-lg", label === "EV колла" && (spot.ev >= 0 ? "text-ok" : "text-bad"))}>{value}</p>
                   <p className="mt-1 text-xs text-subtle">{label}</p>
                 </div>
@@ -195,14 +196,16 @@ export function PotOddsDrill() {
               {ok ? "Верно." : "Ошибка."} {spot.enough ? "Эквити хватает для колла." : "Эквити не хватает для колла."}
             </p>
             <p className="mt-1 text-center text-sm leading-relaxed text-muted">
-              {bb(spot.toCall)} / ({bb(spot.pot)} + {bb(spot.toCall)}) = {pct(spot.required)}. У тебя {pct(spot.equity)} против случайной руки.
+              {bb(spot.toCall)} / {bb(after)} = {pct(spot.required)}. Это колл {bb(spot.toCall)} bb в банк, который после колла станет {bb(after)} bb. У вас {pct(spot.equity)}.
             </p>
             <button type="button" className="mt-3 h-11 w-full text-sm text-muted" onClick={next}>
               Следующая раздача
             </button>
           </div>
         ) : (
-          <p className="mt-3 text-center text-sm text-muted">Сравни эквити с ценой: доплатить / (банк + доплатить).</p>
+          <p className="mt-3 text-center text-sm text-muted">
+            Цена колла — {bb(spot.toCall)} bb из {bb(after)} bb. Поделите первое на второе и сравните со своей эквити.
+          </p>
         )}
       </div>
     </div>
