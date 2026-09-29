@@ -42,6 +42,7 @@ function Formula({ children }: { children: string }) {
 const DRAWS = [
   ["OESD, два конца", "8", "~32%", "~16%"],
   ["Гатшот, одна дырка", "4", "~16%", "~8%"],
+  ["Двойной гатшот", "8", "~32%", "~16%"],
   ["Флеш-дро", "9", "~36%", "~18%"],
   ["Две оверкарты", "6", "~24%", "~12%"],
   ["Флеш + лишние стрит-карты", "~12", "~45%", "~24%"],
@@ -70,6 +71,12 @@ const CHECKS: { prompt: string; options: string[]; answer: number; why: string }
     options: ["4", "8", "6", "2"],
     answer: 0,
     why: "В цепочке 4-6-7-8 дырка одна — пятёрка. Гатшот, 4 аута, около 16%.",
+  },
+  {
+    prompt: "8♠7♦, флоп 5♣9♥T♠. Сколько аутов на стрейт?",
+    options: ["4", "8", "6", "9"],
+    answer: 1,
+    why: "Две разные дырки: 6 собирает 5-6-7-8-9, валет собирает 7-8-9-10-J. Это двойной гатшот, 8 аутов. Считай как OESD, около 32%, не как один гатшот.",
   },
   {
     prompt: "A♠K♣ на Q♦7♥2♠. Сколько потенциальных аутов, если они чистые?",
@@ -238,6 +245,36 @@ const STEPS: { id: string; short: string; title: string; body: ReactNode }[] = [
         <Formula>4 аута · ×4 ≈ 16% с флопа · ×2 ≈ 8% с тёрна</Formula>
         <p className="text-sm leading-relaxed text-muted">
           Та же рука, другой флоп — шансов в два раза меньше. Гатшот редко стоит дорогого колла на 15bb.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "dbb",
+    short: "2 гатшота",
+    title: "Две дырки — те же 8 аутов",
+    body: (
+      <div className="space-y-3">
+        <Cards label="Рука" cards={[{ r: "8", s: "s" }, { r: "7", s: "d" }]} />
+        <Cards label="Флоп" cards={[{ r: "5", s: "c" }, { r: "9", s: "h" }, { r: "T", s: "s" }]} />
+        <p className="text-sm leading-relaxed text-muted">
+          Это не один гатшот и не открытый стрейт. Две разные карты закрывают две разные дырки.
+        </p>
+        <Strip ranks={["5", "6", "7", "8", "9", "10", "J"]} hot={["6", "10"]} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl bg-surface-2 p-3">
+            <p className="font-medium">6</p>
+            <p className="mt-1 text-sm text-muted">5-6-7-8-9. Четыре шестёрки.</p>
+          </div>
+          <div className="rounded-xl bg-surface-2 p-3">
+            <p className="font-medium">Валет</p>
+            <p className="mt-1 text-sm text-muted">7-8-9-10-J. Четыре валета.</p>
+          </div>
+        </div>
+        <Formula>4 + 4 = 8 · ×4 ≈ 32% с флопа · ×2 ≈ 16% с тёрна</Formula>
+        <p className="text-sm leading-relaxed text-muted">
+          За столом плати как за стрейт с двух сторон, не как за гатшот. На связной доске часть этих восьми
+          аутов проигрывает старшему стриту: валет здесь бьётся рукой с дамой. Ауты есть, натс не обещан.
         </p>
       </div>
     ),
@@ -417,7 +454,7 @@ const STEPS: { id: string; short: string; title: string; body: ReactNode }[] = [
   {
     id: "check",
     short: "Проверка",
-    title: "Пять вопросов на память",
+    title: "Шесть вопросов на память",
     body: <CheckStep />,
   },
 ];
