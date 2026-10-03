@@ -818,7 +818,7 @@ function Sapper({
                 disabled={!live || paused || peek != null || Boolean(mark) || done || quiz != null || closing.includes(h)}
                 onClick={() => paint(h)}
                 className={cn(
-                  "relative flex aspect-square origin-center items-center justify-center font-mono text-sm font-bold leading-none tracking-tight sm:text-lg",
+                  "relative flex aspect-square origin-center items-center justify-center font-mono text-base font-bold leading-none tracking-tighter sm:text-xl md:text-2xl",
                   revealed ? ACT[action] : "bg-surface-2 text-muted",
                   mark === "miss" && "outline outline-2 outline-bad",
                   closing.includes(h) && "range-shut",
@@ -899,7 +899,7 @@ function Sapper({
                         <div
                           key={h}
                           className={cn(
-                            "flex aspect-square items-center justify-center font-mono text-[9px] font-bold leading-none sm:text-xs",
+                            "flex aspect-square items-center justify-center font-mono text-xs font-bold leading-none tracking-tighter sm:text-sm",
                             ACT[action],
                             changed && "outline outline-2 outline-fg",
                           )}

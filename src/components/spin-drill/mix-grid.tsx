@@ -76,7 +76,7 @@ export function MixGrid({
               </span>
             ))}
           </div>
-          <span className="relative z-10 flex h-full flex-col justify-end p-0.5 font-mono text-[10px] font-semibold leading-none text-fg [text-shadow:0_1px_2px_#0008] sm:text-xs">
+          <span className="relative z-10 flex h-full flex-col justify-end p-0.5 font-mono text-xs font-bold leading-none tracking-tighter text-fg [text-shadow:0_1px_2px_#0008] sm:text-sm">
             {h}
             {acc != null && <span className="self-end text-[9px]">{acc}%</span>}
           </span>
