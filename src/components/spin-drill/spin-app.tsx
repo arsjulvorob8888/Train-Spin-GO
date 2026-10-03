@@ -230,7 +230,7 @@ function Meta({ spot }: { spot: SpotDef }) {
 }
 
 export function SpinApp() {
-  const [tab, setTab] = useState<Tab>("strategy");
+  const [tab, setTab] = useState<Tab>("experiment");
   const [spotId, setSpotId] = useState("btn");
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [store, setStore] = useState<Store>({ spots: {}, reps: 0 });
