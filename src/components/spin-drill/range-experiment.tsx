@@ -1,4 +1,6 @@
 import { PairLine } from "@/components/spin-drill/mix-grid";
+import { PipCard } from "@/components/spin-drill/pip-card";
+import { COMBOS, type Combo } from "@/lib/spin-drill/combos";
 import { ALL, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
@@ -148,6 +150,50 @@ function startMemoryMusic() {
 
 function stopMemoryMusic() {
   bed?.stop();
+}
+
+function comboHook(combo: Combo): string {
+  const ranked = [...COMBOS].sort((a, b) => a.val - b.val);
+  const index = ranked.findIndex((item) => item.n === combo.n);
+  const rarer = ranked[index - 1];
+  const commoner = ranked[index + 1];
+  if (!rarer) return "Реже этой комбинации не бывает ничего.";
+  if (!commoner) return "Самая частая готовая рука на вскрытии.";
+  return `Чаще, чем ${rarer.name}. Реже, чем ${commoner.name} (${commoner.pct}).`;
+}
+
+function ComboFan({ combo, reveal }: { combo: Combo; reveal: boolean }) {
+  return (
+    <div className="rounded-2xl bg-surface-2 p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-mono text-4xl font-semibold leading-none text-raise">{combo.n}</p>
+        <div className="text-right">
+          <p className="text-xl font-semibold">{combo.name}</p>
+          <p className="font-mono text-xs uppercase tracking-wider text-subtle">{combo.en}</p>
+        </div>
+      </div>
+      <div className="mt-2 flex items-end justify-center overflow-hidden py-3">
+        {combo.cards.map((card, index) => (
+          <div
+            key={`${card.r}${card.s}${index}`}
+            className={cn("origin-bottom", card.dim && "opacity-40")}
+            style={{ marginLeft: index === 0 ? 0 : -34, transform: `rotate(${(index - 2) * 7}deg) scale(0.56)` }}
+          >
+            <PipCard card={{ rank: card.r, suit: card.s }} />
+          </div>
+        ))}
+      </div>
+      {reveal ? (
+        <div className="text-center">
+          <p className="font-mono text-5xl font-semibold leading-none">{combo.pct}</p>
+          <p className="mt-2 font-mono text-sm text-muted">{combo.odds}</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted">{comboHook(combo)}</p>
+        </div>
+      ) : (
+        <p className="text-center text-sm text-muted">Карты уже на столе. Процент вспомни сам.</p>
+      )}
+    </div>
+  );
 }
 
 const SUPPORT = [
@@ -482,6 +528,8 @@ function Sapper({
   const [quizLeft, setQuizLeft] = useState(12);
   const [rewardBb, setRewardBb] = useState(10);
   const rewardFlip = useRef(false);
+  const posterRef = useRef(0);
+  const [poster, setPoster] = useState(0);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
   const marksRef = useRef(marks);
@@ -685,6 +733,8 @@ function Sapper({
   function ask(reason: "strike" | "miss") {
     const q = drawQuiz(reason === "strike" ? "reward" : "drill");
     if (reason === "strike") {
+      setPoster(posterRef.current % COMBOS.length);
+      posterRef.current += 1;
       if (bb === 15) {
         rewardFlip.current = !rewardFlip.current;
         setRewardBb(rewardFlip.current ? 10 : 25);
@@ -757,9 +807,9 @@ function Sapper({
           setFx(anim);
           if (Object.keys(next).length >= 169) celebrate();
         }
-        setCheer("Верно.");
         setQuiz({ ...quiz, picked: index, note: "" });
-        later(420, finishQuiz);
+        later(quiz.combo ? 1400 : 420, finishQuiz);
+        if (!quiz.combo) setCheer("Верно.");
         return;
       }
       sounds.cash();
@@ -976,6 +1026,17 @@ function Sapper({
                 <span />
               )}
             </div>
+            {quiz.reason === "strike" && COMBOS[poster] ? (
+              <div className="mt-4">
+                <p className="mb-2 text-sm text-muted">Запомни руку. Вероятность лучших 5 из 7.</p>
+                <ComboFan combo={COMBOS[poster]!} reveal />
+              </div>
+            ) : null}
+            {quiz.combo ? (
+              <div className="mt-4">
+                <ComboFan combo={COMBOS.find((item) => item.n === quiz.combo) ?? COMBOS[0]!} reveal={quiz.picked != null} />
+              </div>
+            ) : null}
             {quiz.reason === "strike" ? (
               <div className="mt-4">
                 <p className="text-lg">
@@ -1037,7 +1098,7 @@ function Sapper({
               <div className="mt-5 space-y-4 text-lg leading-relaxed">
                 <p className="text-muted">{quiz.why}</p>
                 {quiz.note ? <p>{quiz.note}</p> : null}
-                {quiz.reason === "miss" ? <p>Закрылись ещё 5 ближайших клеток.</p> : null}
+                {quiz.reason === "miss" && quiz.picked !== quiz.answer ? <p>Закрылись ещё 5 ближайших клеток.</p> : null}
                 <button
                   type="button"
                   className="h-14 w-full rounded-xl bg-fg text-xl font-medium text-bg"

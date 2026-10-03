@@ -1,3 +1,5 @@
+import { COMBOS } from "@/lib/spin-drill/combos";
+
 export type QuizQ = {
   id: string;
   topic: string;
@@ -5,9 +7,8 @@ export type QuizQ = {
   options: string[];
   answer: number;
   why: string;
+  combo?: number;
 };
-
-const KEY = "spin-quiz-left";
 
 export const QUIZ: QuizQ[] = [
   {
@@ -335,9 +336,28 @@ const REWARD: QuizQ[] = [
   },
 ];
 
+export const COMBO_Q: QuizQ[] = COMBOS.map((c) => {
+  const near = [...COMBOS]
+    .filter((x) => x.n !== c.n)
+    .sort((a, b) => Math.abs(a.val - c.val) - Math.abs(b.val - c.val))
+    .slice(0, 3);
+  const raw = [c.pct, ...near.map((x) => x.pct)];
+  const order = [0, 1, 2, 3].sort((a, b) => ((c.n * 3 + a * 7) % 5) - ((c.n * 3 + b * 7) % 5));
+  const options = order.map((i) => raw[i]!);
+  return {
+    id: `combo-${c.n}`,
+    topic: "Комбинации",
+    prompt: `Лучшие 5 из 7 карт. Как часто на вскрытии бывает «${c.name}»?`,
+    options,
+    answer: options.indexOf(c.pct),
+    why: `${c.name} — ${c.pct}, ${c.odds}. ${c.text}`,
+    combo: c.n,
+  };
+});
+
 export function drawQuiz(kind: "drill" | "reward" = "drill"): QuizQ {
-  const pool = kind === "reward" ? REWARD : QUIZ;
-  const storageKey = kind === "reward" ? "spin-quiz-reward" : KEY;
+  const pool = kind === "reward" ? REWARD : COMBO_Q;
+  const storageKey = kind === "reward" ? "spin-quiz-reward" : "spin-quiz-combo";
   let left: string[] = [];
   if (typeof localStorage !== "undefined") {
     try {
