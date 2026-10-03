@@ -1,5 +1,6 @@
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
+import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
 import { nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
@@ -139,93 +140,6 @@ function stopMemoryMusic() {
   bed?.stop();
 }
 
-const QUIZ: { topic: string; prompt: string; options: string[]; answer: number; why: string }[] = [
-  {
-    topic: "Pot odds",
-    prompt: "Банк 10bb, соперник ставит 5bb. Вы доплачиваете 5bb. Какая цена колла?",
-    options: ["20%", "25%", "33%", "50%"],
-    answer: 1,
-    why: "Цена = сколько доплатить / банк после вашего колла. В банке уже 15bb, после колла будет 20bb. 5 / 20 = 25%.",
-  },
-  {
-    topic: "Pot odds",
-    prompt: "Блеф в полбанка. Как часто соперник должен сбросить?",
-    options: ["25%", "33%", "50%", "67%"],
-    answer: 1,
-    why: "Нужно фолдов = ставка / (банк + ставка). Полбанка — это 50 в банк 100, то есть 50 / 150 ≈ 33%.",
-  },
-  {
-    topic: "Флеш",
-    prompt: "Голый флеш-дро на флопе. Ауты и грубая эквити до ривера?",
-    options: ["4 ≈ 16%", "8 ≈ 32%", "9 ≈ 36%", "12 ≈ 48%"],
-    answer: 2,
-    why: "Карт вашей масти осталось 9. С флопа ауты × 4: 9 × 4 = 36%.",
-  },
-  {
-    topic: "Стрит",
-    prompt: "Обычный гатшот. Сколько аутов?",
-    options: ["2", "4", "8", "9"],
-    answer: 1,
-    why: "Одна дырка — один ранг, четыре карты. С флопа около 16%. На 15bb такой колл почти всегда дорогой.",
-  },
-  {
-    topic: "Стрит",
-    prompt: "Стрейт с двух сторон, OESD. Сколько аутов?",
-    options: ["4", "6", "8", "9"],
-    answer: 2,
-    why: "Два открытых края, по четыре карты. 8 × 4 ≈ 32% с флопа.",
-  },
-  {
-    topic: "Стрит",
-    prompt: "Двойной гатшот: две разные дырки. Сколько аутов?",
-    options: ["4", "6", "8", "12"],
-    answer: 2,
-    why: "Два разных ранга по четыре карты. Те же 8, что у открытого стрейта. Не путать с одним гатшотом.",
-  },
-  {
-    topic: "Оверкарты",
-    prompt: "AK на флопе Q-7-2. Сколько потенциальных аутов, если они чистые?",
-    options: ["3", "6", "8", "9"],
-    answer: 1,
-    why: "Три туза и три короля. 6 × 4 ≈ 24%. Это не готовая рука и не монетка.",
-  },
-  {
-    topic: "Комбинаторика",
-    prompt: "Сколько комбинаций у AKo, у AKs и у пары?",
-    options: ["12, 4 и 6", "6, 6 и 6", "4, 12 и 6", "16, 4 и 6"],
-    answer: 0,
-    why: "Разномастная рука весит 12, одномастная 4, пара 6. AKo в диапазоне втрое тяжелее AKs.",
-  },
-  {
-    topic: "Комбинаторика",
-    prompt: "Флоп уже выложен. Сколько карт осталось до тёрна?",
-    options: ["52", "49", "47", "45"],
-    answer: 2,
-    why: "52 − 2 ваши − 3 на флопе = 47. Один аут на тёрне — это примерно 2%. Поэтому с тёрна ауты × 2.",
-  },
-  {
-    topic: "Эквити",
-    prompt: "Колл пуша 15bb с баттона. Какая эквити нужна?",
-    options: ["33%", "40%", "около 47%", "55%"],
-    answer: 2,
-    why: "Около 47%. Любая пара и AJ ещё колл. ATo около 41–44% — фолд.",
-  },
-  {
-    topic: "Эквити",
-    prompt: "Пара против AK. Грубая эквити пары?",
-    options: ["35%", "45%", "52–55%", "70%"],
-    answer: 2,
-    why: "Пара чуть впереди двух оверкарт. Это флип, не 70%. 22 против AK тоже около 52–55%.",
-  },
-  {
-    topic: "Комбо-дро",
-    prompt: "Флеш-дро 9 и стрит на 4 карты, одна из них той же масти. Сколько аутов?",
-    options: ["13", "12", "9", "8"],
-    answer: 1,
-    why: "Общую карту нельзя сложить дважды. 9 + 4 − 1 = 12.",
-  },
-];
-
 const SUPPORT = [
   "Поле не закрылось. Ошибка в формуле ничего не стирает из ренджа.",
   "Так и запоминается: не с первого щелчка, а когда видишь, откуда цифра.",
@@ -258,8 +172,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Сначала смотрите форму. Двигайте стек: на 15bb это точный чарт приложения, на других глубинах рендж дышит
-          по открытым ориентирам Spin 3-max. Потом поле закрывается, и у вас есть 2:00.
+          Сначала смотрите форму. Вопрос приходит после трёх волн по пять верных клеток и после ошибки. Обновление страницы не начинает банк сначала.
         </p>
         <button
           type="button"
@@ -373,15 +286,15 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [marks, setMarks] = useState<Record<string, CellMark>>({});
   const [fx, setFx] = useState<Record<string, "pop" | "blast">>({});
   const [streak, setStreak] = useState(0);
+  const [waves, setWaves] = useState(0);
   const [misses, setMisses] = useState(0);
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
   const [live, setLive] = useState(false);
   const [left, setLeft] = useState(120);
-  const [quiz, setQuiz] = useState<(typeof QUIZ)[number] & { picked: number | null; note: string } | null>(null);
+  const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string }) | null>(null);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
-  const quizCursor = useRef(0);
   const busy = useRef(false);
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
@@ -438,7 +351,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         });
         setClosing([]);
         setFx({});
-        busy.current = false;
+        ask();
       });
       return;
     }
@@ -462,18 +375,28 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       setPhase("win");
     } else if (wave) {
       sounds.wave();
-      const q = QUIZ[quizCursor.current % QUIZ.length]!;
-      quizCursor.current += 1;
-      setQuiz({ ...q, picked: null, note: "" });
-      setCheer(null);
+      const doneWaves = waves + 1;
       setPhase("wave");
-      busy.current = true;
+      if (doneWaves >= 3) {
+        setWaves(0);
+        ask();
+      } else {
+        setWaves(doneWaves);
+        later(700, () => setPhase((p) => (p === "wave" ? "play" : p)));
+      }
     } else {
       sounds.hit(nextStreak);
       setPhase("play");
     }
     setFx(anim);
     setMarks(next);
+  }
+
+  function ask() {
+    const q = drawQuiz();
+    setQuiz({ ...q, picked: null, note: "" });
+    setCheer(null);
+    busy.current = true;
   }
 
   function finishQuiz() {
@@ -514,7 +437,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     setQuiz({
       ...quiz,
       picked: index,
-      note: SUPPORT[quizCursor.current % SUPPORT.length]!,
+      note: SUPPORT[Math.floor(Math.random() * SUPPORT.length)]!,
     });
   }
 
@@ -526,10 +449,10 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         : phase === "time"
           ? "Время вышло. Ниже снова видна форма — посмотрите, что осталось."
           : phase === "wave"
-            ? "Пять подряд. Открылись все клетки вокруг последней руки."
+            ? "Пять подряд. Соседи открылись. Вопрос будет на третьей такой волне."
             : streak === 0
-              ? `Поле закрыто. ${formatTime(left * 1000)} на стек ${bb}bb. Ошибка гасит только 10 ближайших.`
-              : `Цепочка ${streak}/5. Ещё ${5 - streak} без ошибки — и откроются соседи.`;
+              ? `Поле закрыто. ${formatTime(left * 1000)}. Волна ${waves}/3. Ошибка тоже задаёт вопрос.`
+              : `Цепочка ${streak}/5. Волна ${waves}/3.`;
 
   return (
     <div className="space-y-3">
@@ -572,6 +495,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
               setLeft(120);
               setMarks({});
               setStreak(0);
+              setWaves(0);
               setPhase("play");
               setMisses(0);
             }}
