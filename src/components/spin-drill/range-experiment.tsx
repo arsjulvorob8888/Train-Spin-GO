@@ -172,7 +172,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Сначала смотрите форму. Вопрос приходит после трёх волн по пять верных клеток и после ошибки. Обновление страницы не начинает банк сначала.
+          Игра стартует сама. Вопрос приходит после трёх волн или после ошибки: верный ответ сразу возвращает в поле, неверный гасит ещё 5 клеток.
         </p>
         <button
           type="button"
@@ -290,7 +290,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [misses, setMisses] = useState(0);
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
-  const [live, setLive] = useState(false);
+  const [live, setLive] = useState(true);
   const [left, setLeft] = useState(120);
   const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string }) | null>(null);
   const [cheer, setCheer] = useState<string | null>(null);
@@ -411,9 +411,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     const ok = index === quiz.answer;
     if (ok) {
       sounds.wave();
-      const extra = (shape.neighbors[lastHand.current] ?? [])
-        .filter((h) => !marks[h])
-        .slice(0, 2);
+      const extra = (shape.neighbors[lastHand.current] ?? []).filter((h) => !marks[h]).slice(0, 2);
       if (extra.length) {
         const next = { ...marks };
         const anim: Record<string, "pop" | "blast"> = {};
@@ -428,11 +426,23 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           setPhase("win");
         }
       }
-      setCheer(extra.length ? "Верно. Две клетки рядом — в подарок." : "Верно. Рядом уже открыто, бонус — само попадание.");
+      setCheer("Верно.");
       setQuiz({ ...quiz, picked: index, note: "" });
+      later(420, finishQuiz);
       return;
     }
     sounds.soft();
+    const open = Object.keys(marks);
+    const victims = nearestOpen(lastHand.current, open, 5);
+    setClosing(victims);
+    later(420, () => {
+      setMarks((prev) => {
+        const next = { ...prev };
+        for (const cell of victims) delete next[cell];
+        return next;
+      });
+      setClosing([]);
+    });
     setCheer(null);
     setQuiz({
       ...quiz,
@@ -456,6 +466,16 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
 
   return (
     <div className="space-y-3">
+      <div className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-bg/90 py-2 backdrop-blur-sm">
+        <p className={cn("font-mono text-5xl font-semibold tabular-nums leading-none", left <= 15 ? "text-bad" : "text-fg")}>
+          {formatTime(left * 1000)}
+        </p>
+        <p className="text-sm text-muted">
+          {openCount}/169 · ошибки {misses}
+          <br />
+          волна {waves}/3
+        </p>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted">{scenario}</p>
         <div className="flex gap-1">
@@ -482,9 +502,8 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
             {actionLabel(spot, a, bb)}
           </button>
         ))}
-        <span className={cn("font-mono text-xs", left <= 15 && live ? "text-bad" : "text-muted")}>
-          {openCount}/169 · ошибки {misses}
-          {live || phase === "time" ? ` · ${formatTime(left * 1000)}` : ""}
+        <span className="font-mono text-xs text-muted">
+          {streak === 0 ? "ошибка гасит 10 клеток" : `цепочка ${streak}/5`}
         </span>
         {!live && phase !== "win" ? (
           <button
@@ -566,11 +585,11 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
                 );
               })}
             </div>
-            {quiz.picked != null ? (
+            {quiz.picked != null && !cheer ? (
               <div className="mt-3 space-y-3 text-sm leading-relaxed">
-                {cheer ? <p className="font-medium">{cheer}</p> : null}
                 <p className="text-muted">{quiz.why}</p>
                 {quiz.note ? <p>{quiz.note}</p> : null}
+                <p>Закрылись ещё 5 ближайших клеток.</p>
                 <button
                   type="button"
                   className="h-12 w-full rounded-lg bg-fg text-base font-medium text-bg"
