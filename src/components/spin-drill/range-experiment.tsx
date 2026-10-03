@@ -156,6 +156,29 @@ const SUPPORT = [
   "Это нормально. На столе вы всё равно будете считать теми же двумя правилами: ауты ×4 и цена колла.",
 ];
 
+type Splash =
+  | { kind: "spot"; bb: number; line: string; next: string }
+  | { kind: "group"; bb: number; group: SpotGroup; line: string; depths: [number, number]; nextId: string; nextTitle: string };
+
+const SPOT_LINES = [
+  "Рендж закрыт. Соперник всё ещё думает, что ты подглядываешь в чарт.",
+  "Все клетки на месте. Память только что обогнала шпаргалку.",
+  "Чисто. Если бы фишки умели хлопать, стол бы уже кончился.",
+];
+
+const GROUP_LINE: Record<SpotGroup, (bb: number) => string> = {
+  BTN: (bb) => `Весь баттон на ${bb}bb. Ты открываешься так, будто эти фишки уже исторические.`,
+  SB: (bb) => `Весь малый блайнд на ${bb}bb. Самая неуютная позиция только что стала твоей.`,
+  BB: (bb) => `Весь большой блайнд на ${bb}bb. Защищаться ты теперь будешь даже от собственных идей.`,
+  HU: (bb) => `Весь хедз-ап на ${bb}bb. Осталось двое, и один из них больше не нуждается в чарте.`,
+};
+
+function otherDepths(bb: number): [number, number] {
+  if (bb === 15) return [10, 25];
+  if (bb < 15) return [15, Math.min(30, bb + 5)];
+  return [15, Math.max(1, bb - 5)];
+}
+
 export function RangeExperiment() {
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [spotId, setSpotId] = useState(SPOTS[0]!.id);
@@ -163,21 +186,58 @@ export function RangeExperiment() {
   const [music, setMusic] = useState(true);
   const [bb, setBb] = useState(15);
   const [autoplay, setAutoplay] = useState(false);
-  const [splash, setSplash] = useState<{ bb: number; next: string } | null>(null);
+  const [splash, setSplash] = useState<Splash | null>(null);
+  const [doneSpots, setDoneSpots] = useState<string[]>([]);
   const spot = SPOTS.find((s) => s.id === spotId) ?? SPOTS[0]!;
   const spotRef = useRef(spotId);
+  const bbRef = useRef(bb);
+  const jokeRef = useRef(0);
+  const splashTimer = useRef<number | null>(null);
   spotRef.current = spotId;
+  bbRef.current = bb;
+
+  function go(nextId: string, depth: number) {
+    const next = SPOTS.find((s) => s.id === nextId) ?? SPOTS[0]!;
+    if (splashTimer.current) window.clearTimeout(splashTimer.current);
+    setBb(depth);
+    setGroup(next.group);
+    setSpotId(next.id);
+    setAutoplay(true);
+    setSplash(null);
+  }
 
   function cleared() {
-    const index = SPOTS.findIndex((s) => s.id === spotRef.current);
-    const next = SPOTS[(index + 1) % SPOTS.length]!;
-    setSplash({ bb, next: next.title });
-    window.setTimeout(() => {
-      setGroup(next.group);
-      setSpotId(next.id);
-      setAutoplay(true);
-      setSplash(null);
-    }, 2400);
+    const depth = bbRef.current;
+    const current = SPOTS.find((s) => s.id === spotRef.current) ?? SPOTS[0]!;
+    const mates = spotsIn(current.group);
+    const mark = `${depth}:${current.id}`;
+    const owned = doneSpots.includes(mark) ? doneSpots : [...doneSpots, mark];
+    setDoneSpots(owned);
+    const finished = mates.every((s) => owned.includes(`${depth}:${s.id}`));
+    if (finished) {
+      if (splashTimer.current) window.clearTimeout(splashTimer.current);
+      const gi = GROUPS.indexOf(current.group);
+      const nextGroup = GROUPS[(gi + 1) % GROUPS.length]!;
+      const nextSpot = spotsIn(nextGroup)[0]!;
+      sounds.fanfare();
+      setSplash({
+        kind: "group",
+        bb: depth,
+        group: current.group,
+        line: GROUP_LINE[current.group](depth),
+        depths: otherDepths(depth),
+        nextId: nextSpot.id,
+        nextTitle: nextSpot.title,
+      });
+      return;
+    }
+    const upcoming = mates.find((s) => !owned.includes(`${depth}:${s.id}`)) ?? mates[0]!;
+    const line = SPOT_LINES[jokeRef.current % SPOT_LINES.length]!;
+    jokeRef.current += 1;
+    sounds.cash();
+    setSplash({ kind: "spot", bb: depth, line, next: upcoming.title });
+    if (splashTimer.current) window.clearTimeout(splashTimer.current);
+    splashTimer.current = window.setTimeout(() => go(upcoming.id, depth), 2600);
   }
 
   useEffect(() => {
@@ -316,26 +376,60 @@ export function RangeExperiment() {
         <EdgeDrill key={`${spot.id}-${bb}`} spot={spot} bb={bb} />
       )}
       {splash ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg p-6">
           <div className="range-veil" />
-          {Array.from({ length: 36 }, (_, i) => (
+          <div className="strike-ring" />
+          <div className="strike-ring strike-ring-late" />
+          {Array.from({ length: splash.kind === "group" ? 56 : 36 }, (_, i) => (
             <i
               key={i}
               className={i % 2 === 0 ? "coin" : "coin coin-burst"}
               style={{
-                left: `${6 + ((i * 11) % 88)}%`,
-                animationDelay: `${i * 30}ms`,
-                ["--dx" as string]: `${(i % 7) * 36 - 108}px`,
-                ["--dy" as string]: `${-60 - (i % 5) * 40}px`,
+                left: `${4 + ((i * 9) % 92)}%`,
+                animationDelay: `${i * 24}ms`,
+                ["--dx" as string]: `${(i % 7) * 40 - 120}px`,
+                ["--dy" as string]: `${-80 - (i % 5) * 36}px`,
               }}
             >
               {i % 3 === 0 ? "bb" : "$"}
             </i>
           ))}
-          <div className="stack-in relative text-center">
+          <div className="stack-in relative max-w-xl text-center">
             <p className="font-mono text-8xl font-semibold leading-none sm:text-9xl">{splash.bb}</p>
-            <p className="mt-2 font-mono text-4xl">bb</p>
-            <p className="mt-6 text-lg text-muted">Дальше · {splash.next}</p>
+            <p className="mt-1 font-mono text-3xl">bb</p>
+            {splash.kind === "spot" ? (
+              <>
+                <p className="mt-6 text-2xl leading-snug">{splash.line}</p>
+                <p className="mt-3 text-lg text-muted">Дальше · {splash.next}</p>
+              </>
+            ) : (
+              <>
+                <p className="mt-6 text-3xl font-semibold leading-snug">Позиция закрыта</p>
+                <p className="mt-3 text-xl leading-snug">{splash.line}</p>
+                <p className="mt-4 text-base text-muted">
+                  На {splash.bb}bb {splash.group} больше не загадка. Другой стек притворяется тем же чартом. Он врёт.
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
+                  {splash.depths.map((depth) => (
+                    <button
+                      key={depth}
+                      type="button"
+                      className="h-14 rounded-2xl bg-fg px-5 text-lg font-medium text-bg"
+                      onClick={() => go(spotsIn(splash.group)[0]!.id, depth)}
+                    >
+                      На {depth}bb
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="h-14 rounded-2xl border border-border px-5 text-lg"
+                    onClick={() => go(splash.nextId, splash.bb)}
+                  >
+                    Дальше · {splash.nextTitle}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}
