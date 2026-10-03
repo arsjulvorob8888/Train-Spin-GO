@@ -598,7 +598,7 @@ function Sapper({
       }
     }
     quizFail.current = false;
-    setQuizLeft(reason === "strike" ? 0 : 12);
+    setQuizLeft(12);
     setQuiz({ ...q, picked: null, note: "", reason });
     setCheer(null);
     busy.current = true;
@@ -621,13 +621,17 @@ function Sapper({
   }
 
   useEffect(() => {
-    if (!quiz || quiz.picked != null || paused || quiz.reason === "strike") return;
+    if (!quiz || quiz.picked != null || paused) return;
     if (quizLeft > 0) {
       const id = window.setTimeout(() => setQuizLeft((n) => n - 1), 1000);
       return () => window.clearTimeout(id);
     }
     if (quizFail.current) return;
     quizFail.current = true;
+    if (quiz.reason === "strike") {
+      setQuiz({ ...quiz, picked: -1, note: "Время вышло. Это награда, клетки не трогаем." });
+      return;
+    }
     punish("Время вышло.", -1);
   }, [quiz, quizLeft, paused]);
 
@@ -866,9 +870,7 @@ function Sapper({
                 </p>
                 <p className="mt-1 font-mono text-sm text-subtle">{quiz.topic}</p>
               </div>
-              {quiz.reason === "strike" ? (
-                <p className="font-mono text-5xl font-semibold leading-none">{rewardBb}</p>
-              ) : quiz.picked == null ? (
+              {quiz.picked == null ? (
                 <p className={cn("font-mono text-5xl font-semibold tabular-nums leading-none", quizLeft <= 4 ? "text-bad" : "text-fg")}>
                   {quizLeft}
                 </p>
