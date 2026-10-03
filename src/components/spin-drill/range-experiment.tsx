@@ -17,6 +17,11 @@ const ACT: Record<MixAction, string> = {
 type Mode = "sapper" | "edge";
 type CellMark = "ok" | "miss";
 
+function formatTime(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 let audioCtx: AudioContext | null = null;
 
 function audio(): AudioContext | null {
@@ -72,6 +77,9 @@ const sounds = {
   },
   win() {
     [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", 0.05, i * 0.09));
+  },
+  cash() {
+    [880, 1174, 1568].forEach((f, i) => tone(f, 0.12, "square", 0.035, i * 0.07));
   },
   soft() {
     tone(392, 0.16, "sine", 0.04);
@@ -167,7 +175,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Игра идёт сама. Каждые 3 секунды гаснут 3 ближайшие открытые клетки. Пять верных подряд открывают соседей и замораживают угасание. Третья серия задаёт вопрос.
+          На партию 2:00. Каждая серия из пяти верных добавляет 15 секунд и денежный залп. Каждые 3 секунды гаснут 3 ближайшие клетки, серия это останавливает.
         </p>
         <button
           type="button"
@@ -286,8 +294,10 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
   const [live, setLive] = useState(true);
+  const [left, setLeft] = useState(120);
   const [tick, setTick] = useState(3);
   const [freeze, setFreeze] = useState(0);
+  const [salute, setSalute] = useState(0);
   const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string }) | null>(null);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
@@ -298,6 +308,21 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
   const done = phase === "win" || phase === "time" || openCount === 169;
+
+  useEffect(() => {
+    if (!live || quiz || phase === "win" || phase === "time") return;
+    const id = window.setInterval(() => {
+      setLeft((seconds) => (seconds <= 1 ? 0 : seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [live, quiz, phase]);
+
+  useEffect(() => {
+    if (!live || left !== 0) return;
+    sounds.miss();
+    setPhase("time");
+    setLive(false);
+  }, [live, left]);
 
   useEffect(() => {
     if (!live || quiz || phase === "win" || phase === "time") return;
@@ -392,6 +417,9 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       setPhase("win");
     } else if (wave) {
       sounds.wave();
+      sounds.cash();
+      setLeft((seconds) => seconds + 15);
+      setSalute((n) => n + 1);
       const doneWaves = waves + 1;
       setPhase("wave");
       if (doneWaves >= 3) {
@@ -485,7 +513,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     phase === "win"
       ? "Рендж собран. Угасание не успело."
       : phase === "wave"
-        ? `Серия ${waves}. Угасание замерло: поле не тухнет ${freeze} с.`
+        ? `Серия. +15 секунд к часам, угасание замерло.`
         : freeze > 0
           ? `Серия держит поле ещё ${freeze} с. Цепочка ${streak}/5.`
           : streak === 0
@@ -495,10 +523,17 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-bg/90 py-2 backdrop-blur-sm">
-        <p className={cn("font-mono text-6xl font-semibold tabular-nums leading-none", freeze > 0 ? "text-ok" : tick === 1 ? "text-bad" : "text-fg")}>
-          {freeze > 0 ? freeze : Math.max(tick, 1)}
-        </p>
+        <div>
+          <p className={cn("font-mono text-6xl font-semibold tabular-nums leading-none", left <= 15 ? "text-bad" : "text-fg")}>
+            {formatTime(left * 1000)}
+          </p>
+          <p className="font-mono text-sm text-ok">{phase === "wave" ? "+15с" : ""}</p>
+        </div>
         <p className="text-right text-sm text-muted">
+          <span className={cn("font-mono text-3xl font-semibold", freeze > 0 ? "text-ok" : tick === 1 ? "text-bad" : "text-fg")}>
+            {freeze > 0 ? freeze : Math.max(tick, 1)}
+          </span>
+          <br />
           {freeze > 0 ? "серия держит поле" : "сек до угасания"}
           <br />
           {openCount}/169 · волны {waves}/3
@@ -539,6 +574,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
             className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg"
             onClick={() => {
               setLive(true);
+              setLeft(120);
               setTick(3);
               setFreeze(0);
               freezeRef.current = 0;
@@ -587,6 +623,19 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           }),
         )}
       </div>
+      {salute > 0 && phase === "wave" ? (
+        <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+          {Array.from({ length: 16 }, (_, i) => (
+            <i
+              key={`${salute}-${i}`}
+              className="coin"
+              style={{ left: `${(i * 6.2) % 100}%`, animationDelay: `${i * 45}ms` }}
+            >
+              {i % 3 === 0 ? "bb" : "$"}
+            </i>
+          ))}
+        </div>
+      ) : null}
       {quiz ? (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-bg/75 p-2 backdrop-blur-sm">
           <section className={cn("max-h-full w-full max-w-lg overflow-auto rounded-2xl border border-border bg-surface p-4 shadow-border", cheer && "range-blast")}>
