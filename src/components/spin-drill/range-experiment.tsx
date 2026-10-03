@@ -1,7 +1,7 @@
-import { handAt } from "@/lib/spin-drill/legacy-ranges";
+import { ALL, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
-import { nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
+import { cellDistance, nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
@@ -319,12 +319,14 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [freeze, setFreeze] = useState(0);
   const [salute, setSalute] = useState(0);
   const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string }) | null>(null);
+  const [quizLeft, setQuizLeft] = useState(12);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
   const marksRef = useRef(marks);
   const freezeRef = useRef(0);
   marksRef.current = marks;
   const busy = useRef(false);
+  const quizFail = useRef(false);
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
   const done = phase === "win" || phase === "time" || openCount === 169;
@@ -463,10 +465,39 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
 
   function ask() {
     const q = drawQuiz();
+    quizFail.current = false;
+    setQuizLeft(12);
     setQuiz({ ...q, picked: null, note: "" });
     setCheer(null);
     busy.current = true;
   }
+
+  function punish(note: string, picked: number) {
+    sounds.soft();
+    const victims = nearestOpen(lastHand.current, Object.keys(marksRef.current), 5);
+    setClosing(victims);
+    later(420, () => {
+      setMarks((prev) => {
+        const next = { ...prev };
+        for (const cell of victims) delete next[cell];
+        return next;
+      });
+      setClosing([]);
+    });
+    setCheer(null);
+    setQuiz((current) => (current ? { ...current, picked, note } : current));
+  }
+
+  useEffect(() => {
+    if (!quiz || quiz.picked != null) return;
+    if (quizLeft > 0) {
+      const id = window.setTimeout(() => setQuizLeft((n) => n - 1), 1000);
+      return () => window.clearTimeout(id);
+    }
+    if (quizFail.current) return;
+    quizFail.current = true;
+    punish("Время вышло.", -1);
+  }, [quiz, quizLeft]);
 
   function finishQuiz() {
     setQuiz(null);
@@ -480,7 +511,9 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     const ok = index === quiz.answer;
     if (ok) {
       sounds.wave();
-      const extra = (shape.neighbors[lastHand.current] ?? []).filter((h) => !marks[h]).slice(0, 2);
+      const extra = ALL.filter((h) => !marks[h])
+        .sort((a, b) => cellDistance(lastHand.current, a) - cellDistance(lastHand.current, b))
+        .slice(0, 8);
       if (extra.length) {
         const next = { ...marks };
         const anim: Record<string, "pop" | "blast"> = {};
@@ -500,24 +533,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       later(420, finishQuiz);
       return;
     }
-    sounds.soft();
-    const open = Object.keys(marks);
-    const victims = nearestOpen(lastHand.current, open, 5);
-    setClosing(victims);
-    later(420, () => {
-      setMarks((prev) => {
-        const next = { ...prev };
-        for (const cell of victims) delete next[cell];
-        return next;
-      });
-      setClosing([]);
-    });
-    setCheer(null);
-    setQuiz({
-      ...quiz,
-      picked: index,
-      note: SUPPORT[Math.floor(Math.random() * SUPPORT.length)]!,
-    });
+    punish(SUPPORT[Math.floor(Math.random() * SUPPORT.length)]!, index);
   }
 
   const doomed =
@@ -625,7 +641,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
                 disabled={!live || Boolean(mark) || done || quiz != null || closing.includes(h)}
                 onClick={() => paint(h)}
                 className={cn(
-                  "relative flex aspect-square origin-center items-end p-0.5 font-mono text-[10px] font-semibold leading-none sm:text-xs",
+                  "relative flex aspect-square origin-center items-center justify-center font-mono text-sm font-bold leading-none tracking-tight sm:text-lg",
                   revealed ? ACT[action] : "bg-surface-2 text-muted",
                   mark === "miss" && "outline outline-2 outline-bad",
                   closing.includes(h) && "range-shut",
@@ -659,7 +675,16 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       {quiz ? (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-bg/75 p-2 backdrop-blur-sm">
           <section className={cn("max-h-full w-full max-w-lg overflow-auto rounded-2xl border border-border bg-surface p-4 shadow-border", cheer && "range-blast")}>
-            <p className="font-mono text-xs text-subtle">{quiz.topic}</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="font-mono text-xs text-subtle">{quiz.topic}</p>
+              {quiz.picked == null ? (
+                <p className={cn("font-mono text-4xl font-semibold tabular-nums leading-none", quizLeft <= 4 ? "text-bad" : "text-fg")}>
+                  {quizLeft}
+                </p>
+              ) : (
+                <span />
+              )}
+            </div>
             <p className="mt-1 text-base">{quiz.prompt}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {quiz.options.map((opt, n) => {
