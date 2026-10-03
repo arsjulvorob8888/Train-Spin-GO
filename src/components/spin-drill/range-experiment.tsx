@@ -120,28 +120,44 @@ function startMemoryMusic() {
   fifthGain.connect(master);
   drone.start();
   fifth.start();
-  const scale = [196, 220, 246.94, 293.66, 329.63];
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 1200;
+  filter.connect(master);
+  const phrase: (number | null)[] = [
+    293.66, null, 329.63, 369.99, 440, null, 369.99, 329.63,
+    293.66, null, null, 329.63, 369.99, 440, 493.88, null,
+    440, 369.99, 329.63, 293.66, 329.63, 369.99, 440, null,
+    493.88, 440, 369.99, 329.63, 293.66, null, null, null,
+    220, 246.94, 293.66, 329.63, 369.99, null, 329.63, 293.66,
+    246.94, 220, null, null, 246.94, 293.66, 329.63, null,
+    293.66, 329.63, 369.99, 440, 369.99, 329.63, 293.66, null,
+    null, null, null, null,
+  ];
   let step = 0;
   const timer = window.setInterval(() => {
+    const freq = phrase[step % phrase.length];
+    step += 1;
+    if (freq == null) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.value = scale[step % scale.length]!;
+    osc.type = step % 8 === 1 ? "sine" : "triangle";
+    osc.frequency.value = freq;
     const t = ctx.currentTime;
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.06);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    gain.gain.exponentialRampToValueAtTime(0.16, t + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
     osc.connect(gain);
-    gain.connect(master);
+    gain.connect(filter);
     osc.start(t);
-    osc.stop(t + 1.6);
-    step += 1;
-  }, 1200);
+    osc.stop(t + 1.45);
+  }, 680);
   bed = {
     stop() {
       window.clearInterval(timer);
       drone.stop();
       fifth.stop();
+      filter.disconnect();
       master.disconnect();
       bed = null;
     },
