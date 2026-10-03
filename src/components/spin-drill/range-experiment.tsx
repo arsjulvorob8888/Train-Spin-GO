@@ -385,6 +385,8 @@ function Sapper({
   const [salute, setSalute] = useState(0);
   const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string; reason: "strike" | "miss" }) | null>(null);
   const [quizLeft, setQuizLeft] = useState(12);
+  const [rewardBb, setRewardBb] = useState(10);
+  const rewardFlip = useRef(false);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
   const marksRef = useRef(marks);
@@ -569,8 +571,16 @@ function Sapper({
 
   function ask(reason: "strike" | "miss") {
     const q = drawQuiz(reason === "strike" ? "reward" : "drill");
+    if (reason === "strike") {
+      if (bb === 15) {
+        rewardFlip.current = !rewardFlip.current;
+        setRewardBb(rewardFlip.current ? 10 : 25);
+      } else {
+        setRewardBb(15);
+      }
+    }
     quizFail.current = false;
-    setQuizLeft(12);
+    setQuizLeft(reason === "strike" ? 0 : 12);
     setQuiz({ ...q, picked: null, note: "", reason });
     setCheer(null);
     busy.current = true;
@@ -593,17 +603,13 @@ function Sapper({
   }
 
   useEffect(() => {
-    if (!quiz || quiz.picked != null || paused) return;
+    if (!quiz || quiz.picked != null || paused || quiz.reason === "strike") return;
     if (quizLeft > 0) {
       const id = window.setTimeout(() => setQuizLeft((n) => n - 1), 1000);
       return () => window.clearTimeout(id);
     }
     if (quizFail.current) return;
     quizFail.current = true;
-    if (quiz.reason === "strike") {
-      setQuiz({ ...quiz, picked: -1, note: "Время вышло. Это награда, клетки не трогаем." });
-      return;
-    }
     punish("Время вышло.", -1);
   }, [quiz, quizLeft, paused]);
 
@@ -650,6 +656,11 @@ function Sapper({
     }
     punish(SUPPORT[Math.floor(Math.random() * SUPPORT.length)]!, index);
   }
+
+  const rewardShape = useMemo(
+    () => buildShape(rangeAtStack(spot.range, spot.id, rewardBb)),
+    [spot, rewardBb],
+  );
 
   const doomed =
     tick === 1 && freeze === 0
@@ -833,7 +844,9 @@ function Sapper({
                 </p>
                 <p className="mt-1 font-mono text-sm text-subtle">{quiz.topic}</p>
               </div>
-              {quiz.picked == null ? (
+              {quiz.reason === "strike" ? (
+                <p className="font-mono text-5xl font-semibold leading-none">{rewardBb}</p>
+              ) : quiz.picked == null ? (
                 <p className={cn("font-mono text-5xl font-semibold tabular-nums leading-none", quizLeft <= 4 ? "text-bad" : "text-fg")}>
                   {quizLeft}
                 </p>
@@ -841,6 +854,35 @@ function Sapper({
                 <span />
               )}
             </div>
+            {quiz.reason === "strike" ? (
+              <div className="mt-4">
+                <p className="text-lg">
+                  {spot.title}. Сейчас {bb}bb, это тот же спот на {rewardBb}bb.
+                </p>
+                <p className="mt-1 text-sm text-muted">Обводка — действие другое, чем на твоём стеке. {stackNote(rewardBb)}</p>
+                <div className="mt-3 grid grid-cols-13 gap-px">
+                  {Array.from({ length: 13 }, (_, r) =>
+                    Array.from({ length: 13 }, (_, c) => {
+                      const h = handAt(r, c);
+                      const action = rewardShape.action[h]!;
+                      const changed = action !== shape.action[h];
+                      return (
+                        <div
+                          key={h}
+                          className={cn(
+                            "flex aspect-square items-center justify-center font-mono text-[9px] font-bold leading-none sm:text-xs",
+                            ACT[action],
+                            changed && "outline outline-2 outline-fg",
+                          )}
+                        >
+                          {h}
+                        </div>
+                      );
+                    }),
+                  )}
+                </div>
+              </div>
+            ) : null}
             <p className="mt-3 text-2xl leading-snug">{quiz.prompt}</p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {quiz.options.map((opt, n) => {
