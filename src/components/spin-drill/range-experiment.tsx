@@ -760,32 +760,8 @@ function Sapper({
           </button>
         ))}
         <span className="font-mono text-xs text-muted">
-          {streak === 0 ? "A S D F · пробел старт/стоп" : `цепочка ${streak}/5`}
+          {streak === 0 ? "A S D F" : `цепочка ${streak}/5`}
         </span>
-        {!live && phase !== "win" ? (
-          <button
-            type="button"
-            className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg"
-            onClick={() => {
-              setLive(true);
-              setPaused(false);
-              setPeek(null);
-              setLeft(120);
-              setTick(3);
-              setFreeze(0);
-              freezeRef.current = 0;
-              setMarks({});
-              setStreak(0);
-              setChain(0);
-              setPhase("play");
-              setMisses(0);
-              setQuiz(null);
-            }}
-          >
-            <span className="mr-1.5 font-mono">Space</span>
-            {phase === "time" ? "Ещё раз" : "Играть"}
-          </button>
-        ) : null}
         {live && !paused ? (
           <button type="button" className="h-11 rounded-lg border border-border px-3 text-sm" onClick={() => setPaused(true)}>
             <span className="mr-1.5 font-mono">Space</span>
@@ -799,6 +775,32 @@ function Sapper({
           </button>
         ) : null}
       </div>
+      {!live && phase !== "win" ? (
+        <button
+          type="button"
+          className="play-cta h-24 w-full rounded-2xl bg-fg text-bg"
+          onClick={() => {
+            setLive(true);
+            setPaused(false);
+            setPeek(null);
+            setLeft(120);
+            setTick(3);
+            setFreeze(0);
+            freezeRef.current = 0;
+            setMarks({});
+            setStreak(0);
+            setChain(0);
+            setPhase("play");
+            setMisses(0);
+            setQuiz(null);
+          }}
+        >
+          <span className="block text-4xl font-semibold tracking-wide">
+            {phase === "time" ? "Ещё раз" : "Играть"}
+          </span>
+          <span className="mt-1 block font-mono text-sm opacity-60">пробел</span>
+        </button>
+      ) : null}
       <div className="relative">
       <div className={cn("grid grid-cols-13 gap-px", live && !paused && tick === 1 && freeze === 0 && "range-urgent", (phase === "wave" || peek) && "range-flash range-peek", (!live || paused) && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
