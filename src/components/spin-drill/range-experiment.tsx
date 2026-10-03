@@ -76,22 +76,196 @@ const sounds = {
   win() {
     [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", 0.05, i * 0.09));
   },
+  soft() {
+    tone(392, 0.16, "sine", 0.04);
+  },
 };
+
+let bed: { stop: () => void } | null = null;
+
+function startMemoryMusic() {
+  if (bed) return;
+  const ctx = audio();
+  if (!ctx) return;
+  const master = ctx.createGain();
+  master.gain.value = 0.04;
+  master.connect(ctx.destination);
+  const drone = ctx.createOscillator();
+  const fifth = ctx.createOscillator();
+  const droneGain = ctx.createGain();
+  const fifthGain = ctx.createGain();
+  drone.type = "sine";
+  fifth.type = "sine";
+  drone.frequency.value = 98;
+  fifth.frequency.value = 146.83;
+  droneGain.gain.value = 0.4;
+  fifthGain.gain.value = 0.12;
+  drone.connect(droneGain);
+  fifth.connect(fifthGain);
+  droneGain.connect(master);
+  fifthGain.connect(master);
+  drone.start();
+  fifth.start();
+  const scale = [196, 220, 246.94, 293.66, 329.63];
+  let step = 0;
+  const timer = window.setInterval(() => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = scale[step % scale.length]!;
+    const t = ctx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(t);
+    osc.stop(t + 1.6);
+    step += 1;
+  }, 1200);
+  bed = {
+    stop() {
+      window.clearInterval(timer);
+      drone.stop();
+      fifth.stop();
+      master.disconnect();
+      bed = null;
+    },
+  };
+}
+
+function stopMemoryMusic() {
+  bed?.stop();
+}
+
+const QUIZ: { topic: string; prompt: string; options: string[]; answer: number; why: string }[] = [
+  {
+    topic: "Pot odds",
+    prompt: "Банк 10bb, соперник ставит 5bb. Вы доплачиваете 5bb. Какая цена колла?",
+    options: ["20%", "25%", "33%", "50%"],
+    answer: 1,
+    why: "Цена = сколько доплатить / банк после вашего колла. В банке уже 15bb, после колла будет 20bb. 5 / 20 = 25%.",
+  },
+  {
+    topic: "Pot odds",
+    prompt: "Блеф в полбанка. Как часто соперник должен сбросить?",
+    options: ["25%", "33%", "50%", "67%"],
+    answer: 1,
+    why: "Нужно фолдов = ставка / (банк + ставка). Полбанка — это 50 в банк 100, то есть 50 / 150 ≈ 33%.",
+  },
+  {
+    topic: "Флеш",
+    prompt: "Голый флеш-дро на флопе. Ауты и грубая эквити до ривера?",
+    options: ["4 ≈ 16%", "8 ≈ 32%", "9 ≈ 36%", "12 ≈ 48%"],
+    answer: 2,
+    why: "Карт вашей масти осталось 9. С флопа ауты × 4: 9 × 4 = 36%.",
+  },
+  {
+    topic: "Стрит",
+    prompt: "Обычный гатшот. Сколько аутов?",
+    options: ["2", "4", "8", "9"],
+    answer: 1,
+    why: "Одна дырка — один ранг, четыре карты. С флопа около 16%. На 15bb такой колл почти всегда дорогой.",
+  },
+  {
+    topic: "Стрит",
+    prompt: "Стрейт с двух сторон, OESD. Сколько аутов?",
+    options: ["4", "6", "8", "9"],
+    answer: 2,
+    why: "Два открытых края, по четыре карты. 8 × 4 ≈ 32% с флопа.",
+  },
+  {
+    topic: "Стрит",
+    prompt: "Двойной гатшот: две разные дырки. Сколько аутов?",
+    options: ["4", "6", "8", "12"],
+    answer: 2,
+    why: "Два разных ранга по четыре карты. Те же 8, что у открытого стрейта. Не путать с одним гатшотом.",
+  },
+  {
+    topic: "Оверкарты",
+    prompt: "AK на флопе Q-7-2. Сколько потенциальных аутов, если они чистые?",
+    options: ["3", "6", "8", "9"],
+    answer: 1,
+    why: "Три туза и три короля. 6 × 4 ≈ 24%. Это не готовая рука и не монетка.",
+  },
+  {
+    topic: "Комбинаторика",
+    prompt: "Сколько комбинаций у AKo, у AKs и у пары?",
+    options: ["12, 4 и 6", "6, 6 и 6", "4, 12 и 6", "16, 4 и 6"],
+    answer: 0,
+    why: "Разномастная рука весит 12, одномастная 4, пара 6. AKo в диапазоне втрое тяжелее AKs.",
+  },
+  {
+    topic: "Комбинаторика",
+    prompt: "Флоп уже выложен. Сколько карт осталось до тёрна?",
+    options: ["52", "49", "47", "45"],
+    answer: 2,
+    why: "52 − 2 ваши − 3 на флопе = 47. Один аут на тёрне — это примерно 2%. Поэтому с тёрна ауты × 2.",
+  },
+  {
+    topic: "Эквити",
+    prompt: "Колл пуша 15bb с баттона. Какая эквити нужна?",
+    options: ["33%", "40%", "около 47%", "55%"],
+    answer: 2,
+    why: "Около 47%. Любая пара и AJ ещё колл. ATo около 41–44% — фолд.",
+  },
+  {
+    topic: "Эквити",
+    prompt: "Пара против AK. Грубая эквити пары?",
+    options: ["35%", "45%", "52–55%", "70%"],
+    answer: 2,
+    why: "Пара чуть впереди двух оверкарт. Это флип, не 70%. 22 против AK тоже около 52–55%.",
+  },
+  {
+    topic: "Комбо-дро",
+    prompt: "Флеш-дро 9 и стрит на 4 карты, одна из них той же масти. Сколько аутов?",
+    options: ["13", "12", "9", "8"],
+    answer: 1,
+    why: "Общую карту нельзя сложить дважды. 9 + 4 − 1 = 12.",
+  },
+];
+
+const SUPPORT = [
+  "Поле не закрылось. Ошибка в формуле ничего не стирает из ренджа.",
+  "Так и запоминается: не с первого щелчка, а когда видишь, откуда цифра.",
+  "Это нормально. На столе вы всё равно будете считать теми же двумя правилами: ауты ×4 и цена колла.",
+];
 
 export function RangeExperiment() {
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [spotId, setSpotId] = useState(SPOTS[0]!.id);
   const [mode, setMode] = useState<Mode>("sapper");
+  const [music, setMusic] = useState(true);
   const spot = SPOTS.find((s) => s.id === spotId) ?? SPOTS[0]!;
+
+  useEffect(() => {
+    if (!music) {
+      stopMemoryMusic();
+      return;
+    }
+    const unlock = () => startMemoryMusic();
+    window.addEventListener("pointerdown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      stopMemoryMusic();
+    };
+  }, [music]);
 
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Во всём приложении у клетки один цвет — самое частое действие, без микса. Здесь поле ведёт себя как
-          игра: пять верных подряд открывают соседей, одна ошибка захлопывает уже открытое.
+          Пять верных подряд открывают только соседние клетки этой руки, потом короткий вопрос по математике.
+          Верный ответ дарит ещё пару клеток. Ошибка в вопросе поле не закрывает.
         </p>
+        <button
+          type="button"
+          onClick={() => setMusic((on) => !on)}
+          className="mt-2 h-9 text-sm text-muted underline"
+        >
+          {music ? "Музыка включена" : "Музыка выключена"}
+        </button>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {GROUPS.map((g) => (
@@ -163,7 +337,10 @@ function Sapper({ spot }: { spot: SpotDef }) {
   const [shutting, setShutting] = useState(false);
   const [started, setStarted] = useState<number | null>(null);
   const [now, setNow] = useState(0);
-  const streakHands = useRef<string[]>([]);
+  const [quiz, setQuiz] = useState<(typeof QUIZ)[number] & { picked: number | null; note: string } | null>(null);
+  const [cheer, setCheer] = useState<string | null>(null);
+  const lastHand = useRef<string>("AA");
+  const quizCursor = useRef(0);
   const busy = useRef(false);
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
@@ -175,10 +352,7 @@ function Sapper({ spot }: { spot: SpotDef }) {
     return () => window.clearInterval(id);
   }, [started, done]);
 
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach((id) => window.clearTimeout(id));
-  }, []);
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
   function later(ms: number, fn: () => void) {
     const id = window.setTimeout(fn, ms);
@@ -186,7 +360,7 @@ function Sapper({ spot }: { spot: SpotDef }) {
   }
 
   function paint(hand: string) {
-    if (busy.current || !armed || marks[hand] || done) return;
+    if (busy.current || !armed || marks[hand] || done || quiz) return;
     const t0 = started ?? Date.now();
     if (started == null) {
       setStarted(t0);
@@ -197,7 +371,6 @@ function Sapper({ spot }: { spot: SpotDef }) {
       busy.current = true;
       sounds.miss();
       setStreak(0);
-      streakHands.current = [];
       setMisses((n) => n + 1);
       setPhase("collapse");
       setMarks((prev) => ({ ...prev, [hand]: "miss" }));
@@ -214,23 +387,13 @@ function Sapper({ spot }: { spot: SpotDef }) {
     }
 
     const opened = shape.diffCount[hand] === 0 ? floodSame(shape, hand) : [hand];
-    const chain = [...streakHands.current, ...opened];
     const nextStreak = streak + 1;
     const wave = nextStreak >= 5;
-    const bonus = wave
-      ? chain.flatMap((h) => shape.neighbors[h] ?? []).filter((h, i, all) => all.indexOf(h) === i)
-      : [];
+    lastHand.current = hand;
+    const bonus = wave ? (shape.neighbors[hand] ?? []).filter((h) => !marks[h] && !opened.includes(h)).slice(0, 3) : [];
     const gained = [...opened, ...bonus];
-    if (wave) {
-      streakHands.current = [];
-      setStreak(0);
-      setPhase("wave");
-      later(900, () => setPhase((p) => (p === "wave" ? "play" : p)));
-    } else {
-      streakHands.current = chain;
-      setStreak(nextStreak);
-      setPhase("play");
-    }
+    if (wave) setStreak(0);
+    else setStreak(nextStreak);
     const anim: Record<string, "pop" | "blast"> = {};
     for (const h of opened) anim[h] = "pop";
     for (const h of bonus) anim[h] = "blast";
@@ -242,11 +405,60 @@ function Sapper({ spot }: { spot: SpotDef }) {
       setPhase("win");
     } else if (wave) {
       sounds.wave();
+      const q = QUIZ[quizCursor.current % QUIZ.length]!;
+      quizCursor.current += 1;
+      setQuiz({ ...q, picked: null, note: "" });
+      setCheer(null);
+      setPhase("wave");
+      busy.current = true;
     } else {
       sounds.hit(nextStreak);
+      setPhase("play");
     }
     setFx(anim);
     setMarks(next);
+  }
+
+  function finishQuiz() {
+    setQuiz(null);
+    setCheer(null);
+    busy.current = false;
+    setPhase((p) => (p === "win" ? p : "play"));
+  }
+
+  function answerQuiz(index: number) {
+    if (!quiz || quiz.picked != null) return;
+    const ok = index === quiz.answer;
+    if (ok) {
+      sounds.wave();
+      const extra = (shape.neighbors[lastHand.current] ?? [])
+        .filter((h) => !marks[h])
+        .slice(0, 2);
+      if (extra.length) {
+        const next = { ...marks };
+        const anim: Record<string, "pop" | "blast"> = {};
+        for (const h of extra) {
+          next[h] = "ok";
+          anim[h] = "blast";
+        }
+        setMarks(next);
+        setFx(anim);
+        if (Object.keys(next).length >= 169) {
+          sounds.win();
+          setPhase("win");
+        }
+      }
+      setCheer(extra.length ? "Верно. Две клетки рядом — в подарок." : "Верно. Рядом уже открыто, бонус — само попадание.");
+      setQuiz({ ...quiz, picked: index, note: "" });
+      return;
+    }
+    sounds.soft();
+    setCheer(null);
+    setQuiz({
+      ...quiz,
+      picked: index,
+      note: SUPPORT[quizCursor.current % SUPPORT.length]!,
+    });
   }
 
   const scenario =
@@ -255,10 +467,10 @@ function Sapper({ spot }: { spot: SpotDef }) {
       : phase === "collapse"
         ? "Обвал. Одна ошибка закрыла уже открытые клетки."
         : phase === "wave"
-          ? "Волна. Пять подряд — открылись клетки вокруг цепочки."
+          ? "Пять подряд. Волна маленькая: только клетки вокруг последней руки. Дальше вопрос."
           : streak === 0
-            ? "Назовите цвет клетки. Пять верных подряд поднимают волну."
-            : `Цепочка ${streak}/5. Ещё ${5 - streak} без ошибки — и соседние клетки откроются.`;
+            ? "Назовите цвет. Пять верных подряд — маленькая волна и вопрос по математике."
+            : `Цепочка ${streak}/5. Ошибка на клетке закроет поле. Ошибка в вопросе — нет.`;
 
   return (
     <div className="space-y-3">
@@ -304,7 +516,7 @@ function Sapper({ spot }: { spot: SpotDef }) {
               <button
                 key={h}
                 type="button"
-                disabled={Boolean(mark) || done || shutting}
+                disabled={Boolean(mark) || done || shutting || quiz != null}
                 onClick={() => paint(h)}
                 className={cn(
                   "relative flex aspect-square origin-center items-end p-0.5 font-mono text-[10px] font-semibold leading-none sm:text-xs",
@@ -324,6 +536,46 @@ function Sapper({ spot }: { spot: SpotDef }) {
           }),
         )}
       </div>
+      {quiz ? (
+        <section className={cn("rounded-2xl border border-border bg-surface p-4", cheer && "range-blast")}>
+          <p className="font-mono text-xs text-subtle">{quiz.topic}</p>
+          <p className="mt-1 text-base">{quiz.prompt}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {quiz.options.map((opt, n) => {
+              const picked = quiz.picked === n;
+              const good = quiz.picked != null && n === quiz.answer;
+              const bad = picked && n !== quiz.answer;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  disabled={quiz.picked != null}
+                  onClick={() => answerQuiz(n)}
+                  className={cn(
+                    "h-11 rounded-[10px] border text-sm",
+                    quiz.picked == null && "border-border bg-surface-2",
+                    good && "border-ok text-ok",
+                    bad && "border-bad text-bad",
+                    quiz.picked != null && !good && !bad && "border-border text-subtle",
+                  )}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+          {quiz.picked != null ? (
+            <div className="mt-3 space-y-2 text-sm leading-relaxed">
+              {cheer ? <p className="font-medium">{cheer}</p> : null}
+              <p className="text-muted">{quiz.why}</p>
+              {quiz.note ? <p>{quiz.note}</p> : null}
+              <button type="button" className="h-11 text-sm text-muted" onClick={finishQuiz}>
+                Дальше к ренджу
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }
