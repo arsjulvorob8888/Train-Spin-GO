@@ -194,20 +194,40 @@ export function RangeExperiment() {
           {music ? "Выключить музыку" : "Включить музыку"}
         </button>
       </div>
-      <label className="block rounded-2xl border border-border bg-surface p-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <span className="font-mono text-sm">{bb}bb</span>
-          <span className="text-sm text-muted">{stackNote(bb)}</span>
+      <div className={cn("rounded-2xl border p-3", bb === 15 ? "border-fg bg-surface" : "border-border bg-surface")}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className={cn("font-mono text-4xl font-semibold tabular-nums leading-none", bb === 15 ? "text-fg" : "text-muted")}>
+            {bb}
+            <span className="ml-1 text-lg">bb</span>
+          </p>
+          {bb === 15 ? (
+            <span className="rounded-full bg-fg px-3 py-1 text-sm text-bg">точный чарт</span>
+          ) : (
+            <button type="button" className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg" onClick={() => setBb(15)}>
+              На 15bb
+            </button>
+          )}
         </div>
-        <input
-          type="range"
-          min={1}
-          max={30}
-          value={bb}
-          onChange={(e) => setBb(Number(e.target.value))}
-          className="mt-3 w-full"
-        />
-      </label>
+        <div className="relative mt-4">
+          <span className="pointer-events-none absolute top-1/2 left-[48.3%] z-0 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-fg" />
+          <input
+            type="range"
+            min={1}
+            max={30}
+            value={bb}
+            onChange={(e) => setBb(Number(e.target.value))}
+            className="relative z-10 w-full accent-current"
+          />
+        </div>
+        <div className="mt-1 grid grid-cols-3 font-mono text-xs text-muted">
+          <span>1</span>
+          <button type="button" className={cn("text-center", bb === 15 ? "font-semibold text-fg" : "text-fg")} onClick={() => setBb(15)}>
+            15
+          </button>
+          <span className="text-right">30</span>
+        </div>
+        <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {GROUPS.map((g) => (
           <button
