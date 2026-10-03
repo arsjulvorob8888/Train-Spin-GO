@@ -171,6 +171,18 @@
 .range-shut { animation: range-shut 380ms ease-in forwards; }
 .range-shake { animation: range-shake 460ms ease-in-out; }
 .range-urgent { box-shadow: inset 0 0 0 2px rgba(185, 74, 62, 0.85); animation: range-shake 700ms ease-in-out infinite; }
+.range-warn { animation: range-warn 320ms linear infinite; }
+.range-flash { animation: range-flash 720ms ease-out; }
+
+@keyframes range-warn {
+  0%, 100% { filter: brightness(1); transform: scale(1); }
+  50% { filter: brightness(2.4); transform: scale(1.08); }
+}
+@keyframes range-flash {
+  0% { filter: brightness(1); }
+  35% { filter: brightness(1.85); }
+  100% { filter: brightness(1); }
+}
 .range-live { animation: range-glow 2.8s ease-in-out infinite; }
 
 @keyframes range-glow {

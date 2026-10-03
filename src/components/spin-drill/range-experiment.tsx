@@ -17,11 +17,6 @@ const ACT: Record<MixAction, string> = {
 type Mode = "sapper" | "edge";
 type CellMark = "ok" | "miss";
 
-function formatTime(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
 let audioCtx: AudioContext | null = null;
 
 function audio(): AudioContext | null {
@@ -172,7 +167,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Игра стартует сама. Вопрос приходит после трёх волн или после ошибки: верный ответ сразу возвращает в поле, неверный гасит ещё 5 клеток.
+          Игра идёт сама. Каждые 3 секунды гаснут 3 ближайшие открытые клетки. Пять верных подряд открывают соседей и замораживают угасание. Третья серия задаёт вопрос.
         </p>
         <button
           type="button"
@@ -291,10 +286,14 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
   const [live, setLive] = useState(true);
-  const [left, setLeft] = useState(120);
+  const [tick, setTick] = useState(3);
+  const [freeze, setFreeze] = useState(0);
   const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string }) | null>(null);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
+  const marksRef = useRef(marks);
+  const freezeRef = useRef(0);
+  marksRef.current = marks;
   const busy = useRef(false);
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
@@ -303,21 +302,37 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   useEffect(() => {
     if (!live || quiz || phase === "win" || phase === "time") return;
     const id = window.setInterval(() => {
-      setLeft((seconds) => (seconds <= 1 ? 0 : seconds - 1));
+      if (busy.current) return;
+      if (freezeRef.current > 0) {
+        freezeRef.current -= 1;
+        setFreeze(freezeRef.current);
+        setTick(3);
+        return;
+      }
+      setTick((current) => (current > 1 ? current - 1 : 0));
     }, 1000);
     return () => window.clearInterval(id);
   }, [live, quiz, phase]);
 
   useEffect(() => {
-    if (!live || left !== 0) return;
-    sounds.miss();
-    setPhase("time");
-    setLive(false);
-  }, [live, left]);
-
-  useEffect(() => {
-    if (live && left > 0 && left <= 10) sounds.soft();
-  }, [live, left]);
+    if (tick !== 0 || quiz || phase === "win") return;
+    const open = Object.keys(marksRef.current).filter((cell) => cell !== lastHand.current && marksRef.current[cell] === "ok");
+    const victims = nearestOpen(lastHand.current, open, 3);
+    if (victims.length) {
+      sounds.soft();
+      setClosing(victims);
+      const id = window.setTimeout(() => {
+        setMarks((prev) => {
+          const next = { ...prev };
+          for (const cell of victims) if (next[cell] === "ok") delete next[cell];
+          return next;
+        });
+        setClosing([]);
+      }, 280);
+      timers.current.push(id);
+    }
+    setTick(3);
+  }, [tick, quiz, phase]);
 
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
@@ -338,6 +353,8 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       busy.current = true;
       sounds.miss();
       setStreak(0);
+      freezeRef.current = 0;
+      setFreeze(0);
       setMisses((n) => n + 1);
       setClosing(victims);
       setMarks((prev) => ({ ...prev, [hand]: "miss" }));
@@ -379,10 +396,14 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       setPhase("wave");
       if (doneWaves >= 3) {
         setWaves(0);
+        freezeRef.current = 0;
+        setFreeze(0);
         ask();
       } else {
         setWaves(doneWaves);
-        later(700, () => setPhase((p) => (p === "wave" ? "play" : p)));
+        freezeRef.current = 3 + doneWaves * 3;
+        setFreeze(freezeRef.current);
+        later(900, () => setPhase((p) => (p === "wave" ? "play" : p)));
       }
     } else {
       sounds.hit(nextStreak);
@@ -451,29 +472,36 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     });
   }
 
+  const doomed =
+    tick === 1 && freeze === 0
+      ? nearestOpen(
+          lastHand.current,
+          Object.keys(marks).filter((cell) => cell !== lastHand.current && marks[cell] === "ok"),
+          3,
+        )
+      : [];
+
   const scenario =
-    !live && phase !== "time" && phase !== "win"
-      ? "Рендж открыт. Запомните форму, потом нажмите «Закрыть и играть»."
-      : phase === "win"
-        ? "Рендж собран до дедлайна."
-        : phase === "time"
-          ? "Время вышло. Ниже снова видна форма — посмотрите, что осталось."
-          : phase === "wave"
-            ? "Пять подряд. Соседи открылись. Вопрос будет на третьей такой волне."
-            : streak === 0
-              ? `Поле закрыто. ${formatTime(left * 1000)}. Волна ${waves}/3. Ошибка тоже задаёт вопрос.`
-              : `Цепочка ${streak}/5. Волна ${waves}/3.`;
+    phase === "win"
+      ? "Рендж собран. Угасание не успело."
+      : phase === "wave"
+        ? `Серия ${waves}. Угасание замерло: поле не тухнет ${freeze} с.`
+        : freeze > 0
+          ? `Серия держит поле ещё ${freeze} с. Цепочка ${streak}/5.`
+          : streak === 0
+            ? "Каждые 3 секунды гаснут 3 ближайшие открытые клетки. Пять подряд останавливают угасание."
+            : `Цепочка ${streak}/5. Волна ${waves}/3. Ещё ${5 - streak} — и поле замирает.`;
 
   return (
     <div className="space-y-3">
       <div className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-bg/90 py-2 backdrop-blur-sm">
-        <p className={cn("font-mono text-5xl font-semibold tabular-nums leading-none", left <= 15 ? "text-bad" : "text-fg")}>
-          {formatTime(left * 1000)}
+        <p className={cn("font-mono text-6xl font-semibold tabular-nums leading-none", freeze > 0 ? "text-ok" : tick === 1 ? "text-bad" : "text-fg")}>
+          {freeze > 0 ? freeze : Math.max(tick, 1)}
         </p>
-        <p className="text-sm text-muted">
-          {openCount}/169 · ошибки {misses}
+        <p className="text-right text-sm text-muted">
+          {freeze > 0 ? "серия держит поле" : "сек до угасания"}
           <br />
-          волна {waves}/3
+          {openCount}/169 · волны {waves}/3
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -511,7 +539,9 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
             className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg"
             onClick={() => {
               setLive(true);
-              setLeft(120);
+              setTick(3);
+              setFreeze(0);
+              freezeRef.current = 0;
               setMarks({});
               setStreak(0);
               setWaves(0);
@@ -524,7 +554,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         ) : null}
       </div>
       <div className="relative">
-      <div className={cn("grid grid-cols-13 gap-px", live && left <= 15 && "range-urgent", !live && phase !== "time" && "range-live")}>
+      <div className={cn("grid grid-cols-13 gap-px", live && tick === 1 && freeze === 0 && "range-urgent", phase === "wave" && "range-flash", !live && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
           Array.from({ length: 13 }, (_, c) => {
             const h = handAt(r, c);
@@ -543,6 +573,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
                   revealed ? ACT[action] : "bg-surface-2 text-muted",
                   mark === "miss" && "outline outline-2 outline-bad",
                   closing.includes(h) && "range-shut",
+                  doomed.includes(h) && "range-warn",
                   !closing.includes(h) && fx[h] === "pop" && "range-pop",
                   !closing.includes(h) && fx[h] === "blast" && "range-blast",
                 )}
