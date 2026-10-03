@@ -356,8 +356,8 @@ export const COMBO_Q: QuizQ[] = COMBOS.map((c) => {
 });
 
 export function drawQuiz(kind: "drill" | "reward" = "drill"): QuizQ {
-  const pool = kind === "reward" ? REWARD : COMBO_Q;
-  const storageKey = kind === "reward" ? "spin-quiz-reward" : "spin-quiz-combo";
+  const pool = kind === "reward" ? REWARD : [...QUIZ, ...COMBO_Q];
+  const storageKey = kind === "reward" ? "spin-quiz-reward" : "spin-quiz-mix";
   let left: string[] = [];
   if (typeof localStorage !== "undefined") {
     try {
@@ -369,7 +369,19 @@ export function drawQuiz(kind: "drill" | "reward" = "drill"): QuizQ {
   }
   const known = new Set(pool.map((q) => q.id));
   left = left.filter((id) => known.has(id));
-  if (left.length === 0) left = pool.map((q) => q.id).sort(() => Math.random() - 0.5);
+  if (left.length === 0) {
+    if (kind === "reward") left = pool.map((q) => q.id).sort(() => Math.random() - 0.5);
+    else {
+      const math = QUIZ.map((q) => q.id).sort(() => Math.random() - 0.5);
+      const combos = COMBO_Q.map((q) => q.id).sort(() => Math.random() - 0.5);
+      left = [];
+      const count = Math.max(math.length, combos.length);
+      for (let i = 0; i < count; i++) {
+        if (math[i]) left.push(math[i]!);
+        if (combos[i]) left.push(combos[i]!);
+      }
+    }
+  }
   const id = left.shift() ?? pool[0]!.id;
   if (typeof localStorage !== "undefined") localStorage.setItem(storageKey, JSON.stringify(left));
   return pool.find((q) => q.id === id) ?? pool[0]!;
