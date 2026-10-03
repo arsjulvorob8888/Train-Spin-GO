@@ -451,7 +451,29 @@ function Sapper({
   useEffect(() => {
     const keys = ["a", "s", "d", "f"];
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === " " || event.code === "Space") {
+        event.preventDefault();
+        if (quiz || phase === "win") return;
+        if (!live) {
+          setLive(true);
+          setPaused(false);
+          setPeek(null);
+          setLeft(120);
+          setTick(3);
+          setFreeze(0);
+          freezeRef.current = 0;
+          setMarks({});
+          setStreak(0);
+          setChain(0);
+          setPhase("play");
+          setMisses(0);
+          setQuiz(null);
+          return;
+        }
+        setPaused((on) => !on);
+        return;
+      }
       const index = keys.indexOf(event.key.toLowerCase());
       if (index < 0 || index >= actions.length) return;
       event.preventDefault();
@@ -459,7 +481,7 @@ function Sapper({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [actions]);
+  }, [actions, live, paused, phase, quiz]);
 
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
@@ -733,7 +755,7 @@ function Sapper({
           </button>
         ))}
         <span className="font-mono text-xs text-muted">
-          {streak === 0 ? "A S D F" : `цепочка ${streak}/5`}
+          {streak === 0 ? "A S D F · пробел старт/стоп" : `цепочка ${streak}/5`}
         </span>
         {!live && phase !== "win" ? (
           <button
@@ -755,16 +777,19 @@ function Sapper({
               setQuiz(null);
             }}
           >
+            <span className="mr-1.5 font-mono">Space</span>
             {phase === "time" ? "Ещё раз" : "Играть"}
           </button>
         ) : null}
         {live && !paused ? (
           <button type="button" className="h-11 rounded-lg border border-border px-3 text-sm" onClick={() => setPaused(true)}>
+            <span className="mr-1.5 font-mono">Space</span>
             Стоп
           </button>
         ) : null}
         {paused ? (
           <button type="button" className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg" onClick={() => setPaused(false)}>
+            <span className="mr-1.5 font-mono">Space</span>
             Продолжить
           </button>
         ) : null}
