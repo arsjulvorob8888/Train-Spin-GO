@@ -1,3 +1,4 @@
+import { PairLine } from "@/components/spin-drill/mix-grid";
 import { ALL, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
@@ -834,6 +835,7 @@ function Sapper({
           }),
         )}
       </div>
+      <PairLine />
       {strikeFx ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden">
           <div className="strike-ring" />
@@ -884,7 +886,8 @@ function Sapper({
                   {spot.title}. Сейчас {bb}bb, это тот же спот на {rewardBb}bb.
                 </p>
                 <p className="mt-1 text-sm text-muted">Обводка — действие другое, чем на твоём стеке. {stackNote(rewardBb)}</p>
-                <div className="mt-3 grid grid-cols-13 gap-px">
+                <div className="relative mt-3">
+                <div className="grid grid-cols-13 gap-px">
                   {Array.from({ length: 13 }, (_, r) =>
                     Array.from({ length: 13 }, (_, c) => {
                       const h = handAt(r, c);
@@ -904,6 +907,8 @@ function Sapper({
                       );
                     }),
                   )}
+                </div>
+                <PairLine />
                 </div>
               </div>
             ) : null}

@@ -10,6 +10,20 @@ const BAR: Record<string, string> = {
   fold: "bg-fold",
 };
 
+export function PairLine() {
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0 z-20 h-full w-full"
+      viewBox="0 0 13 13"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <line x1="0.5" y1="0.5" x2="12.5" y2="12.5" stroke="#000" strokeWidth="3" vectorEffect="non-scaling-stroke" opacity="0.55" />
+      <line x1="0.5" y1="0.5" x2="12.5" y2="12.5" stroke="#fff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 export function MixGrid({
   range,
   selected,
@@ -63,7 +77,10 @@ export function MixGrid({
   }
   return (
     <div className="w-full overflow-x-auto">
-      <div className="grid min-w-0 grid-cols-13 gap-px bg-bg">{cells}</div>
+      <div className="relative grid min-w-0 grid-cols-13 gap-px bg-bg">
+        {cells}
+        <PairLine />
+      </div>
     </div>
   );
 }
