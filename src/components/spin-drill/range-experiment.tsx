@@ -175,7 +175,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          На партию 2:00. Каждая серия из пяти верных добавляет 15 секунд и денежный залп. Каждые 3 секунды гаснут 3 ближайшие клетки, серия это останавливает.
+          На партию 2:00. Сначала смотрите рендж и запускайте кнопкой. Серия из пяти верных даёт 15 секунд, денежный залп и короткий показ всей доски.
         </p>
         <button
           type="button"
@@ -313,7 +313,9 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [misses, setMisses] = useState(0);
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
-  const [live, setLive] = useState(true);
+  const [live, setLive] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [peek, setPeek] = useState(false);
   const [left, setLeft] = useState(120);
   const [tick, setTick] = useState(3);
   const [freeze, setFreeze] = useState(0);
@@ -332,12 +334,12 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const done = phase === "win" || phase === "time" || openCount === 169;
 
   useEffect(() => {
-    if (!live || quiz || phase === "win" || phase === "time") return;
+    if (!live || paused || quiz || phase === "win" || phase === "time") return;
     const id = window.setInterval(() => {
       setLeft((seconds) => (seconds <= 1 ? 0 : seconds - 1));
     }, 1000);
     return () => window.clearInterval(id);
-  }, [live, quiz, phase]);
+  }, [live, paused, quiz, phase]);
 
   useEffect(() => {
     if (!live || left !== 0) return;
@@ -347,7 +349,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   }, [live, left]);
 
   useEffect(() => {
-    if (!live || quiz || phase === "win" || phase === "time") return;
+    if (!live || paused || quiz || phase === "win" || phase === "time") return;
     const id = window.setInterval(() => {
       if (busy.current) return;
       if (freezeRef.current > 0) {
@@ -359,10 +361,10 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       setTick((current) => (current > 1 ? current - 1 : 0));
     }, 1000);
     return () => window.clearInterval(id);
-  }, [live, quiz, phase]);
+  }, [live, paused, quiz, phase]);
 
   useEffect(() => {
-    if (tick !== 0 || quiz || phase === "win") return;
+    if (tick !== 0 || paused || quiz || phase === "win") return;
     const open = Object.keys(marksRef.current).filter((cell) => cell !== lastHand.current && marksRef.current[cell] === "ok");
     const victims = nearestOpen(lastHand.current, open, 3);
     if (victims.length) {
@@ -379,7 +381,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       timers.current.push(id);
     }
     setTick(3);
-  }, [tick, quiz, phase]);
+  }, [tick, paused, quiz, phase]);
 
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
@@ -389,7 +391,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   }
 
   function paint(hand: string) {
-    if (!live || busy.current || !armed || marks[hand] || done || quiz) return;
+    if (!live || paused || busy.current || !armed || marks[hand] || done || quiz || peek) return;
     const right = shape.action[hand] === armed;
     if (!right) {
       const victims = nearestOpen(
@@ -442,13 +444,15 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       sounds.cash();
       setLeft((seconds) => seconds + 15);
       setSalute((n) => n + 1);
+      setPeek(true);
+      later(1600, () => setPeek(false));
       const doneWaves = waves + 1;
       setPhase("wave");
       if (doneWaves >= 3) {
         setWaves(0);
         freezeRef.current = 0;
         setFreeze(0);
-        ask();
+        later(1500, () => ask());
       } else {
         setWaves(doneWaves);
         freezeRef.current = 3 + doneWaves * 3;
@@ -489,7 +493,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   }
 
   useEffect(() => {
-    if (!quiz || quiz.picked != null) return;
+    if (!quiz || quiz.picked != null || paused) return;
     if (quizLeft > 0) {
       const id = window.setTimeout(() => setQuizLeft((n) => n - 1), 1000);
       return () => window.clearTimeout(id);
@@ -497,7 +501,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     if (quizFail.current) return;
     quizFail.current = true;
     punish("Время вышло.", -1);
-  }, [quiz, quizLeft]);
+  }, [quiz, quizLeft, paused]);
 
   function finishQuiz() {
     setQuiz(null);
@@ -546,10 +550,14 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       : [];
 
   const scenario =
-    phase === "win"
+    !live && phase !== "time" && phase !== "win"
+      ? "Рендж открыт. Посмотрите форму и нажмите «Играть»."
+      : paused
+        ? "Пауза. Часы стоят, рендж открыт."
+        : phase === "win"
       ? "Рендж собран. Угасание не успело."
       : phase === "wave"
-        ? `Серия. +15 секунд к часам, угасание замерло.`
+        ? "Серия. +15 секунд, доска открыта на миг."
         : freeze > 0
           ? `Серия держит поле ещё ${freeze} с. Цепочка ${streak}/5.`
           : streak === 0
@@ -610,6 +618,8 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
             className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg"
             onClick={() => {
               setLive(true);
+              setPaused(false);
+              setPeek(false);
               setLeft(120);
               setTick(3);
               setFreeze(0);
@@ -619,26 +629,37 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
               setWaves(0);
               setPhase("play");
               setMisses(0);
+              setQuiz(null);
             }}
           >
-            {phase === "time" ? "Ещё раз" : "Закрыть и играть"}
+            {phase === "time" ? "Ещё раз" : "Играть"}
+          </button>
+        ) : null}
+        {live && !paused ? (
+          <button type="button" className="h-11 rounded-lg border border-border px-3 text-sm" onClick={() => setPaused(true)}>
+            Стоп
+          </button>
+        ) : null}
+        {paused ? (
+          <button type="button" className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg" onClick={() => setPaused(false)}>
+            Продолжить
           </button>
         ) : null}
       </div>
       <div className="relative">
-      <div className={cn("grid grid-cols-13 gap-px", live && tick === 1 && freeze === 0 && "range-urgent", phase === "wave" && "range-flash", !live && phase !== "time" && "range-live")}>
+      <div className={cn("grid grid-cols-13 gap-px", live && !paused && tick === 1 && freeze === 0 && "range-urgent", (phase === "wave" || peek) && "range-flash range-peek", (!live || paused) && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
           Array.from({ length: 13 }, (_, c) => {
             const h = handAt(r, c);
             const mark = marks[h];
             const action = shape.action[h]!;
             const n = shape.diffCount[h] ?? 0;
-            const revealed = Boolean(mark) || !live || phase === "time" || phase === "win";
+            const revealed = Boolean(mark) || !live || paused || peek || phase === "time" || phase === "win";
             return (
               <button
                 key={h}
                 type="button"
-                disabled={!live || Boolean(mark) || done || quiz != null || closing.includes(h)}
+                disabled={!live || paused || peek || Boolean(mark) || done || quiz != null || closing.includes(h)}
                 onClick={() => paint(h)}
                 className={cn(
                   "relative flex aspect-square origin-center items-center justify-center font-mono text-sm font-bold leading-none tracking-tight sm:text-lg",
@@ -646,6 +667,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
                   mark === "miss" && "outline outline-2 outline-bad",
                   closing.includes(h) && "range-shut",
                   doomed.includes(h) && "range-warn",
+                  peek && !mark && "range-peek-cell",
                   !closing.includes(h) && fx[h] === "pop" && "range-pop",
                   !closing.includes(h) && fx[h] === "blast" && "range-blast",
                 )}
@@ -659,13 +681,19 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           }),
         )}
       </div>
-      {salute > 0 && phase === "wave" ? (
+      {peek ? (
         <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
-          {Array.from({ length: 16 }, (_, i) => (
+          <div className="range-veil" />
+          {Array.from({ length: 28 }, (_, i) => (
             <i
               key={`${salute}-${i}`}
-              className="coin"
-              style={{ left: `${(i * 6.2) % 100}%`, animationDelay: `${i * 45}ms` }}
+              className={i < 14 ? "coin" : "coin coin-burst"}
+              style={{
+                left: `${8 + ((i * 13) % 84)}%`,
+                animationDelay: `${i * 28}ms`,
+                ["--dx" as string]: `${(i % 7) * 28 - 84}px`,
+                ["--dy" as string]: `${-40 - (i % 5) * 36}px`,
+              }}
             >
               {i % 3 === 0 ? "bb" : "$"}
             </i>
