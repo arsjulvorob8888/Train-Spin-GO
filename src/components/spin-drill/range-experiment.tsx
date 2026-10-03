@@ -175,7 +175,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          На партию 2:00. Сначала смотрите рендж и запускайте кнопкой. Серия из пяти верных даёт 15 секунд, денежный залп и короткий показ всей доски.
+          Серия из пяти верных даёт 15 секунд. Вся доска открывается только после пяти таких серий подряд, потом счётчик начинается заново.
         </p>
         <button
           type="button"
@@ -310,6 +310,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [fx, setFx] = useState<Record<string, "pop" | "blast">>({});
   const [streak, setStreak] = useState(0);
   const [waves, setWaves] = useState(0);
+  const [chain, setChain] = useState(0);
   const [misses, setMisses] = useState(0);
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
@@ -402,6 +403,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       busy.current = true;
       sounds.miss();
       setStreak(0);
+      setChain(0);
       freezeRef.current = 0;
       setFreeze(0);
       setMisses((n) => n + 1);
@@ -441,18 +443,25 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       setPhase("win");
     } else if (wave) {
       sounds.wave();
-      sounds.cash();
       setLeft((seconds) => seconds + 15);
-      setSalute((n) => n + 1);
-      setPeek(true);
-      later(1600, () => setPeek(false));
+      const nextChain = chain + 1;
+      const showBoard = nextChain >= 5;
+      if (showBoard) {
+        sounds.cash();
+        setChain(0);
+        setSalute((n) => n + 1);
+        setPeek(true);
+        later(2200, () => setPeek(false));
+      } else {
+        setChain(nextChain);
+      }
       const doneWaves = waves + 1;
       setPhase("wave");
       if (doneWaves >= 3) {
         setWaves(0);
         freezeRef.current = 0;
         setFreeze(0);
-        later(1500, () => ask());
+        later(showBoard ? 2300 : 1500, () => ask());
       } else {
         setWaves(doneWaves);
         freezeRef.current = 3 + doneWaves * 3;
@@ -556,9 +565,11 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         ? "Пауза. Часы стоят, рендж открыт."
         : phase === "win"
       ? "Рендж собран. Угасание не успело."
-      : phase === "wave"
-        ? "Серия. +15 секунд, доска открыта на миг."
-        : freeze > 0
+      : peek
+        ? "Пять серий подряд. Вся доска открыта."
+        : phase === "wave"
+          ? `Серия ${chain}/5. +15 секунд. Доска откроется на пятой подряд.`
+          : freeze > 0
           ? `Серия держит поле ещё ${freeze} с. Цепочка ${streak}/5.`
           : streak === 0
             ? "Каждые 3 секунды гаснут 3 ближайшие открытые клетки. Пять подряд останавливают угасание."
@@ -580,7 +591,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           <br />
           {freeze > 0 ? "серия держит поле" : "сек до угасания"}
           <br />
-          {openCount}/169 · волны {waves}/3
+          {openCount}/169 · серии {chain}/5
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -627,6 +638,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
               setMarks({});
               setStreak(0);
               setWaves(0);
+              setChain(0);
               setPhase("play");
               setMisses(0);
               setQuiz(null);
@@ -684,10 +696,10 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       {peek ? (
         <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
           <div className="range-veil" />
-          {Array.from({ length: 28 }, (_, i) => (
+          {Array.from({ length: 40 }, (_, i) => (
             <i
               key={`${salute}-${i}`}
-              className={i < 14 ? "coin" : "coin coin-burst"}
+              className={i % 2 === 0 ? "coin coin-fall" : "coin coin-burst"}
               style={{
                 left: `${8 + ((i * 13) % 84)}%`,
                 animationDelay: `${i * 28}ms`,

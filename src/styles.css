@@ -186,40 +186,42 @@
 .range-peek-cell { animation: range-blast 780ms cubic-bezier(0.16, 1.4, 0.3, 1); }
 .range-veil {
   position: absolute;
-  inset: 0;
-  background: radial-gradient(circle, rgba(255, 244, 214, 0.72), transparent 68%);
-  animation: range-veil 1.5s ease-out forwards;
+  inset: -8%;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 236, 170, 0.95), transparent 42%),
+    radial-gradient(circle at 50% 70%, rgba(255, 255, 255, 0.55), transparent 60%);
+  animation: range-veil 2.1s ease-out forwards;
 }
 @keyframes range-veil {
-  0% { opacity: 0; }
-  18% { opacity: 1; }
-  100% { opacity: 0; }
-}
-.coin-burst {
-  top: 42%;
-  animation-name: coin-burst;
-}
-@keyframes coin-burst {
-  0% { transform: translate(0, 0) scale(0.3); opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)) scale(1.2); opacity: 0; }
+  0% { opacity: 0; transform: scale(0.6); }
+  12% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.15); }
 }
 .coin {
   position: absolute;
-  top: -8%;
+  top: -12%;
   font-style: normal;
   font-family: ui-monospace, monospace;
-  font-size: 18px;
+  font-size: 28px;
   font-weight: 700;
-  color: #e7c56a;
-  text-shadow: 0 0 12px rgba(231, 197, 106, 0.85);
-  animation: coin-fall 1200ms ease-in forwards;
+  color: #ffe08a;
+  text-shadow: 0 0 18px rgba(255, 210, 90, 1), 0 0 4px rgba(255, 255, 255, 0.9);
+  animation: coin-fall 1600ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
 }
-.coin:nth-child(3n) { color: #7dcea0; font-size: 14px; }
-.coin:nth-child(4n) { font-size: 22px; }
-
+.coin:nth-child(3n) { color: #b6f3c8; font-size: 22px; }
+.coin:nth-child(4n) { font-size: 36px; color: #fff4c2; }
+.coin-burst {
+  top: 46%;
+  font-size: 32px;
+  animation: coin-burst 1400ms cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+@keyframes coin-burst {
+  0% { transform: translate(0, 0) scale(0.2) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1.35) rotate(220deg); opacity: 0; }
+}
 @keyframes coin-fall {
-  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(520px) rotate(280deg); opacity: 0; }
+  0% { transform: translateY(-30px) rotate(0deg) scale(0.6); opacity: 1; }
+  100% { transform: translateY(640px) rotate(420deg) scale(1); opacity: 0; }
 }
 .range-live { animation: range-glow 2.8s ease-in-out infinite; }
 
