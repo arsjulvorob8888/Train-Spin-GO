@@ -175,7 +175,7 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Серия из пяти верных даёт 15 секунд. Вся доска открывается только после пяти таких серий подряд, потом счётчик начинается заново.
+          Страйк — пять верных клеток подряд. После трёх страйков открывается кусок доски, после пяти — весь рендж. Потом счётчик сначала.
         </p>
         <button
           type="button"
@@ -316,7 +316,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [closing, setClosing] = useState<string[]>([]);
   const [live, setLive] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [peek, setPeek] = useState(false);
+  const [peek, setPeek] = useState<"part" | "all" | null>(null);
   const [left, setLeft] = useState(120);
   const [tick, setTick] = useState(3);
   const [freeze, setFreeze] = useState(0);
@@ -445,15 +445,20 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
       sounds.wave();
       setLeft((seconds) => seconds + 15);
       const nextChain = chain + 1;
-      const showBoard = nextChain >= 5;
-      if (showBoard) {
+      const showAll = nextChain >= 5;
+      const showPart = nextChain === 3;
+      if (showAll) {
         sounds.cash();
         setChain(0);
         setSalute((n) => n + 1);
-        setPeek(true);
-        later(2200, () => setPeek(false));
+        setPeek("all");
+        later(2200, () => setPeek(null));
       } else {
         setChain(nextChain);
+        if (showPart) {
+          setPeek("part");
+          later(1600, () => setPeek(null));
+        }
       }
       const doneWaves = waves + 1;
       setPhase("wave");
@@ -461,7 +466,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         setWaves(0);
         freezeRef.current = 0;
         setFreeze(0);
-        later(showBoard ? 2300 : 1500, () => ask());
+        later(showAll ? 2300 : showPart ? 1700 : 400, () => ask());
       } else {
         setWaves(doneWaves);
         freezeRef.current = 3 + doneWaves * 3;
@@ -565,11 +570,13 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         ? "Пауза. Часы стоят, рендж открыт."
         : phase === "win"
       ? "Рендж собран. Угасание не успело."
-      : peek
-        ? "Пять серий подряд. Вся доска открыта."
-        : phase === "wave"
-          ? `Серия ${chain}/5. +15 секунд. Доска откроется на пятой подряд.`
-          : freeze > 0
+      : peek === "all"
+        ? "Пять страйков подряд. Весь рендж открыт."
+        : peek === "part"
+          ? "Три страйка. Открыт кусок вокруг последней руки."
+          : phase === "wave"
+            ? `Страйк ${chain}/5. +15 секунд. Кусок доски на третьем, весь рендж на пятом.`
+            : freeze > 0
           ? `Серия держит поле ещё ${freeze} с. Цепочка ${streak}/5.`
           : streak === 0
             ? "Каждые 3 секунды гаснут 3 ближайшие открытые клетки. Пять подряд останавливают угасание."
@@ -591,7 +598,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           <br />
           {freeze > 0 ? "серия держит поле" : "сек до угасания"}
           <br />
-          {openCount}/169 · серии {chain}/5
+          {openCount}/169 · страйки {chain}/5
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -630,7 +637,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
             onClick={() => {
               setLive(true);
               setPaused(false);
-              setPeek(false);
+              setPeek(null);
               setLeft(120);
               setTick(3);
               setFreeze(0);
@@ -666,12 +673,13 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
             const mark = marks[h];
             const action = shape.action[h]!;
             const n = shape.diffCount[h] ?? 0;
-            const revealed = Boolean(mark) || !live || paused || peek || phase === "time" || phase === "win";
+            const inPart = peek === "part" && cellDistance(lastHand.current, h) <= 3;
+            const revealed = Boolean(mark) || !live || paused || peek === "all" || inPart || phase === "time" || phase === "win";
             return (
               <button
                 key={h}
                 type="button"
-                disabled={!live || paused || peek || Boolean(mark) || done || quiz != null || closing.includes(h)}
+                disabled={!live || paused || peek != null || Boolean(mark) || done || quiz != null || closing.includes(h)}
                 onClick={() => paint(h)}
                 className={cn(
                   "relative flex aspect-square origin-center items-center justify-center font-mono text-sm font-bold leading-none tracking-tight sm:text-lg",
@@ -679,7 +687,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
                   mark === "miss" && "outline outline-2 outline-bad",
                   closing.includes(h) && "range-shut",
                   doomed.includes(h) && "range-warn",
-                  peek && !mark && "range-peek-cell",
+                  (peek === "all" || inPart) && !mark && "range-peek-cell",
                   !closing.includes(h) && fx[h] === "pop" && "range-pop",
                   !closing.includes(h) && fx[h] === "blast" && "range-blast",
                 )}
@@ -693,7 +701,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           }),
         )}
       </div>
-      {peek ? (
+      {peek === "all" ? (
         <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
           <div className="range-veil" />
           {Array.from({ length: 40 }, (_, i) => (
