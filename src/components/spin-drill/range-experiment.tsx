@@ -465,6 +465,19 @@ function Sapper({
     return () => el.removeEventListener("wheel", spin);
   }, [actions]);
 
+  useEffect(() => {
+    const keys = ["a", "s", "d", "f"];
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const index = keys.indexOf(event.key.toLowerCase());
+      if (index < 0 || index >= actions.length) return;
+      event.preventDefault();
+      setArmed(actions[index]!);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [actions]);
+
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
   function celebrate() {
@@ -721,7 +734,7 @@ function Sapper({
         </div>
       </div>
       <div ref={wheelRef} className="flex flex-wrap items-center gap-2" title="Колесо мыши меняет действие">
-        {actions.map((a) => (
+        {actions.map((a, i) => (
           <button
             key={a}
             type="button"
@@ -732,11 +745,12 @@ function Sapper({
               armed === a ? "scale-110 text-base outline outline-2 outline-offset-2 outline-fg" : "opacity-70",
             )}
           >
+            <span className="mr-1.5 font-mono">{["A", "S", "D", "F"][i]}</span>
             {actionLabel(spot, a, bb)}
           </button>
         ))}
         <span className="font-mono text-xs text-muted">
-          {streak === 0 ? "скролл меняет действие" : `цепочка ${streak}/5`}
+          {streak === 0 ? "A S D F или скролл" : `цепочка ${streak}/5`}
         </span>
         {!live && phase !== "win" ? (
           <button
