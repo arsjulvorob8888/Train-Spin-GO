@@ -721,20 +721,20 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         </div>
       ) : null}
       {quiz ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-bg/75 p-2 backdrop-blur-sm">
-          <section className={cn("max-h-full w-full max-w-lg overflow-auto rounded-2xl border border-border bg-surface p-4 shadow-border", cheer && "range-blast")}>
-            <div className="flex items-start justify-between gap-3">
-              <p className="font-mono text-xs text-subtle">{quiz.topic}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm">
+          <section className={cn("max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-border bg-surface p-6 shadow-border sm:p-8", cheer && "range-blast")}>
+            <div className="flex items-start justify-between gap-4">
+              <p className="font-mono text-sm text-subtle">{quiz.topic}</p>
               {quiz.picked == null ? (
-                <p className={cn("font-mono text-4xl font-semibold tabular-nums leading-none", quizLeft <= 4 ? "text-bad" : "text-fg")}>
+                <p className={cn("font-mono text-5xl font-semibold tabular-nums leading-none", quizLeft <= 4 ? "text-bad" : "text-fg")}>
                   {quizLeft}
                 </p>
               ) : (
                 <span />
               )}
             </div>
-            <p className="mt-1 text-base">{quiz.prompt}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <p className="mt-3 text-2xl leading-snug">{quiz.prompt}</p>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {quiz.options.map((opt, n) => {
                 const picked = quiz.picked === n;
                 const good = quiz.picked != null && n === quiz.answer;
@@ -746,7 +746,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
                     disabled={quiz.picked != null}
                     onClick={() => answerQuiz(n)}
                     className={cn(
-                      "h-11 rounded-[10px] border text-sm",
+                      "min-h-14 rounded-xl border px-4 py-3 text-left text-lg leading-snug",
                       quiz.picked == null && "border-border bg-surface-2",
                       good && "border-ok text-ok",
                       bad && "border-bad text-bad",
@@ -759,13 +759,13 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
               })}
             </div>
             {quiz.picked != null && !cheer ? (
-              <div className="mt-3 space-y-3 text-sm leading-relaxed">
+              <div className="mt-5 space-y-4 text-lg leading-relaxed">
                 <p className="text-muted">{quiz.why}</p>
                 {quiz.note ? <p>{quiz.note}</p> : null}
                 <p>Закрылись ещё 5 ближайших клеток.</p>
                 <button
                   type="button"
-                  className="h-12 w-full rounded-lg bg-fg text-base font-medium text-bg"
+                  className="h-14 w-full rounded-xl bg-fg text-xl font-medium text-bg"
                   onClick={finishQuiz}
                 >
                   Дальше к ренджу
