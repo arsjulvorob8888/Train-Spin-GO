@@ -7,6 +7,7 @@ import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-shee
 import { EquityDrill } from "@/components/spin-drill/equity-drill";
 import { PotOddsDrill } from "@/components/spin-drill/pot-odds-drill";
 import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
+import { RangeExperiment } from "@/components/spin-drill/range-experiment";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
@@ -37,7 +38,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "practice" | "strategy" | "hands" | "math" | "stats";
+type Tab = "practice" | "strategy" | "experiment" | "hands" | "math" | "stats";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -362,6 +363,7 @@ export function SpinApp() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "practice", label: "Тренировка" },
     { id: "strategy", label: "Стратегия" },
+    { id: "experiment", label: "Эксперимент" },
     { id: "hands", label: "Комбинации" },
     { id: "math", label: "Математика" },
     { id: "stats", label: "Статистика" },
@@ -398,6 +400,8 @@ export function SpinApp() {
             <span className="font-mono text-sm font-normal text-muted">
               {tab === "hands"
                 ? "Комбинации"
+                : tab === "experiment"
+                  ? "Эксперимент"
                 : tab === "math"
                   ? "Математика"
                   : tab === "practice" && practiceMode === "math"
@@ -458,6 +462,8 @@ export function SpinApp() {
             </aside>
           </div>
         )}
+
+        {tab === "experiment" && <RangeExperiment />}
 
         {tab === "practice" && (
           <div className="space-y-4">
