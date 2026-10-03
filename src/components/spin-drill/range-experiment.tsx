@@ -580,6 +580,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
           </button>
         ) : null}
       </div>
+      <div className="relative">
       <div className={cn("grid grid-cols-13 gap-px", live && left <= 15 && "range-urgent", !live && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
           Array.from({ length: 13 }, (_, c) => {
@@ -613,45 +614,52 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         )}
       </div>
       {quiz ? (
-        <section className={cn("rounded-2xl border border-border bg-surface p-4", cheer && "range-blast")}>
-          <p className="font-mono text-xs text-subtle">{quiz.topic}</p>
-          <p className="mt-1 text-base">{quiz.prompt}</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {quiz.options.map((opt, n) => {
-              const picked = quiz.picked === n;
-              const good = quiz.picked != null && n === quiz.answer;
-              const bad = picked && n !== quiz.answer;
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  disabled={quiz.picked != null}
-                  onClick={() => answerQuiz(n)}
-                  className={cn(
-                    "h-11 rounded-[10px] border text-sm",
-                    quiz.picked == null && "border-border bg-surface-2",
-                    good && "border-ok text-ok",
-                    bad && "border-bad text-bad",
-                    quiz.picked != null && !good && !bad && "border-border text-subtle",
-                  )}
-                >
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-          {quiz.picked != null ? (
-            <div className="mt-3 space-y-2 text-sm leading-relaxed">
-              {cheer ? <p className="font-medium">{cheer}</p> : null}
-              <p className="text-muted">{quiz.why}</p>
-              {quiz.note ? <p>{quiz.note}</p> : null}
-              <button type="button" className="h-11 text-sm text-muted" onClick={finishQuiz}>
-                Дальше к ренджу
-              </button>
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-bg/75 p-2 backdrop-blur-sm">
+          <section className={cn("max-h-full w-full max-w-lg overflow-auto rounded-2xl border border-border bg-surface p-4 shadow-border", cheer && "range-blast")}>
+            <p className="font-mono text-xs text-subtle">{quiz.topic}</p>
+            <p className="mt-1 text-base">{quiz.prompt}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {quiz.options.map((opt, n) => {
+                const picked = quiz.picked === n;
+                const good = quiz.picked != null && n === quiz.answer;
+                const bad = picked && n !== quiz.answer;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    disabled={quiz.picked != null}
+                    onClick={() => answerQuiz(n)}
+                    className={cn(
+                      "h-11 rounded-[10px] border text-sm",
+                      quiz.picked == null && "border-border bg-surface-2",
+                      good && "border-ok text-ok",
+                      bad && "border-bad text-bad",
+                      quiz.picked != null && !good && !bad && "border-border text-subtle",
+                    )}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
             </div>
-          ) : null}
-        </section>
+            {quiz.picked != null ? (
+              <div className="mt-3 space-y-3 text-sm leading-relaxed">
+                {cheer ? <p className="font-medium">{cheer}</p> : null}
+                <p className="text-muted">{quiz.why}</p>
+                {quiz.note ? <p>{quiz.note}</p> : null}
+                <button
+                  type="button"
+                  className="h-12 w-full rounded-lg bg-fg text-base font-medium text-bg"
+                  onClick={finishQuiz}
+                >
+                  Дальше к ренджу
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </div>
       ) : null}
+      </div>
     </div>
   );
 }
