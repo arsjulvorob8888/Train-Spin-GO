@@ -383,7 +383,7 @@ function Sapper({
   const [tick, setTick] = useState(3);
   const [freeze, setFreeze] = useState(0);
   const [salute, setSalute] = useState(0);
-  const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string }) | null>(null);
+  const [quiz, setQuiz] = useState<(QuizQ & { picked: number | null; note: string; reason: "strike" | "miss" }) | null>(null);
   const [quizLeft, setQuizLeft] = useState(12);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
@@ -507,7 +507,7 @@ function Sapper({
         });
         setClosing([]);
         setFx({});
-        ask();
+        ask("miss");
       });
       return;
     }
@@ -553,7 +553,7 @@ function Sapper({
       if (showAll) {
         freezeRef.current = 0;
         setFreeze(0);
-        later(2300, () => ask());
+        later(2300, () => ask("strike"));
       } else {
         freezeRef.current = 6;
         setFreeze(freezeRef.current);
@@ -567,11 +567,11 @@ function Sapper({
     setMarks(next);
   }
 
-  function ask() {
-    const q = drawQuiz();
+  function ask(reason: "strike" | "miss") {
+    const q = drawQuiz(reason === "strike" ? "reward" : "drill");
     quizFail.current = false;
     setQuizLeft(12);
-    setQuiz({ ...q, picked: null, note: "" });
+    setQuiz({ ...q, picked: null, note: "", reason });
     setCheer(null);
     busy.current = true;
   }
@@ -600,6 +600,10 @@ function Sapper({
     }
     if (quizFail.current) return;
     quizFail.current = true;
+    if (quiz.reason === "strike") {
+      setQuiz({ ...quiz, picked: -1, note: "Время вышло. Это награда, клетки не трогаем." });
+      return;
+    }
     punish("Время вышло.", -1);
   }, [quiz, quizLeft, paused]);
 
@@ -615,23 +619,33 @@ function Sapper({
     const ok = index === quiz.answer;
     if (ok) {
       sounds.wave();
-      const extra = ALL.filter((h) => !marks[h])
-        .sort((a, b) => cellDistance(lastHand.current, a) - cellDistance(lastHand.current, b))
-        .slice(0, 8);
-      if (extra.length) {
-        const next = { ...marks };
-        const anim: Record<string, "pop" | "blast"> = {};
-        for (const h of extra) {
-          next[h] = "ok";
-          anim[h] = "blast";
+      if (quiz.reason === "miss") {
+        const extra = ALL.filter((h) => !marks[h])
+          .sort((a, b) => cellDistance(lastHand.current, a) - cellDistance(lastHand.current, b))
+          .slice(0, 8);
+        if (extra.length) {
+          const next = { ...marks };
+          const anim: Record<string, "pop" | "blast"> = {};
+          for (const h of extra) {
+            next[h] = "ok";
+            anim[h] = "blast";
+          }
+          setMarks(next);
+          setFx(anim);
+          if (Object.keys(next).length >= 169) celebrate();
         }
-        setMarks(next);
-        setFx(anim);
-        if (Object.keys(next).length >= 169) celebrate();
+        setCheer("Верно.");
+        setQuiz({ ...quiz, picked: index, note: "" });
+        later(420, finishQuiz);
+        return;
       }
-      setCheer("Верно.");
-      setQuiz({ ...quiz, picked: index, note: "" });
-      later(420, finishQuiz);
+      sounds.cash();
+      setQuiz({ ...quiz, picked: index, note: "Пять страйков. Забери лайфхак с собой." });
+      return;
+    }
+    if (quiz.reason === "strike") {
+      sounds.soft();
+      setQuiz({ ...quiz, picked: index, note: "Это награда, не штраф. Клетки остаются открытыми." });
       return;
     }
     punish(SUPPORT[Math.floor(Math.random() * SUPPORT.length)]!, index);
@@ -811,9 +825,14 @@ function Sapper({
       ) : null}
       {quiz ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm">
-          <section className={cn("max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-border bg-surface p-6 shadow-border sm:p-8", cheer && "range-blast")}>
+          <section className={cn("max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border bg-surface p-6 shadow-border sm:p-8", quiz.reason === "strike" ? "quiz-reward border-transparent" : "quiz-miss border-transparent", cheer && "range-blast")}>
             <div className="flex items-start justify-between gap-4">
-              <p className="font-mono text-sm text-subtle">{quiz.topic}</p>
+              <div>
+                <p className={cn("text-lg font-medium", quiz.reason === "strike" ? "text-fg" : "text-bad")}>
+                  {quiz.reason === "strike" ? "Награда · 5 STRIKE" : "Ошибка · неверное действие"}
+                </p>
+                <p className="mt-1 font-mono text-sm text-subtle">{quiz.topic}</p>
+              </div>
               {quiz.picked == null ? (
                 <p className={cn("font-mono text-5xl font-semibold tabular-nums leading-none", quizLeft <= 4 ? "text-bad" : "text-fg")}>
                   {quizLeft}
@@ -851,7 +870,7 @@ function Sapper({
               <div className="mt-5 space-y-4 text-lg leading-relaxed">
                 <p className="text-muted">{quiz.why}</p>
                 {quiz.note ? <p>{quiz.note}</p> : null}
-                <p>Закрылись ещё 5 ближайших клеток.</p>
+                {quiz.reason === "miss" ? <p>Закрылись ещё 5 ближайших клеток.</p> : null}
                 <button
                   type="button"
                   className="h-14 w-full rounded-xl bg-fg text-xl font-medium text-bg"
