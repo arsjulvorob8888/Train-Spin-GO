@@ -155,7 +155,28 @@ export function RangeExperiment() {
   const [mode, setMode] = useState<Mode>("sapper");
   const [music, setMusic] = useState(true);
   const [bb, setBb] = useState(15);
+  const [autoplay, setAutoplay] = useState(false);
+  const [splash, setSplash] = useState<{ bb: number; next: string } | null>(null);
   const spot = SPOTS.find((s) => s.id === spotId) ?? SPOTS[0]!;
+  const spotRef = useRef(spotId);
+  spotRef.current = spotId;
+
+  function cleared() {
+    const index = SPOTS.findIndex((s) => s.id === spotRef.current);
+    const next = SPOTS[(index + 1) % SPOTS.length]!;
+    setSplash({ bb, next: next.title });
+    window.setTimeout(() => {
+      setGroup(next.group);
+      setSpotId(next.id);
+      setAutoplay(true);
+      setSplash(null);
+    }, 2400);
+  }
+
+  useEffect(() => {
+    if (!autoplay) return;
+    setAutoplay(false);
+  }, [autoplay, spotId]);
 
   useEffect(() => {
     if (!music) {
@@ -283,10 +304,34 @@ export function RangeExperiment() {
         ))}
       </div>
       {mode === "sapper" ? (
-        <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} />
+        <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} autoplay={autoplay} onClear={cleared} />
       ) : (
         <EdgeDrill key={`${spot.id}-${bb}`} spot={spot} bb={bb} />
       )}
+      {splash ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg">
+          <div className="range-veil" />
+          {Array.from({ length: 36 }, (_, i) => (
+            <i
+              key={i}
+              className={i % 2 === 0 ? "coin" : "coin coin-burst"}
+              style={{
+                left: `${6 + ((i * 11) % 88)}%`,
+                animationDelay: `${i * 30}ms`,
+                ["--dx" as string]: `${(i % 7) * 36 - 108}px`,
+                ["--dy" as string]: `${-60 - (i % 5) * 40}px`,
+              }}
+            >
+              {i % 3 === 0 ? "bb" : "$"}
+            </i>
+          ))}
+          <div className="stack-in relative text-center">
+            <p className="font-mono text-8xl font-semibold leading-none sm:text-9xl">{splash.bb}</p>
+            <p className="mt-2 font-mono text-4xl">bb</p>
+            <p className="mt-6 text-lg text-muted">Дальше · {splash.next}</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -298,7 +343,17 @@ function actionLabel(spot: SpotDef, action: MixAction, bb: number): string {
   return spot.labels[action];
 }
 
-function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
+function Sapper({
+  spot,
+  bb,
+  autoplay,
+  onClear,
+}: {
+  spot: SpotDef;
+  bb: number;
+  autoplay: boolean;
+  onClear: () => void;
+}) {
   const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
   const shape = useMemo(() => buildShape(range), [range]);
   const actions = useMemo(() => {
@@ -314,7 +369,8 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
   const [misses, setMisses] = useState(0);
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
   const [closing, setClosing] = useState<string[]>([]);
-  const [live, setLive] = useState(false);
+  const [live, setLive] = useState(autoplay);
+  const told = useRef(false);
   const [paused, setPaused] = useState(false);
   const [peek, setPeek] = useState<"part" | "all" | null>(null);
   const [left, setLeft] = useState(120);
@@ -386,6 +442,15 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
 
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
+  function celebrate() {
+    if (told.current) return;
+    told.current = true;
+    sounds.win();
+    sounds.cash();
+    setPhase("win");
+    onClear();
+  }
+
   function later(ms: number, fn: () => void) {
     const id = window.setTimeout(fn, ms);
     timers.current.push(id);
@@ -439,8 +504,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
     for (const h of gained) if (!next[h]) next[h] = "ok";
     const cleared = Object.keys(next).length >= 169;
     if (cleared) {
-      sounds.win();
-      setPhase("win");
+      celebrate();
     } else if (wave) {
       sounds.wave();
       setLeft((seconds) => seconds + 15);
@@ -541,10 +605,7 @@ function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
         }
         setMarks(next);
         setFx(anim);
-        if (Object.keys(next).length >= 169) {
-          sounds.win();
-          setPhase("win");
-        }
+        if (Object.keys(next).length >= 169) celebrate();
       }
       setCheer("Верно.");
       setQuiz({ ...quiz, picked: index, note: "" });
