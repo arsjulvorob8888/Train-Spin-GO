@@ -395,7 +395,6 @@ function Sapper({
   const busy = useRef(false);
   const quizFail = useRef(false);
   const timers = useRef<number[]>([]);
-  const wheelRef = useRef<HTMLDivElement>(null);
   const openCount = Object.keys(marks).length;
   const done = phase === "win" || phase === "time" || openCount === 169;
 
@@ -448,22 +447,6 @@ function Sapper({
     }
     setTick(3);
   }, [tick, paused, quiz, phase]);
-
-  useEffect(() => {
-    const el = wheelRef.current;
-    if (!el) return;
-    const spin = (event: WheelEvent) => {
-      event.preventDefault();
-      const dir = event.deltaY > 0 ? 1 : -1;
-      setArmed((current) => {
-        if (actions.length === 0) return current;
-        const index = Math.max(0, actions.indexOf(current ?? actions[0]!));
-        return actions[(index + dir + actions.length) % actions.length]!;
-      });
-    };
-    el.addEventListener("wheel", spin, { passive: false });
-    return () => el.removeEventListener("wheel", spin);
-  }, [actions]);
 
   useEffect(() => {
     const keys = ["a", "s", "d", "f"];
@@ -733,7 +716,7 @@ function Sapper({
           ))}
         </div>
       </div>
-      <div ref={wheelRef} className="flex flex-wrap items-center gap-2" title="Колесо мыши меняет действие">
+      <div className="flex flex-wrap items-center gap-2">
         {actions.map((a, i) => (
           <button
             key={a}
@@ -750,7 +733,7 @@ function Sapper({
           </button>
         ))}
         <span className="font-mono text-xs text-muted">
-          {streak === 0 ? "A S D F или скролл" : `цепочка ${streak}/5`}
+          {streak === 0 ? "A S D F" : `цепочка ${streak}/5`}
         </span>
         {!live && phase !== "win" ? (
           <button
