@@ -45,7 +45,7 @@ export function MixGrid({
                 className={cn("relative block h-full", BAR[s.a])}
                 style={{ width: `${s.p}%` }}
               >
-                {s.p >= 22 && (
+                {s.p >= 22 && s.p < 99 && (
                   <span className="absolute inset-x-0 top-0 hidden pt-px text-center font-mono text-[9px] font-semibold leading-none text-fg [text-shadow:0_1px_2px_#000a] sm:block">
                     {s.p}
                   </span>

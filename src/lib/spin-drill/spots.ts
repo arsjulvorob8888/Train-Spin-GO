@@ -23,7 +23,7 @@ import {
   RANGE_SB_ISO,
   RANGE_SB_VS_BB_JAM,
 } from "./extra-ranges";
-import { continuePct, type MixAction, type MixRange } from "./mix";
+import { continuePct, emptyMix, mixOf, primary, type MixAction, type MixRange } from "./mix";
 import { ALL } from "./legacy-ranges";
 
 export type HeroSeat = "BTN" | "SB" | "BB";
@@ -518,6 +518,19 @@ export const SPOTS: SpotDef[] = [
 ];
 
 export const GROUPS: SpotGroup[] = ["BTN", "SB", "BB", "HU"];
+
+for (const spot of SPOTS) spot.range = solidRange(spot.range);
+
+function solidRange(range: MixRange): MixRange {
+  const out: MixRange = {};
+  for (const hand of ALL) {
+    const action = primary(mixOf(range, hand));
+    const mix = emptyMix();
+    mix[action] = 100;
+    out[hand] = mix;
+  }
+  return out;
+}
 
 export const ICM = "50 / 30 / 20";
 export const STACK = "15bb";

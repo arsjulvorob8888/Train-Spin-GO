@@ -11,7 +11,7 @@ import { RangeExperiment } from "@/components/spin-drill/range-experiment";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
-import { continueHands, grade, isMix, mixOf, primary, segs, type MixAction } from "@/lib/spin-drill/mix";
+import { continueHands, grade, mixOf, primary, segs, type MixAction } from "@/lib/spin-drill/mix";
 import {
   GROUPS,
   ICM,
@@ -456,7 +456,7 @@ export function SpinApp() {
               <Meta spot={spot} />
               <p className="mt-4 font-mono text-lg font-semibold">{selected}</p>
               <p className="mb-3 text-sm text-muted">
-                {isMix(mixOf(spot.range, selected)) ? "Микс" : "Чисто"} · {spot.labels[primary(mixOf(spot.range, selected))]}
+                {spot.labels[primary(mixOf(spot.range, selected))]}
               </p>
               <MixBars range={spot.range} hand={selected} labels={spot.labels} />
             </aside>
