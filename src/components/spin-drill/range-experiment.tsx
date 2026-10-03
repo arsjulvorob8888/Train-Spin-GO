@@ -792,7 +792,7 @@ function Sapper({
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden">
           <div className="strike-ring" />
           <div className="strike-ring strike-ring-late" />
-          <p className="strike-title">Страйк</p>
+          <p className="strike-title">STRIKE!!!</p>
         </div>
       ) : null}
       {peek === "all" ? (
