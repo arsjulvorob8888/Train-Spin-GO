@@ -261,7 +261,7 @@ export function RangeExperiment() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
+        <h2 className="text-lg font-medium">GAME · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
           Страйк — пять верных клеток подряд. После трёх страйков открывается кусок доски, после пяти — весь рендж. Потом счётчик сначала.
         </p>

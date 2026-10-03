@@ -363,7 +363,7 @@ export function SpinApp() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "practice", label: "Тренировка" },
     { id: "strategy", label: "Стратегия" },
-    { id: "experiment", label: "Эксперимент" },
+    { id: "experiment", label: "GAME" },
     { id: "hands", label: "Комбинации" },
     { id: "math", label: "Математика" },
     { id: "stats", label: "Статистика" },
@@ -401,7 +401,7 @@ export function SpinApp() {
               {tab === "hands"
                 ? "Комбинации"
                 : tab === "experiment"
-                  ? "Эксперимент"
+                  ? "GAME"
                 : tab === "math"
                   ? "Математика"
                   : tab === "practice" && practiceMode === "math"
