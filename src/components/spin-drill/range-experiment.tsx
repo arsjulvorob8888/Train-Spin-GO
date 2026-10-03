@@ -110,10 +110,10 @@ function startMemoryMusic() {
   const fifthGain = ctx.createGain();
   drone.type = "sine";
   fifth.type = "sine";
-  drone.frequency.value = 98;
-  fifth.frequency.value = 146.83;
-  droneGain.gain.value = 0.4;
-  fifthGain.gain.value = 0.12;
+  drone.frequency.value = 73.42;
+  fifth.frequency.value = 110;
+  droneGain.gain.value = 0.34;
+  fifthGain.gain.value = 0.1;
   drone.connect(droneGain);
   fifth.connect(fifthGain);
   droneGain.connect(master);
@@ -122,36 +122,46 @@ function startMemoryMusic() {
   fifth.start();
   const filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
-  filter.frequency.value = 1200;
+  filter.frequency.value = 1800;
   filter.connect(master);
   const phrase: (number | null)[] = [
-    293.66, null, 329.63, 369.99, 440, null, 369.99, 329.63,
-    293.66, null, null, 329.63, 369.99, 440, 493.88, null,
-    440, 369.99, 329.63, 293.66, 329.63, 369.99, 440, null,
-    493.88, 440, 369.99, 329.63, 293.66, null, null, null,
-    220, 246.94, 293.66, 329.63, 369.99, null, 329.63, 293.66,
-    246.94, 220, null, null, 246.94, 293.66, 329.63, null,
-    293.66, 329.63, 369.99, 440, 369.99, 329.63, 293.66, null,
-    null, null, null, null,
+    293.66, null, 440, null, null, 493.88, 440, null,
+    369.99, null, 329.63, null, 293.66, null, null, null,
+    329.63, 369.99, null, 440, null, 587.33, null, 493.88,
+    440, null, 369.99, null, 329.63, null, 293.66, null,
+    null, null, 220, null, 246.94, 293.66, null, 329.63,
+    293.66, null, null, null, null, null, null, null,
   ];
   let step = 0;
   const timer = window.setInterval(() => {
     const freq = phrase[step % phrase.length];
     step += 1;
     if (freq == null) return;
+    const t = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = step % 8 === 1 ? "sine" : "triangle";
-    osc.frequency.value = freq;
-    const t = ctx.currentTime;
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq * 1.012, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.09);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.16, t + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
+    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
     osc.connect(gain);
     gain.connect(filter);
     osc.start(t);
-    osc.stop(t + 1.45);
-  }, 680);
+    osc.stop(t + 1.8);
+    const shimmer = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    shimmer.type = "sine";
+    shimmer.frequency.value = freq * 2;
+    shimmerGain.gain.setValueAtTime(0.0001, t);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.05, t + 0.015);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    shimmer.connect(shimmerGain);
+    shimmerGain.connect(filter);
+    shimmer.start(t);
+    shimmer.stop(t + 0.6);
+  }, 560);
   bed = {
     stop() {
       window.clearInterval(timer);
