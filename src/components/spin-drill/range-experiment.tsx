@@ -1,5 +1,6 @@
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
+import { nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
@@ -236,6 +237,7 @@ export function RangeExperiment() {
   const [spotId, setSpotId] = useState(SPOTS[0]!.id);
   const [mode, setMode] = useState<Mode>("sapper");
   const [music, setMusic] = useState(true);
+  const [bb, setBb] = useState(15);
   const spot = SPOTS.find((s) => s.id === spotId) ?? SPOTS[0]!;
 
   useEffect(() => {
@@ -256,7 +258,8 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Пять верных подряд открывают все клетки, которые граничат с последней угаданной. Остальные открываются по одной.
+          Сначала смотрите форму. Двигайте стек: на 15bb это точный чарт приложения, на других глубинах рендж дышит
+          по открытым ориентирам Spin 3-max. Потом поле закрывается, и у вас есть 2:00.
         </p>
         <button
           type="button"
@@ -275,6 +278,20 @@ export function RangeExperiment() {
           {music ? "Выключить музыку" : "Включить музыку"}
         </button>
       </div>
+      <label className="block rounded-2xl border border-border bg-surface p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <span className="font-mono text-sm">{bb}bb</span>
+          <span className="text-sm text-muted">{stackNote(bb)}</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={30}
+          value={bb}
+          onChange={(e) => setBb(Number(e.target.value))}
+          className="mt-3 w-full"
+        />
+      </label>
       <div className="flex flex-wrap gap-1.5">
         {GROUPS.map((g) => (
           <button
@@ -329,22 +346,38 @@ export function RangeExperiment() {
           </button>
         ))}
       </div>
-      {mode === "sapper" ? <Sapper key={spot.id} spot={spot} /> : <EdgeDrill key={spot.id} spot={spot} />}
+      {mode === "sapper" ? (
+        <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} />
+      ) : (
+        <EdgeDrill key={`${spot.id}-${bb}`} spot={spot} bb={bb} />
+      )}
     </div>
   );
 }
 
-function Sapper({ spot }: { spot: SpotDef }) {
-  const shape = useMemo(() => buildShape(spot.range), [spot]);
+function actionLabel(spot: SpotDef, action: MixAction, bb: number): string {
+  if (action === "allin") return `All-in ${bb}`;
+  if (action === "raise") return bb >= 20 ? "Raise 2.5" : "Raise 2";
+  if (action === "call" && (spot.id === "sb_fold" || spot.id === "hu_sb")) return "Limp";
+  return spot.labels[action];
+}
+
+function Sapper({ spot, bb }: { spot: SpotDef; bb: number }) {
+  const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
+  const shape = useMemo(() => buildShape(range), [range]);
+  const actions = useMemo(() => {
+    const used = new Set(Object.values(shape.action));
+    return spot.actions.filter((action) => used.has(action));
+  }, [shape, spot.actions]);
   const [armed, setArmed] = useState<MixAction | null>(null);
   const [marks, setMarks] = useState<Record<string, CellMark>>({});
   const [fx, setFx] = useState<Record<string, "pop" | "blast">>({});
   const [streak, setStreak] = useState(0);
   const [misses, setMisses] = useState(0);
-  const [phase, setPhase] = useState<"play" | "wave" | "collapse" | "win">("play");
-  const [shutting, setShutting] = useState(false);
-  const [started, setStarted] = useState<number | null>(null);
-  const [now, setNow] = useState(0);
+  const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
+  const [closing, setClosing] = useState<string[]>([]);
+  const [live, setLive] = useState(false);
+  const [left, setLeft] = useState(120);
   const [quiz, setQuiz] = useState<(typeof QUIZ)[number] & { picked: number | null; note: string } | null>(null);
   const [cheer, setCheer] = useState<string | null>(null);
   const lastHand = useRef<string>("AA");
@@ -352,13 +385,26 @@ function Sapper({ spot }: { spot: SpotDef }) {
   const busy = useRef(false);
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
-  const done = phase === "win" || openCount === 169;
+  const done = phase === "win" || phase === "time" || openCount === 169;
 
   useEffect(() => {
-    if (started == null || done) return;
-    const id = window.setInterval(() => setNow(Date.now()), 250);
+    if (!live || quiz || phase === "win" || phase === "time") return;
+    const id = window.setInterval(() => {
+      setLeft((seconds) => (seconds <= 1 ? 0 : seconds - 1));
+    }, 1000);
     return () => window.clearInterval(id);
-  }, [started, done]);
+  }, [live, quiz, phase]);
+
+  useEffect(() => {
+    if (!live || left !== 0) return;
+    sounds.miss();
+    setPhase("time");
+    setLive(false);
+  }, [live, left]);
+
+  useEffect(() => {
+    if (live && left > 0 && left <= 10) sounds.soft();
+  }, [live, left]);
 
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
@@ -368,27 +414,30 @@ function Sapper({ spot }: { spot: SpotDef }) {
   }
 
   function paint(hand: string) {
-    if (busy.current || !armed || marks[hand] || done || quiz) return;
-    const t0 = started ?? Date.now();
-    if (started == null) {
-      setStarted(t0);
-      setNow(t0);
-    }
+    if (!live || busy.current || !armed || marks[hand] || done || quiz) return;
     const right = shape.action[hand] === armed;
     if (!right) {
+      const victims = nearestOpen(
+        hand,
+        Object.keys(marks).filter((cell) => marks[cell]),
+        10,
+      );
       busy.current = true;
       sounds.miss();
       setStreak(0);
       setMisses((n) => n + 1);
-      setPhase("collapse");
+      setClosing(victims);
       setMarks((prev) => ({ ...prev, [hand]: "miss" }));
       setFx({ [hand]: "pop" });
-      later(280, () => setShutting(true));
-      later(700, () => {
-        setMarks({});
+      later(420, () => {
+        setMarks((prev) => {
+          const next = { ...prev };
+          delete next[hand];
+          for (const cell of victims) delete next[cell];
+          return next;
+        });
+        setClosing([]);
         setFx({});
-        setShutting(false);
-        setPhase("play");
         busy.current = false;
       });
       return;
@@ -470,15 +519,17 @@ function Sapper({ spot }: { spot: SpotDef }) {
   }
 
   const scenario =
-    phase === "win"
-      ? "Рендж открыт. Форма собрана."
-      : phase === "collapse"
-        ? "Обвал. Одна ошибка закрыла уже открытые клетки."
-        : phase === "wave"
-          ? "Пять подряд. Открылись все клетки вокруг последней руки."
-          : streak === 0
-            ? "Каждая верная рука открывает только себя. Пять подряд — все соседи последней."
-            : `Цепочка ${streak}/5. Ошибка на клетке закроет поле. Ошибка в вопросе — нет.`;
+    !live && phase !== "time" && phase !== "win"
+      ? "Рендж открыт. Запомните форму, потом нажмите «Закрыть и играть»."
+      : phase === "win"
+        ? "Рендж собран до дедлайна."
+        : phase === "time"
+          ? "Время вышло. Ниже снова видна форма — посмотрите, что осталось."
+          : phase === "wave"
+            ? "Пять подряд. Открылись все клетки вокруг последней руки."
+            : streak === 0
+              ? `Поле закрыто. ${formatTime(left * 1000)} на стек ${bb}bb. Ошибка гасит только 10 ближайших.`
+              : `Цепочка ${streak}/5. Ещё ${5 - streak} без ошибки — и откроются соседи.`;
 
   return (
     <div className="space-y-3">
@@ -494,7 +545,7 @@ function Sapper({ spot }: { spot: SpotDef }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {spot.actions.map((a) => (
+        {actions.map((a) => (
           <button
             key={a}
             type="button"
@@ -505,38 +556,55 @@ function Sapper({ spot }: { spot: SpotDef }) {
               armed === a ? "outline outline-2 outline-offset-2 outline-fg" : "opacity-80",
             )}
           >
-            {spot.labels[a]}
+            {actionLabel(spot, a, bb)}
           </button>
         ))}
-        <span className="font-mono text-xs text-muted">
-          {openCount}/169 · обвалы {misses}
-          {started != null ? ` · ${formatTime(now - started)}` : ""}
+        <span className={cn("font-mono text-xs", left <= 15 && live ? "text-bad" : "text-muted")}>
+          {openCount}/169 · ошибки {misses}
+          {live || phase === "time" ? ` · ${formatTime(left * 1000)}` : ""}
         </span>
+        {!live && phase !== "win" ? (
+          <button
+            type="button"
+            className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg"
+            onClick={() => {
+              setLive(true);
+              setLeft(120);
+              setMarks({});
+              setStreak(0);
+              setPhase("play");
+              setMisses(0);
+            }}
+          >
+            {phase === "time" ? "Ещё раз" : "Закрыть и играть"}
+          </button>
+        ) : null}
       </div>
-      <div className={cn("grid grid-cols-13 gap-px", shutting && "range-shake")}>
+      <div className={cn("grid grid-cols-13 gap-px", live && left <= 15 && "range-urgent", !live && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
           Array.from({ length: 13 }, (_, c) => {
             const h = handAt(r, c);
             const mark = marks[h];
             const action = shape.action[h]!;
             const n = shape.diffCount[h] ?? 0;
+            const revealed = Boolean(mark) || !live || phase === "time" || phase === "win";
             return (
               <button
                 key={h}
                 type="button"
-                disabled={Boolean(mark) || done || shutting || quiz != null}
+                disabled={!live || Boolean(mark) || done || quiz != null || closing.includes(h)}
                 onClick={() => paint(h)}
                 className={cn(
                   "relative flex aspect-square origin-center items-end p-0.5 font-mono text-[10px] font-semibold leading-none sm:text-xs",
-                  mark ? ACT[action] : "bg-surface-2 text-muted",
+                  revealed ? ACT[action] : "bg-surface-2 text-muted",
                   mark === "miss" && "outline outline-2 outline-bad",
-                  shutting && mark && "range-shut",
-                  !shutting && fx[h] === "pop" && "range-pop",
-                  !shutting && fx[h] === "blast" && "range-blast",
+                  closing.includes(h) && "range-shut",
+                  !closing.includes(h) && fx[h] === "pop" && "range-pop",
+                  !closing.includes(h) && fx[h] === "blast" && "range-blast",
                 )}
               >
                 {h}
-                {mark && n > 0 ? (
+                {revealed && n > 0 ? (
                   <span className="absolute top-0.5 right-0.5 text-[9px] text-fg/80">{n}</span>
                 ) : null}
               </button>
@@ -588,8 +656,9 @@ function Sapper({ spot }: { spot: SpotDef }) {
   );
 }
 
-function EdgeDrill({ spot }: { spot: SpotDef }) {
-  const shape: Shape = useMemo(() => buildShape(spot.range), [spot]);
+function EdgeDrill({ spot, bb }: { spot: SpotDef; bb: number }) {
+  const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
+  const shape: Shape = useMemo(() => buildShape(range), [range]);
   const queue = useMemo(() => studyHands(shape), [shape]);
   const [i, setI] = useState(0);
   const [wrong, setWrong] = useState(false);
