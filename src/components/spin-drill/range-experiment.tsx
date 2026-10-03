@@ -370,7 +370,6 @@ function Sapper({
   const [marks, setMarks] = useState<Record<string, CellMark>>({});
   const [fx, setFx] = useState<Record<string, "pop" | "blast">>({});
   const [streak, setStreak] = useState(0);
-  const [waves, setWaves] = useState(0);
   const [chain, setChain] = useState(0);
   const [misses, setMisses] = useState(0);
   const [phase, setPhase] = useState<"play" | "wave" | "win" | "time">("play");
@@ -550,16 +549,13 @@ function Sapper({
           later(1600, () => setPeek(null));
         }
       }
-      const doneWaves = waves + 1;
       setPhase("wave");
-      if (doneWaves >= 3) {
-        setWaves(0);
+      if (showAll) {
         freezeRef.current = 0;
         setFreeze(0);
-        later(showAll ? 2300 : showPart ? 1700 : 400, () => ask());
+        later(2300, () => ask());
       } else {
-        setWaves(doneWaves);
-        freezeRef.current = 3 + doneWaves * 3;
+        freezeRef.current = 6;
         setFreeze(freezeRef.current);
         later(900, () => setPhase((p) => (p === "wave" ? "play" : p)));
       }
@@ -662,12 +658,12 @@ function Sapper({
         : peek === "part"
           ? "Три страйка. Открыт кусок вокруг последней руки."
           : phase === "wave"
-            ? `Страйк ${chain}/5. +15 секунд. Кусок доски на третьем, весь рендж на пятом.`
+            ? `Страйк ${chain}/5. +15 секунд. Вопрос будет на пятом.`
             : freeze > 0
           ? `Серия держит поле ещё ${freeze} с. Цепочка ${streak}/5.`
           : streak === 0
             ? "Каждые 3 секунды гаснут 3 ближайшие открытые клетки. Пять подряд останавливают угасание."
-            : `Цепочка ${streak}/5. Волна ${waves}/3. Ещё ${5 - streak} — и поле замирает.`;
+            : `Цепочка ${streak}/5. Ещё ${5 - streak} — и будет STRIKE.`;
 
   return (
     <div className="space-y-3">
@@ -731,7 +727,6 @@ function Sapper({
               freezeRef.current = 0;
               setMarks({});
               setStreak(0);
-              setWaves(0);
               setChain(0);
               setPhase("play");
               setMisses(0);
