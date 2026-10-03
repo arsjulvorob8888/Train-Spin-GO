@@ -18,8 +18,17 @@ export function PairLine() {
       preserveAspectRatio="none"
       aria-hidden
     >
-      <line x1="0.5" y1="0.5" x2="12.5" y2="12.5" stroke="#000" strokeWidth="3" vectorEffect="non-scaling-stroke" opacity="0.55" />
-      <line x1="0.5" y1="0.5" x2="12.5" y2="12.5" stroke="#fff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <line
+        x1="0.5"
+        y1="0.12"
+        x2="12.5"
+        y2="12.12"
+        stroke="#fff"
+        strokeWidth="1"
+        strokeDasharray="3 4"
+        vectorEffect="non-scaling-stroke"
+        opacity="0.9"
+      />
     </svg>
   );
 }
