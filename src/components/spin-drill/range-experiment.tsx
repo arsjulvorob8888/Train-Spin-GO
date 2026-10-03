@@ -1,5 +1,5 @@
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
-import { buildShape, floodSame, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
+import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
@@ -256,15 +256,23 @@ export function RangeExperiment() {
       <div>
         <h2 className="text-lg font-medium">Эксперимент · рейнджи</h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Пять верных подряд открывают только соседние клетки этой руки, потом короткий вопрос по математике.
-          Верный ответ дарит ещё пару клеток. Ошибка в вопросе поле не закрывает.
+          Пять верных подряд открывают все клетки, которые граничат с последней угаданной. Остальные открываются по одной.
         </p>
         <button
           type="button"
-          onClick={() => setMusic((on) => !on)}
-          className="mt-2 h-9 text-sm text-muted underline"
+          onClick={() => {
+            setMusic((on) => {
+              if (on) stopMemoryMusic();
+              else startMemoryMusic();
+              return !on;
+            });
+          }}
+          className={cn(
+            "h-11 rounded-lg border px-3 text-sm",
+            music ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
+          )}
         >
-          {music ? "Музыка включена" : "Музыка выключена"}
+          {music ? "Выключить музыку" : "Включить музыку"}
         </button>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -386,11 +394,11 @@ function Sapper({ spot }: { spot: SpotDef }) {
       return;
     }
 
-    const opened = shape.diffCount[hand] === 0 ? floodSame(shape, hand) : [hand];
+    const opened = [hand];
     const nextStreak = streak + 1;
     const wave = nextStreak >= 5;
     lastHand.current = hand;
-    const bonus = wave ? (shape.neighbors[hand] ?? []).filter((h) => !marks[h] && !opened.includes(h)).slice(0, 3) : [];
+    const bonus = wave ? (shape.neighbors[hand] ?? []).filter((h) => !marks[h]) : [];
     const gained = [...opened, ...bonus];
     if (wave) setStreak(0);
     else setStreak(nextStreak);
@@ -467,9 +475,9 @@ function Sapper({ spot }: { spot: SpotDef }) {
       : phase === "collapse"
         ? "Обвал. Одна ошибка закрыла уже открытые клетки."
         : phase === "wave"
-          ? "Пять подряд. Волна маленькая: только клетки вокруг последней руки. Дальше вопрос."
+          ? "Пять подряд. Открылись все клетки вокруг последней руки."
           : streak === 0
-            ? "Назовите цвет. Пять верных подряд — маленькая волна и вопрос по математике."
+            ? "Каждая верная рука открывает только себя. Пять подряд — все соседи последней."
             : `Цепочка ${streak}/5. Ошибка на клетке закроет поле. Ошибка в вопросе — нет.`;
 
   return (
