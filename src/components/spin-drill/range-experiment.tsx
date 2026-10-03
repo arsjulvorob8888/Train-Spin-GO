@@ -59,6 +59,12 @@ const sounds = {
     tone(659, 0.16, "square", 0.04, 0.08);
     tone(784, 0.22, "triangle", 0.05, 0.16);
   },
+  fanfare() {
+    [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      tone(f, 0.34, "triangle", 0.07, i * 0.12);
+      tone(f / 2, 0.34, "square", 0.018, i * 0.12);
+    });
+  },
   miss() {
     const ctx = audio();
     if (!ctx) return;
@@ -373,6 +379,7 @@ function Sapper({
   const told = useRef(false);
   const [paused, setPaused] = useState(false);
   const [peek, setPeek] = useState<"part" | "all" | null>(null);
+  const [strikeFx, setStrikeFx] = useState(false);
   const [left, setLeft] = useState(120);
   const [tick, setTick] = useState(3);
   const [freeze, setFreeze] = useState(0);
@@ -387,6 +394,7 @@ function Sapper({
   const busy = useRef(false);
   const quizFail = useRef(false);
   const timers = useRef<number[]>([]);
+  const wheelRef = useRef<HTMLDivElement>(null);
   const openCount = Object.keys(marks).length;
   const done = phase === "win" || phase === "time" || openCount === 169;
 
@@ -439,6 +447,22 @@ function Sapper({
     }
     setTick(3);
   }, [tick, paused, quiz, phase]);
+
+  useEffect(() => {
+    const el = wheelRef.current;
+    if (!el) return;
+    const spin = (event: WheelEvent) => {
+      event.preventDefault();
+      const dir = event.deltaY > 0 ? 1 : -1;
+      setArmed((current) => {
+        if (actions.length === 0) return current;
+        const index = Math.max(0, actions.indexOf(current ?? actions[0]!));
+        return actions[(index + dir + actions.length) % actions.length]!;
+      });
+    };
+    el.addEventListener("wheel", spin, { passive: false });
+    return () => el.removeEventListener("wheel", spin);
+  }, [actions]);
 
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
@@ -506,7 +530,9 @@ function Sapper({
     if (cleared) {
       celebrate();
     } else if (wave) {
-      sounds.wave();
+      sounds.fanfare();
+      setStrikeFx(true);
+      later(1100, () => setStrikeFx(false));
       setLeft((seconds) => seconds + 15);
       const nextChain = chain + 1;
       const showAll = nextChain >= 5;
@@ -673,7 +699,7 @@ function Sapper({
           ))}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div ref={wheelRef} className="flex flex-wrap items-center gap-2" title="Колесо мыши меняет действие">
         {actions.map((a) => (
           <button
             key={a}
@@ -682,14 +708,14 @@ function Sapper({
             className={cn(
               "h-11 rounded-lg px-3 text-sm",
               ACT[a],
-              armed === a ? "outline outline-2 outline-offset-2 outline-fg" : "opacity-80",
+              armed === a ? "scale-110 text-base outline outline-2 outline-offset-2 outline-fg" : "opacity-70",
             )}
           >
             {actionLabel(spot, a, bb)}
           </button>
         ))}
         <span className="font-mono text-xs text-muted">
-          {streak === 0 ? "ошибка гасит 10 клеток" : `цепочка ${streak}/5`}
+          {streak === 0 ? "скролл меняет действие" : `цепочка ${streak}/5`}
         </span>
         {!live && phase !== "win" ? (
           <button
@@ -762,6 +788,13 @@ function Sapper({
           }),
         )}
       </div>
+      {strikeFx ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden">
+          <div className="strike-ring" />
+          <div className="strike-ring strike-ring-late" />
+          <p className="strike-title">Страйк</p>
+        </div>
+      ) : null}
       {peek === "all" ? (
         <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
           <div className="range-veil" />
