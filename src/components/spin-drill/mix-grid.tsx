@@ -20,9 +20,9 @@ export function PairLine() {
     >
       <line
         x1="0.5"
-        y1="0.12"
+        y1="0.5"
         x2="12.5"
-        y2="12.12"
+        y2="12.5"
         stroke="#fff"
         strokeWidth="1"
         strokeDasharray="3 4"
