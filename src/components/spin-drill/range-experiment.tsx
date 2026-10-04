@@ -95,14 +95,20 @@ const sounds = {
   },
 };
 
-let bed: { stop: () => void } | null = null;
+let bed: { stop: () => void; setGain: (value: number) => void } | null = null;
+let musicGain = 0.11;
+
+function setMusicVolume(percent: number) {
+  musicGain = Math.min(1, Math.max(0, percent) / 100) * 0.22;
+  bed?.setGain(musicGain);
+}
 
 function startMemoryMusic() {
   if (bed) return;
   const ctx = audio();
   if (!ctx) return;
   const master = ctx.createGain();
-  master.gain.value = 0.04;
+  master.gain.value = musicGain;
   master.connect(ctx.destination);
   const drone = ctx.createOscillator();
   const fifth = ctx.createOscillator();
@@ -163,6 +169,9 @@ function startMemoryMusic() {
     shimmer.stop(t + 0.6);
   }, 560);
   bed = {
+    setGain(value: number) {
+      master.gain.value = value;
+    },
     stop() {
       window.clearInterval(timer);
       drone.stop();
@@ -363,6 +372,7 @@ export function RangeExperiment() {
   const [spotId, setSpotId] = useState(SPOTS[0]!.id);
   const [mode, setMode] = useState<Mode>("sapper");
   const [music, setMusic] = useState(true);
+  const [volume, setVolume] = useState(50);
   const [bb, setBb] = useState(15);
   const [autoplay, setAutoplay] = useState(false);
   const [splash, setSplash] = useState<Splash | null>(null);
@@ -460,6 +470,21 @@ export function RangeExperiment() {
         >
           {music ? "Выключить музыку" : "Включить музыку"}
         </button>
+        <label className="ml-3 inline-flex items-center gap-2 text-sm text-muted">
+          громкость
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={volume}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              setVolume(next);
+              setMusicVolume(next);
+            }}
+            className="w-28 accent-current"
+          />
+        </label>
       </div>
       <div className={cn("rounded-2xl border p-3", bb === 15 ? "border-fg bg-surface" : "border-border bg-surface")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
