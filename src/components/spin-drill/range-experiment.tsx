@@ -54,17 +54,17 @@ function tone(freq: number, dur: number, type: OscillatorType, gain: number, del
 
 const sounds = {
   hit(streak: number) {
-    tone(480 + streak * 55, 0.09, "triangle", 0.06);
+    tone(480 + streak * 55, 0.09, "triangle", 0.028);
   },
   wave() {
-    tone(523, 0.12, "square", 0.04);
-    tone(659, 0.16, "square", 0.04, 0.08);
-    tone(784, 0.22, "triangle", 0.05, 0.16);
+    tone(523, 0.12, "square", 0.02);
+    tone(659, 0.16, "square", 0.02, 0.08);
+    tone(784, 0.22, "triangle", 0.025, 0.16);
   },
   fanfare() {
     [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-      tone(f, 0.34, "triangle", 0.07, i * 0.12);
-      tone(f / 2, 0.34, "square", 0.018, i * 0.12);
+      tone(f, 0.34, "triangle", 0.03, i * 0.12);
+      tone(f / 2, 0.34, "square", 0.008, i * 0.12);
     });
   },
   miss() {
@@ -76,7 +76,7 @@ const sounds = {
     osc.type = "sawtooth";
     osc.frequency.setValueAtTime(220, t);
     osc.frequency.exponentialRampToValueAtTime(70, t + 0.28);
-    amp.gain.setValueAtTime(0.05, t);
+    amp.gain.setValueAtTime(0.025, t);
     amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
     osc.connect(amp);
     amp.connect(ctx.destination);
@@ -84,21 +84,21 @@ const sounds = {
     osc.stop(t + 0.34);
   },
   win() {
-    [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", 0.05, i * 0.09));
+    [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", 0.025, i * 0.09));
   },
   cash() {
-    [880, 1174, 1568].forEach((f, i) => tone(f, 0.12, "square", 0.035, i * 0.07));
+    [880, 1174, 1568].forEach((f, i) => tone(f, 0.12, "square", 0.018, i * 0.07));
   },
   soft() {
-    tone(392, 0.16, "sine", 0.04);
+    tone(392, 0.16, "sine", 0.02);
   },
 };
 
 let bed: { stop: () => void; setGain: (value: number) => void } | null = null;
-let musicGain = 0.11;
+let musicGain = 0.28;
 
 function setMusicVolume(percent: number) {
-  musicGain = Math.min(1, Math.max(0, percent) / 100) * 0.22;
+  musicGain = Math.min(1, Math.max(0, percent) / 100) * 0.4;
   bed?.setGain(musicGain);
 }
 
@@ -149,7 +149,7 @@ function startMemoryMusic() {
     osc.frequency.setValueAtTime(freq * 1.012, t);
     osc.frequency.exponentialRampToValueAtTime(freq, t + 0.09);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.7);
     osc.connect(gain);
     gain.connect(filter);
@@ -370,7 +370,7 @@ export function RangeExperiment() {
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [spotId, setSpotId] = useState(SPOTS[0]!.id);
   const [music, setMusic] = useState(true);
-  const [volume, setVolume] = useState(50);
+  const [volume, setVolume] = useState(70);
   const [bb, setBb] = useState(15);
   const [autoplay, setAutoplay] = useState(false);
   const [splash, setSplash] = useState<Splash | null>(null);
