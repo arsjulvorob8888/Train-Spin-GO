@@ -2,7 +2,7 @@ import { PairLine } from "@/components/spin-drill/mix-grid";
 import { PipCard } from "@/components/spin-drill/pip-card";
 import { COMBOS, type Combo } from "@/lib/spin-drill/combos";
 import { ALL, handAt } from "@/lib/spin-drill/legacy-ranges";
-import { buildShape, studyHands, type Shape } from "@/lib/spin-drill/range-shape";
+import { buildShape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
 import { cellDistance, nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
@@ -17,7 +17,6 @@ const ACT: Record<MixAction, string> = {
   allin: "bg-allin text-fg",
 };
 
-type Mode = "sapper" | "edge";
 type CellMark = "ok" | "miss";
 
 function formatTime(ms: number): string {
@@ -370,7 +369,6 @@ function otherDepths(bb: number): [number, number] {
 export function RangeExperiment() {
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [spotId, setSpotId] = useState(SPOTS[0]!.id);
-  const [mode, setMode] = useState<Mode>("sapper");
   const [music, setMusic] = useState(true);
   const [volume, setVolume] = useState(50);
   const [bb, setBb] = useState(15);
@@ -554,31 +552,7 @@ export function RangeExperiment() {
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {(
-          [
-            ["sapper", "Сапёр"],
-            ["edge", "Граница"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setMode(id)}
-            className={cn(
-              "h-11 rounded-lg px-3 text-sm",
-              mode === id ? "bg-surface-2 text-fg" : "text-muted",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {mode === "sapper" ? (
-        <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} autoplay={autoplay} onClear={cleared} />
-      ) : (
-        <EdgeDrill key={`${spot.id}-${bb}`} spot={spot} bb={bb} />
-      )}
+      <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} autoplay={autoplay} onClear={cleared} />
       {splash ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg p-6">
           <div className="range-veil" />
@@ -1283,72 +1257,6 @@ function Sapper({
         </div>
       ) : null}
       </div>
-    </div>
-  );
-}
-
-function EdgeDrill({ spot, bb }: { spot: SpotDef; bb: number }) {
-  const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
-  const shape: Shape = useMemo(() => buildShape(range), [range]);
-  const queue = useMemo(() => studyHands(shape), [shape]);
-  const [i, setI] = useState(0);
-  const [wrong, setWrong] = useState(false);
-  const [misses, setMisses] = useState(0);
-  const hand = queue[i];
-  const done = hand == null;
-
-  function pick(a: MixAction) {
-    if (done || wrong || !hand) return;
-    if (shape.action[hand] === a) {
-      sounds.hit(1);
-      setI((n) => n + 1);
-      return;
-    }
-    sounds.miss();
-    setWrong(true);
-    setMisses((n) => n + 1);
-  }
-
-  if (done) {
-    return (
-      <p className="text-sm text-muted">
-        Граница этого ренджа закрыта. Рук в наборе: {queue.length}. Ошибок: {misses}. Серые фолды в глубине
-        чарта сюда не входят — их не нужно учить по одной.
-      </p>
-    );
-  }
-
-  const truth = shape.action[hand]!;
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted">
-        Только руки, которые играют, и фолды на самой кромке. {i + 1} из {queue.length}. Ошибок: {misses}.
-      </p>
-      <p className="font-mono text-5xl font-semibold tracking-wide">{hand}</p>
-      <div className="flex flex-wrap gap-2">
-        {spot.actions.map((a) => (
-          <button
-            key={a}
-            type="button"
-            disabled={wrong}
-            onClick={() => pick(a)}
-            className={cn(
-              "h-12 rounded-lg px-4 text-sm",
-              ACT[a],
-              wrong && a === truth && "outline outline-2 outline-offset-2 outline-fg",
-              wrong && a !== truth && "opacity-40",
-            )}
-          >
-            {spot.labels[a]}
-          </button>
-        ))}
-      </div>
-      {wrong ? (
-        <button type="button" className="h-11 text-sm text-muted" onClick={() => { setWrong(false); setI((n) => n + 1); }}>
-          Дальше — это {spot.labels[truth]}
-        </button>
-      ) : null}
     </div>
   );
 }
