@@ -229,6 +229,56 @@ const NEIGHBORS = [
   [0, -1],
 ] as const;
 
+function sealedPockets(open: Set<string>): string[] {
+  const seen = new Set<string>();
+  const components: string[][] = [];
+  for (let row = 0; row < 13; row++) {
+    for (let col = 0; col < 13; col++) {
+      const start = handAt(row, col);
+      if (open.has(start) || seen.has(start)) continue;
+      const comp: string[] = [];
+      const stack: [number, number][] = [[row, col]];
+      seen.add(start);
+      while (stack.length) {
+        const [y, x] = stack.pop()!;
+        comp.push(handAt(y, x));
+        for (const [dy, dx] of NEIGHBORS) {
+          const ny = y + dy;
+          const nx = x + dx;
+          if (ny < 0 || nx < 0 || ny > 12 || nx > 12) continue;
+          const next = handAt(ny, nx);
+          if (open.has(next) || seen.has(next)) continue;
+          seen.add(next);
+          stack.push([ny, nx]);
+        }
+      }
+      components.push(comp);
+    }
+  }
+  if (components.length < 2) return [];
+  let biggest = 0;
+  for (let i = 1; i < components.length; i++) {
+    if (components[i]!.length > components[biggest]!.length) biggest = i;
+  }
+  return components.filter((_, index) => index !== biggest).flat();
+}
+
+function revealSealed(actionOf: (hand: string) => string, open: Set<string>): string[] {
+  const gained: string[] = [];
+  for (let guard = 0; guard < 169; guard++) {
+    const hands = [...sealedPockets(open), ...enclosedSame(actionOf, open)];
+    let added = false;
+    for (const hand of hands) {
+      if (open.has(hand)) continue;
+      open.add(hand);
+      gained.push(hand);
+      added = true;
+    }
+    if (!added) break;
+  }
+  return gained;
+}
+
 function enclosedSame(actionOf: (hand: string) => string, open: Set<string>): string[] {
   const seen = new Set<string>();
   const extra: string[] = [];
@@ -771,10 +821,8 @@ function Sapper({
     for (const h of bonus) anim[h] = "blast";
     const next = { ...marks };
     for (const h of gained) if (!next[h]) next[h] = "ok";
-    const filled = enclosedSame(
-      (cell) => shape.action[cell]!,
-      new Set(Object.keys(next).filter((cell) => next[cell] === "ok")),
-    );
+    const open = new Set(Object.keys(next).filter((cell) => next[cell] === "ok"));
+    const filled = revealSealed((cell) => shape.action[cell]!, open);
     for (const cell of filled) {
       next[cell] = "ok";
       anim[cell] = "blast";
@@ -895,10 +943,8 @@ function Sapper({
             next[h] = "ok";
             anim[h] = "blast";
           }
-          const filled = enclosedSame(
-            (cell) => shape.action[cell]!,
-            new Set(Object.keys(next).filter((cell) => next[cell] === "ok")),
-          );
+          const open = new Set(Object.keys(next).filter((cell) => next[cell] === "ok"));
+          const filled = revealSealed((cell) => shape.action[cell]!, open);
           for (const cell of filled) {
             next[cell] = "ok";
             anim[cell] = "blast";
