@@ -222,6 +222,63 @@ function ComboFan({ combo, reveal }: { combo: Combo; reveal: boolean }) {
   );
 }
 
+const NEIGHBORS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
+
+function enclosedSame(actionOf: (hand: string) => string, open: Set<string>): string[] {
+  const seen = new Set<string>();
+  const extra: string[] = [];
+  for (let row = 0; row < 13; row++) {
+    for (let col = 0; col < 13; col++) {
+      const start = handAt(row, col);
+      if (seen.has(start)) continue;
+      const color = actionOf(start);
+      const cells: { row: number; col: number; hand: string }[] = [];
+      const stack: [number, number][] = [[row, col]];
+      seen.add(start);
+      while (stack.length) {
+        const [y, x] = stack.pop()!;
+        const hand = handAt(y, x);
+        cells.push({ row: y, col: x, hand });
+        for (const [dy, dx] of NEIGHBORS) {
+          const ny = y + dy;
+          const nx = x + dx;
+          if (ny < 0 || nx < 0 || ny > 12 || nx > 12) continue;
+          const next = handAt(ny, nx);
+          if (seen.has(next) || actionOf(next) !== color) continue;
+          seen.add(next);
+          stack.push([ny, nx]);
+        }
+      }
+      const gates: string[] = [];
+      const rest: string[] = [];
+      for (const cell of cells) {
+        let touchesOther = false;
+        for (const [dy, dx] of NEIGHBORS) {
+          const ny = cell.row + dy;
+          const nx = cell.col + dx;
+          if (ny < 0 || nx < 0 || ny > 12 || nx > 12) continue;
+          if (actionOf(handAt(ny, nx)) !== color) touchesOther = true;
+        }
+        if (touchesOther) gates.push(cell.hand);
+        else rest.push(cell.hand);
+      }
+      const border = gates.length
+        ? gates
+        : cells.filter((cell) => cell.row === 0 || cell.col === 0 || cell.row === 12 || cell.col === 12).map((cell) => cell.hand);
+      if (!border.length || !border.every((hand) => open.has(hand))) continue;
+      for (const hand of cells.map((cell) => cell.hand)) {
+        if (!open.has(hand)) extra.push(hand);
+      }
+    }
+  }
+  return extra;
+}
+
 const SUPPORT = [
   "Поле не закрылось. Ошибка в формуле ничего не стирает из ренджа.",
   "Так и запоминается: не с первого щелчка, а когда видишь, откуда цифра.",
@@ -714,6 +771,15 @@ function Sapper({
     for (const h of bonus) anim[h] = "blast";
     const next = { ...marks };
     for (const h of gained) if (!next[h]) next[h] = "ok";
+    const filled = enclosedSame(
+      (cell) => shape.action[cell]!,
+      new Set(Object.keys(next).filter((cell) => next[cell] === "ok")),
+    );
+    for (const cell of filled) {
+      next[cell] = "ok";
+      anim[cell] = "blast";
+    }
+    if (filled.length && !wave) sounds.soft();
     const cleared = Object.keys(next).length >= 169;
     if (cleared) {
       celebrate();
@@ -829,6 +895,14 @@ function Sapper({
             next[h] = "ok";
             anim[h] = "blast";
           }
+          const filled = enclosedSame(
+            (cell) => shape.action[cell]!,
+            new Set(Object.keys(next).filter((cell) => next[cell] === "ok")),
+          );
+          for (const cell of filled) {
+            next[cell] = "ok";
+            anim[cell] = "blast";
+          }
           setMarks(next);
           setFx(anim);
           if (Object.keys(next).length >= 169) celebrate();
@@ -930,7 +1004,7 @@ function Sapper({
           </button>
         ))}
         <span className="font-mono text-xs text-muted">
-          {streak === 0 ? "A S D F" : `цепочка ${streak}/5`}
+          {streak === 0 ? "A S D F · закрытая граница закрашивает середину" : `цепочка ${streak}/5`}
         </span>
         {live && !paused ? (
           <button type="button" className="h-11 rounded-lg border border-border px-3 text-sm" onClick={() => setPaused(true)}>
