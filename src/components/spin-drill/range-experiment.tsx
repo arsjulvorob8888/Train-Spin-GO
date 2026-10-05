@@ -1,3 +1,4 @@
+import { StackRail } from "@/components/spin-drill/stack-rail";
 import { PairLine } from "@/components/spin-drill/mix-grid";
 import { PipCard } from "@/components/spin-drill/pip-card";
 import { COMBOS, type Combo } from "@/lib/spin-drill/combos";
@@ -484,40 +485,6 @@ export function RangeExperiment() {
           />
         </label>
       </div>
-      <div className={cn("rounded-2xl border p-3", bb === 15 ? "border-fg bg-surface" : "border-border bg-surface")}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className={cn("font-mono text-4xl font-semibold tabular-nums leading-none", bb === 15 ? "text-fg" : "text-muted")}>
-            {bb}
-            <span className="ml-1 text-lg">bb</span>
-          </p>
-          {bb === 15 ? (
-            <span className="rounded-full bg-fg px-3 py-1 text-sm text-bg">точный чарт</span>
-          ) : (
-            <button type="button" className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg" onClick={() => setBb(15)}>
-              На 15bb
-            </button>
-          )}
-        </div>
-        <div className="relative mt-4">
-          <span className="pointer-events-none absolute top-1/2 left-[48.3%] z-0 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-fg" />
-          <input
-            type="range"
-            min={1}
-            max={30}
-            value={bb}
-            onChange={(e) => setBb(Number(e.target.value))}
-            className="relative z-10 w-full accent-current"
-          />
-        </div>
-        <div className="mt-1 grid grid-cols-3 font-mono text-xs text-muted">
-          <span>1</span>
-          <button type="button" className={cn("text-center", bb === 15 ? "font-semibold text-fg" : "text-fg")} onClick={() => setBb(15)}>
-            15
-          </button>
-          <span className="text-right">30</span>
-        </div>
-        <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
-      </div>
       <div className="flex flex-wrap gap-1.5">
         {GROUPS.map((g) => (
           <button
@@ -552,7 +519,8 @@ export function RangeExperiment() {
           </button>
         ))}
       </div>
-      <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} autoplay={autoplay} onClear={cleared} />
+      <p className="text-sm text-muted">{stackNote(bb)}</p>
+      <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} onBb={setBb} autoplay={autoplay} onClear={cleared} />
       {splash ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg p-6">
           <div className="range-veil" />
@@ -625,11 +593,13 @@ function actionLabel(spot: SpotDef, action: MixAction, bb: number): string {
 function Sapper({
   spot,
   bb,
+  onBb,
   autoplay,
   onClear,
 }: {
   spot: SpotDef;
   bb: number;
+  onBb: (bb: number) => void;
   autoplay: boolean;
   onClear: () => void;
 }) {
@@ -1090,7 +1060,8 @@ function Sapper({
           <span className="mt-1 block font-mono text-sm opacity-60">пробел</span>
         </button>
       ) : null}
-      <div className="relative">
+      <div className="flex items-stretch gap-1">
+      <div className="relative min-w-0 flex-1">
       <div className={cn("grid grid-cols-13 gap-px", live && !paused && tick === 1 && freeze === 0 && "range-urgent", (phase === "wave" || peek) && "range-flash range-peek", (!live || paused) && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
           Array.from({ length: 13 }, (_, c) => {
@@ -1256,6 +1227,8 @@ function Sapper({
           </section>
         </div>
       ) : null}
+      </div>
+      <StackRail bb={bb} onChange={onBb} />
       </div>
     </div>
   );

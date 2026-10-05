@@ -1,6 +1,7 @@
 "use client";
 
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
+import { StackRail } from "@/components/spin-drill/stack-rail";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
 import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-sheet";
@@ -117,45 +118,6 @@ function labelsAt(spot: SpotDef, bb: number): SpotDef["labels"] {
     raise: bb >= 20 ? "Raise 2.5" : spot.labels.raise,
     call: spot.id === "sb_fold" || spot.id === "hu_sb" ? "Limp" : spot.labels.call,
   };
-}
-
-function StackControl({ bb, onChange }: { bb: number; onChange: (bb: number) => void }) {
-  return (
-    <div className={cn("rounded-2xl border p-3", bb === 15 ? "border-fg bg-surface" : "border-border bg-surface")}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className={cn("font-mono text-4xl font-semibold tabular-nums leading-none", bb === 15 ? "text-fg" : "text-muted")}>
-          {bb}
-          <span className="ml-1 text-lg">bb</span>
-        </p>
-        {bb === 15 ? (
-          <span className="rounded-full bg-fg px-3 py-1 text-sm text-bg">точный чарт</span>
-        ) : (
-          <button type="button" className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg" onClick={() => onChange(15)}>
-            На 15bb
-          </button>
-        )}
-      </div>
-      <div className="relative mt-4">
-        <span className="pointer-events-none absolute top-1/2 left-[48.3%] z-0 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-fg" />
-        <input
-          type="range"
-          min={1}
-          max={30}
-          value={bb}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="relative z-10 w-full accent-current"
-        />
-      </div>
-      <div className="mt-1 grid grid-cols-3 font-mono text-xs text-muted">
-        <span>1</span>
-        <button type="button" className={cn("text-center", bb === 15 ? "font-semibold text-fg" : "text-fg")} onClick={() => onChange(15)}>
-          15
-        </button>
-        <span className="text-right">30</span>
-      </div>
-      <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
-    </div>
-  );
 }
 
 function MixBars({ range, hand, labels }: { range: SpotDef["range"]; hand: string; labels: SpotDef["labels"] }) {
@@ -514,7 +476,6 @@ export function SpinApp() {
         {tab === "strategy" && (
           <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
-              <StackControl bb={bb} onChange={setBb} />
               <div className="mt-4">
                 <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
               </div>
@@ -524,7 +485,13 @@ export function SpinApp() {
                 </strong>
                 <Legend spot={{ ...spot, labels }} />
               </div>
-              <MixGrid range={range} selected={selected} onPick={setSelected} />
+              <div className="flex items-stretch gap-1">
+                <div className="min-w-0 flex-1">
+                  <MixGrid range={range} selected={selected} onPick={setSelected} />
+                </div>
+                <StackRail bb={bb} onChange={setBb} />
+              </div>
+              <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
             </section>
             <aside className="rounded-2xl border border-border bg-surface p-4">
               <Meta spot={spot} bb={bb} range={range} labels={labels} />
@@ -586,8 +553,6 @@ export function SpinApp() {
                 {mathDrill === "equity" ? <EquityDrill /> : <PotOddsDrill />}
               </div>
             ) : (
-          <div className="space-y-4">
-          <StackControl bb={bb} onChange={setBb} />
           <div className={cn("grid gap-5", hideRange ? "lg:grid-cols-1" : "lg:grid-cols-[1fr_minmax(22rem,26rem)]")}>
             {!hideRange && (
               <section className="rounded-2xl border border-border bg-surface p-4">
@@ -607,17 +572,23 @@ export function SpinApp() {
                   </label>
                 </div>
                 <Legend spot={{ ...spot, labels }} />
-                <div className="mt-3">
-                  <MixGrid range={range} selected={current} onPick={setSelected} />
+                <div className="mt-3 flex items-stretch gap-1">
+                  <div className="min-w-0 flex-1">
+                    <MixGrid range={range} selected={current} onPick={setSelected} />
+                  </div>
+                  <StackRail bb={bb} onChange={setBb} />
                 </div>
+                <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
               </section>
             )}
-            <section className="rounded-2xl border border-border bg-surface p-4">
+            <section className="flex items-stretch gap-1 rounded-2xl border border-border bg-surface p-4">
+              <div className="min-w-0 flex-1">
               {quiz ? (
                 <QuizPanel quiz={quiz} setQuiz={setQuiz} onDone={() => deal()} />
               ) : (
                 <>
                   {hideRange && <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />}
+                  {hideRange ? <p className="mb-2 text-sm text-muted">{stackNote(bb)}</p> : null}
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <span className="font-mono text-sm text-muted">
                       Сессия {session.correct}/{session.total} <b className="text-fg">{sessPct}%</b>
@@ -700,8 +671,9 @@ export function SpinApp() {
                   </button>
                 </>
               )}
+              </div>
+              {hideRange ? <StackRail bb={bb} onChange={setBb} /> : null}
             </section>
-          </div>
           </div>
             )}
           </div>
