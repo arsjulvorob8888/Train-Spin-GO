@@ -3,6 +3,7 @@
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { EquityDesk } from "@/components/spin-drill/equity-desk";
+import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
 import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-sheet";
@@ -41,7 +42,7 @@ import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "practice" | "strategy" | "experiment" | "hands" | "math" | "stats";
+type Tab = "practice" | "strategy" | "table" | "experiment" | "hands" | "math" | "stats";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -403,6 +404,7 @@ export function SpinApp() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "practice", label: "Тренировка" },
     { id: "strategy", label: "Стратегия" },
+    { id: "table", label: "Раздача" },
     { id: "experiment", label: "GAME" },
     { id: "hands", label: "Комбинации" },
     { id: "math", label: "Математика" },
@@ -480,6 +482,8 @@ export function SpinApp() {
       </header>
 
       <main className="mx-auto w-full max-w-[1100px] flex-1 p-4 sm:p-5">
+        {tab === "table" && <HandSim />}
+
         {tab === "strategy" && (
           <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
