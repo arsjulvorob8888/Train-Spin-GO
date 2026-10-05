@@ -3,7 +3,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
-import { applyLine, lineNote, type Line } from "@/lib/spin-drill/postflop-line";
+import { lineNote, narrowSeat, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
   "старшая карта",
@@ -229,6 +229,26 @@ function advice(opts: {
   };
 }
 
+function overlaps(a: Combo, b: Combo): boolean {
+  return (
+    (a.a.rank === b.a.rank && a.a.suit === b.a.suit) ||
+    (a.a.rank === b.b.rank && a.a.suit === b.b.suit) ||
+    (a.b.rank === b.a.rank && a.b.suit === b.a.suit) ||
+    (a.b.rank === b.b.rank && a.b.suit === b.b.suit)
+  );
+}
+
+function pickCombo(combos: Combo[]): Combo {
+  let total = 0;
+  for (const combo of combos) total += combo.w;
+  let ticket = Math.random() * total;
+  for (const combo of combos) {
+    ticket -= combo.w;
+    if (ticket <= 0) return combo;
+  }
+  return combos[combos.length - 1]!;
+}
+
 export function consult(opts: {
   hero: [Card, Card];
   board: Card[];
@@ -239,6 +259,7 @@ export function consult(opts: {
   pot?: number | null;
   toCall?: number | null;
   line?: Line;
+  heroSeat?: Seat;
   iterations?: number;
 }): Consult {
   const klass = handClass(opts.hero[0], opts.hero[1]);
@@ -246,7 +267,16 @@ export function consult(opts: {
   const action = primary(mix);
   const used = new Set([...opts.hero, ...opts.board].map(keyOf));
   const villain = villainCombos(opts.spotId, opts.bb, used);
-  const combos = villain.random || !opts.line ? villain.combos : applyLine(villain.combos, opts.board, opts.line);
+  const heroSeat = opts.heroSeat ?? "BTN";
+  const opponents = seatsInHand(opts.spotId).filter((seat) => seat !== heroSeat);
+  const acted = opponents.filter((seat) =>
+    opts.line ? Boolean(opts.line.flop[seat] || opts.line.turn[seat] || opts.line.river[seat]) : false,
+  );
+  const perSeat =
+    opts.line && acted.length
+      ? acted.map((seat) => ({ seat, combos: narrowSeat(villain.combos, opts.board, opts.line!, seat) }))
+      : [];
+  const combos = perSeat.length ? perSeat.flatMap((seat) => seat.combos) : villain.combos;
   const note = opts.line ? lineNote(opts.line) : "";
   const who = note && !villain.random ? `${villain.who}; ${note}` : villain.who;
   const iterations = opts.iterations ?? 1400;
@@ -270,6 +300,44 @@ export function consult(opts: {
       } else if (heroScore === oppScore) {
         tie += 1;
         share += 0.5;
+      }
+    }
+  } else if (perSeat.length > 0) {
+    const live = perSeat.filter((seat) => seat.combos.length > 0);
+    for (let i = 0; i < iterations; i++) {
+      const chosen: Combo[] = [];
+      let blocked = false;
+      for (const seat of live) {
+        const pool = seat.combos.filter(
+          (combo) => !chosen.some((taken) => overlaps(taken, combo)),
+        );
+        if (!pool.length) {
+          blocked = true;
+          break;
+        }
+        chosen.push(pickCombo(pool));
+      }
+      if (blocked || !chosen.length) continue;
+      const dead = chosen.flatMap((combo) => [combo.a, combo.b]);
+      const deck = remainingDeck([...opts.hero, ...opts.board, ...dead]);
+      partialShuffle(deck, boardNeed);
+      const full = opts.board.concat(deck.slice(0, boardNeed));
+      const heroScore = evaluateBest([...opts.hero, ...full]).score;
+      let best = heroScore;
+      let winners = 1;
+      for (const combo of chosen) {
+        const score = evaluateBest([combo.a, combo.b, ...full]).score;
+        if (score > best) {
+          best = score;
+          winners = 1;
+        } else if (score === best) winners += 1;
+      }
+      if (heroScore === best && winners === 1) {
+        win += 1;
+        share += 1;
+      } else if (heroScore === best) {
+        tie += 1;
+        share += 1 / winners;
       }
     }
   } else if (combos.length > 0) {
@@ -341,7 +409,7 @@ export function consult(opts: {
     win: win / iterations,
     tie: tie / iterations,
     who,
-    likely: villain.random || combos.length === 0 ? [] : likelyHands(combos, Boolean(note)),
+    likely: villain.random || combos.length === 0 ? [] : likelyHands(perSeat.length ? perSeat.flatMap((seat) => seat.combos.map((combo) => ({ ...combo, klass: `${seat.seat} ${combo.klass}` }))) : combos, Boolean(note)),
     need,
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,

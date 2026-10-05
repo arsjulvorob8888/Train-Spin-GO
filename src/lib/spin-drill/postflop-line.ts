@@ -1,46 +1,84 @@
 import type { Card } from "@/lib/poker/cards";
 import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 
+export type Seat = "BTN" | "SB" | "BB";
 export type StreetId = "flop" | "turn" | "river";
-export type LineAction = "check" | "bet33" | "bet50" | "bet75" | "betpot" | "raise" | "call" | "allin";
+export type LineAction = "check" | "bet33" | "bet66" | "fold" | "call" | "raise" | "allin";
 
-export const LINE_ACTIONS: { id: LineAction; label: string }[] = [
-  { id: "check", label: "Чек" },
-  { id: "bet33", label: "Бет 33%" },
-  { id: "bet50", label: "Бет 50%" },
-  { id: "bet75", label: "Бет 75%" },
-  { id: "betpot", label: "Бет пот" },
-  { id: "raise", label: "Рейз" },
-  { id: "call", label: "Колл" },
-  { id: "allin", label: "Олл-ин" },
+export const OPEN_ACTIONS: { id: LineAction; label: string }[] = [
+  { id: "check", label: "Check" },
+  { id: "bet33", label: "Bet 33%" },
+  { id: "bet66", label: "Bet 66%" },
+  { id: "allin", label: "All-in" },
 ];
 
-export type Line = Partial<Record<StreetId, LineAction>>;
+export const FACING_ACTIONS: { id: LineAction; label: string }[] = [
+  { id: "fold", label: "Fold" },
+  { id: "call", label: "Call" },
+  { id: "raise", label: "Raise" },
+  { id: "allin", label: "All-in" },
+];
 
-const LABEL = Object.fromEntries(LINE_ACTIONS.map((item) => [item.id, item.label])) as Record<LineAction, string>;
+const LABEL: Record<LineAction, string> = {
+  check: "Check",
+  bet33: "Bet 33%",
+  bet66: "Bet 66%",
+  fold: "Fold",
+  call: "Call",
+  raise: "Raise",
+  allin: "All-in",
+};
 
-export function lineLabel(action: LineAction): string {
-  return LABEL[action];
+export type StreetLine = Partial<Record<Seat, LineAction>>;
+export type Line = Record<StreetId, StreetLine>;
+
+export function emptyLine(): Line {
+  return { flop: {}, turn: {}, river: {} };
+}
+
+/** Postflop acting order. Heads-up is BB then SB. Three-handed is SB, BB, BTN. */
+export function seatsInHand(spotId: string): Seat[] {
+  if (
+    spotId.startsWith("hu_") ||
+    spotId === "sb_fold" ||
+    spotId.startsWith("bb_vs_sb") ||
+    spotId === "sb_iso" ||
+    spotId === "sb_vs_bb_jam"
+  ) {
+    return ["BB", "SB"];
+  }
+  if (spotId.startsWith("bb_vs_btn")) return ["BB", "BTN"];
+  return ["SB", "BB", "BTN"];
+}
+
+export function seatStack(seat: Seat, bb: number): number {
+  const left = seat === "SB" ? bb - 0.5 : seat === "BB" ? bb - 1 : bb;
+  return Math.round(Math.max(0.5, left) * 10) / 10;
+}
+
+export function lineActive(line: Line): boolean {
+  return (["flop", "turn", "river"] as const).some((street) => Object.keys(line[street]).length > 0);
 }
 
 export function lineNote(line: Line): string {
   const bits: string[] = [];
-  if (line.flop) bits.push(`флоп ${LABEL[line.flop]}`);
-  if (line.turn) bits.push(`тёрн ${LABEL[line.turn]}`);
-  if (line.river) bits.push(`ривер ${LABEL[line.river]}`);
+  for (const street of ["flop", "turn", "river"] as const) {
+    const names = (["SB", "BB", "BTN"] as const)
+      .filter((seat) => line[street][seat])
+      .map((seat) => `${seat} ${LABEL[line[street][seat]!]}`);
+    if (names.length) bits.push(`${street === "flop" ? "флоп" : street === "turn" ? "тёрн" : "ривер"} ${names.join(", ")}`);
+  }
   return bits.join(" · ");
 }
 
-/** Size hero must call, in bb. Null when the pot is unknown and the size cannot be named. */
 export function callSize(action: LineAction, pot: number | null, stackBb: number): number | null {
-  if (action === "check") return 0;
+  if (action === "check" || action === "fold") return 0;
   if (action === "call") return null;
-  if (pot == null || pot <= 0) return action === "allin" ? stackBb : null;
+  if (action === "allin") return stackBb;
+  if (pot == null || pot <= 0) return null;
   if (action === "bet33") return roundBb(pot / 3);
-  if (action === "bet50") return roundBb(pot / 2);
-  if (action === "bet75") return roundBb(pot * 0.75);
-  if (action === "betpot" || action === "raise") return roundBb(pot);
-  return roundBb(Math.max(pot, stackBb));
+  if (action === "bet66") return roundBb(pot * 0.66);
+  return roundBb(pot);
 }
 
 function roundBb(value: number): number {
@@ -52,11 +90,12 @@ function keep(category: number, draw: boolean, action: LineAction): number {
   const two = category === 2;
   const nuts = category >= 3;
   const air = category === 0 && !draw;
+  if (action === "fold") return 0;
   if (action === "check") return nuts ? 0.1 : two ? 0.35 : 1;
-  if (action === "bet33" || action === "bet50") return air ? 0.4 : 1;
-  if (action === "bet75" || action === "betpot") {
+  if (action === "bet33") return air ? 0.45 : 1;
+  if (action === "bet66") {
     if (nuts || two || draw) return 1;
-    if (pair) return 0.28;
+    if (pair) return 0.3;
     return 0.1;
   }
   if (action === "allin") {
@@ -74,21 +113,26 @@ function keep(category: number, draw: boolean, action: LineAction): number {
   return 0.08;
 }
 
-export function applyLine<T extends { a: Card; b: Card; w: number }>(combos: T[], board: Card[], line: Line): T[] {
+export function narrowSeat<T extends { a: Card; b: Card; w: number }>(
+  combos: T[],
+  board: Card[],
+  line: Line,
+  seat: Seat,
+): T[] {
+  let current = combos;
   const steps: { action: LineAction; cards: Card[] }[] = [];
-  if (line.flop && board.length >= 3) steps.push({ action: line.flop, cards: board.slice(0, 3) });
-  if (line.turn && board.length >= 4) steps.push({ action: line.turn, cards: board.slice(0, 4) });
-  if (line.river && board.length >= 5) steps.push({ action: line.river, cards: board.slice(0, 5) });
-  if (!steps.length) return combos;
-  return combos
-    .map((combo) => {
-      let weight = combo.w;
-      for (const step of steps) {
+  if (line.flop[seat] && board.length >= 3) steps.push({ action: line.flop[seat]!, cards: board.slice(0, 3) });
+  if (line.turn[seat] && board.length >= 4) steps.push({ action: line.turn[seat]!, cards: board.slice(0, 4) });
+  if (line.river[seat] && board.length >= 5) steps.push({ action: line.river[seat]!, cards: board.slice(0, 5) });
+  for (const step of steps) {
+    if (step.action === "fold") return [];
+    current = current
+      .map((combo) => {
         const made = evaluateBest([combo.a, combo.b, ...step.cards]).category;
         const draws = analyzeDraws([combo.a, combo.b], step.cards);
-        weight *= keep(made, draws.flushDraw || draws.oesd, step.action);
-      }
-      return { ...combo, w: weight };
-    })
-    .filter((combo) => combo.w > 0.03);
+        return { ...combo, w: combo.w * keep(made, draws.flushDraw || draws.oesd, step.action) };
+      })
+      .filter((combo) => combo.w > 0.03);
+  }
+  return current;
 }

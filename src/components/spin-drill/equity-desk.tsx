@@ -1,10 +1,22 @@
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
 import { consult } from "@/lib/spin-drill/equity-calc";
-import { LINE_ACTIONS, callSize, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
+import {
+  FACING_ACTIONS,
+  OPEN_ACTIONS,
+  callSize,
+  emptyLine,
+  lineActive,
+  seatStack,
+  seatsInHand,
+  type Line,
+  type LineAction,
+  type Seat,
+  type StreetId,
+} from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const RANKS = [...RANK_CHARS].reverse();
 const SLOTS = ["h0", "h1", "f0", "f1", "f2", "t", "r"] as const;
@@ -28,7 +40,8 @@ export function EquityDesk({
   const [rank, setRank] = useState<number | null>(null);
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
-  const [line, setLine] = useState<Line>({});
+  const [line, setLine] = useState<Line>(emptyLine);
+  const [streetTab, setStreetTab] = useState<StreetId>("flop");
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -46,10 +59,15 @@ export function EquityDesk({
 
   const shown = useMemo(() => {
     if (!hero) return null;
-    const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall, line });
+    const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall, line, heroSeat: spot.hero });
     return { ...once, label: labels[once.action] };
   }, [hero, board, spot.id, bb, range, labels, pot, toCall, line]);
   const street = board.length >= 5 ? "Ривер" : board.length === 4 ? "Тёрн" : board.length >= 3 ? "Флоп" : "Префлоп";
+  useEffect(() => {
+    if (board.length >= 5) setStreetTab("river");
+    else if (board.length >= 4) setStreetTab("turn");
+    else setStreetTab("flop");
+  }, [board.length]);
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
   function used(card: Card, except: Slot): boolean {
@@ -87,47 +105,16 @@ export function EquityDesk({
         ))}
       </div>
       {street !== "Префлоп" ? (
-        <>
-          <p className="mt-2 text-sm text-fg">
-            {street}. Префлоп задан слева. Ниже — что сделал оппонент на каждой улице, как в солвере.
-          </p>
-          <div className="mt-3 flex gap-2 overflow-x-auto">
-            <div className="w-24 shrink-0">
-              <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Префлоп</p>
-              <p className="mt-1 rounded-md bg-fg px-2 py-2 text-xs leading-tight text-bg">{spot.vs}</p>
-            </div>
-            {(
-              [
-                ["flop", "Флоп", board.length >= 3],
-                ["turn", "Тёрн", board.length >= 4],
-                ["river", "Ривер", board.length >= 5],
-              ] as const
-            ).map(([id, title, ready]) => (
-              <div key={id} className={cn("w-24 shrink-0", ready ? "" : "opacity-40")}>
-                <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">{title}</p>
-                <div className="mt-1 flex flex-col gap-1">
-                  {ready ? (
-                    LINE_ACTIONS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => chooseLine(id, item.id)}
-                        className={cn(
-                          "rounded-md border px-2 py-1 text-left text-xs",
-                          line[id] === item.id ? "border-fg bg-fg text-bg" : "border-border bg-surface text-muted",
-                        )}
-                      >
-                        {item.label}
-                      </button>
-                    ))
-                  ) : (
-                    <p className="text-xs text-muted">нет карты</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+        <WizardLine
+          spotId={spot.id}
+          hero={spot.hero}
+          bb={bb}
+          line={line}
+          streetTab={streetTab}
+          boardLength={board.length}
+          onStreet={setStreetTab}
+          onAction={(seat, action) => chooseLine(streetTab, seat, action)}
+        />
       ) : null}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
@@ -216,7 +203,7 @@ export function EquityDesk({
           {shown.likely.length ? (
             <div>
               <p className="text-xs text-muted">
-                {line.flop || line.turn || line.river ? "Руки на этой линии" : "Верх диапазона оппонента"}
+                {lineActive(line) ? "Руки на этой линии" : "Верх диапазона оппонента"}
               </p>
               <div className="mt-1 flex flex-wrap gap-1">
                 {shown.likely.map((item) => (
@@ -228,7 +215,7 @@ export function EquityDesk({
             </div>
           ) : (
             <p className="text-xs text-muted">
-              {line.flop || line.turn || line.river
+              {lineActive(line)
                 ? "На этой линии из префлоп-диапазона рук почти не остаётся."
                 : "На этой глубине рейндж пустой, считаю против случайной руки."}
             </p>
@@ -238,23 +225,32 @@ export function EquityDesk({
         <p className="mt-3 text-sm text-muted">Нажми пустую карту, выбери достоинство и масть.</p>
       )}
       {hero ? (
-        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { setCards({}); setPicking(null); }}>
+        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { setCards({}); setPicking(null); setLine(emptyLine()); }}>
           Сбросить карты
         </button>
       ) : null}
     </div>
   );
 
-  function chooseLine(streetId: StreetId, action: LineAction) {
-    const turningOff = line[streetId] === action;
-    setLine((prev) => {
-      const next = { ...prev };
-      if (turningOff) delete next[streetId];
-      else next[streetId] = action;
-      return next;
-    });
+  function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
+    const turningOff = line[streetId][seat] === action;
+    const next = {
+      ...line,
+      [streetId]: { ...line[streetId] },
+    };
+    if (turningOff) delete next[streetId][seat];
+    else next[streetId][seat] = action;
+    setLine(next);
     if (turningOff) return;
-    const size = callSize(action, pot, bb);
+    const order = seatsInHand(spot.id).filter((item) => item !== spot.hero);
+    let size: number | null = null;
+    for (const item of order) {
+      const picked = next[streetId][item];
+      if (!picked) continue;
+      const priced = callSize(picked, pot, bb);
+      if (priced != null && picked !== "check" && picked !== "fold") size = priced;
+      if (priced === 0 && (picked === "check" || picked === "fold")) size = size ?? 0;
+    }
     if (size === 0) setCallText("");
     else if (size != null) setCallText(trimNum(size));
   }
@@ -323,5 +319,89 @@ function CardSlot({
         "+"
       )}
     </button>
+  );
+}
+
+function WizardLine({
+  spotId,
+  hero,
+  bb,
+  line,
+  streetTab,
+  boardLength,
+  onStreet,
+  onAction,
+}: {
+  spotId: string;
+  hero: Seat;
+  bb: number;
+  line: Line;
+  streetTab: StreetId;
+  boardLength: number;
+  onStreet: (street: StreetId) => void;
+  onAction: (seat: Seat, action: LineAction) => void;
+}) {
+  const streets = (
+    [
+      ["flop", "Флоп", boardLength >= 3],
+      ["turn", "Тёрн", boardLength >= 4],
+      ["river", "Ривер", boardLength >= 5],
+    ] as const
+  ).filter((item) => item[2]);
+  const street = streets.some((item) => item[0] === streetTab) ? streetTab : "flop";
+  const seats = seatsInHand(spotId);
+  return (
+    <div className="mt-3">
+      <div className="mb-2 flex gap-1">
+        {streets.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onStreet(id)}
+            className={cn("h-8 rounded-md px-2 text-xs", street === id ? "bg-fg text-bg" : "text-muted")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1 overflow-x-auto">
+        {seats.map((seat, index) => {
+          const facing = seats.slice(0, index).some((prev) => {
+            const action = line[street][prev];
+            return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
+          });
+          const actions = facing ? FACING_ACTIONS : OPEN_ACTIONS;
+          const chosen = line[street][seat];
+          const mine = seat === hero;
+          return (
+            <div key={seat} className={cn("w-[5.5rem] shrink-0 rounded-lg border p-1", mine ? "border-ok" : "border-border")}>
+              <div className="flex items-center justify-between px-1 text-[11px]">
+                <span className="font-medium">{seat}</span>
+                <span className="font-mono text-muted">{seatStack(seat, bb)}</span>
+              </div>
+              <div className="mt-1 flex flex-col">
+                {mine ? (
+                  <p className="px-1 py-1 text-xs text-muted">ваш ход</p>
+                ) : (
+                  actions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onAction(seat, item.id)}
+                      className={cn(
+                        "rounded px-1 py-1 text-left text-xs",
+                        chosen === item.id ? "bg-fg text-bg" : "text-muted",
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
