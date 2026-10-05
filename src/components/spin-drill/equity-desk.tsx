@@ -16,7 +16,7 @@ import {
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 const RANKS = [...RANK_CHARS].reverse();
 const SLOTS = ["h0", "h1", "f0", "f1", "f2", "t", "r"] as const;
@@ -41,7 +41,6 @@ export function EquityDesk({
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
   const [line, setLine] = useState<Line>(emptyLine);
-  const [streetTab, setStreetTab] = useState<StreetId>("flop");
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -62,12 +61,6 @@ export function EquityDesk({
     const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall, line, heroSeat: spot.hero });
     return { ...once, label: labels[once.action] };
   }, [hero, board, spot.id, bb, range, labels, pot, toCall, line]);
-  const street = board.length >= 5 ? "Ривер" : board.length === 4 ? "Тёрн" : board.length >= 3 ? "Флоп" : "Префлоп";
-  useEffect(() => {
-    if (board.length >= 5) setStreetTab("river");
-    else if (board.length >= 4) setStreetTab("turn");
-    else setStreetTab("flop");
-  }, [board.length]);
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
   function used(card: Card, except: Slot): boolean {
@@ -90,59 +83,134 @@ export function EquityDesk({
 
   return (
     <div className="relative rounded-xl border border-border bg-surface-2 p-3">
-      <p className="text-sm font-medium">Эквити</p>
-      <p className="mt-0.5 text-xs text-muted">Две свои карты. Борд можно не заполнять.</p>
-      <p className="mt-3 text-[10px] font-medium tracking-wide text-subtle uppercase">Мои карты</p>
-      <div className="mt-1 flex gap-2">
-        {(["h0", "h1"] as const).map((slot) => (
-          <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} onClick={() => open(slot)} />
-        ))}
-      </div>
-      <p className="mt-3 text-[10px] font-medium tracking-wide text-subtle uppercase">Флоп · терн · ривер</p>
-      <div className="mt-1 flex gap-1">
-        {(["f0", "f1", "f2", "t", "r"] as const).map((slot) => (
-          <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} small onClick={() => open(slot)} />
-        ))}
-      </div>
-      {street !== "Префлоп" ? (
-        <WizardLine
-          spotId={spot.id}
-          hero={spot.hero}
-          bb={bb}
-          line={line}
-          streetTab={streetTab}
-          boardLength={board.length}
-          onStreet={setStreetTab}
-          onAction={(seat, action) => chooseLine(streetTab, seat, action)}
-        />
-      ) : null}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-          Банк, bb
-          <input
-            inputMode="decimal"
-            value={potText}
-            placeholder="6"
-            onChange={(event) => setPotText(event.target.value)}
-            className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-          />
-        </label>
-        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-          Докинуть, bb
-          <input
-            inputMode="decimal"
-            value={callText}
-            placeholder="4"
-            onChange={(event) => setCallText(event.target.value)}
-            className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-          />
-        </label>
-      </div>
-      <p className="mt-2 font-mono text-xs text-muted">
-        {typedOdds != null
-          ? `Pot odds: нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
-          : "Банк — уже лежит, вместе со ставкой оппонента. Докинуть — твоя сумма."}
-      </p>
+      <p className="text-sm font-medium">Раздача по шагам</p>
+      <p className="mt-0.5 text-xs text-muted">Сверху вниз: стол, карты, оппоненты, банк. Рекомендация в конце.</p>
+
+      <Step n={1} title="Стол" done>
+        <p className="text-sm">
+          Вы: {spot.hero} · {bb}bb · {spot.vs}
+        </p>
+        <ul className="mt-1 space-y-0.5 text-xs text-muted">
+          {spot.steps.map((step) => (
+            <li key={step.label}>
+              {step.label}: {step.did}
+            </li>
+          ))}
+        </ul>
+      </Step>
+
+      <Step n={2} title="Ваши карты" done={Boolean(hero)}>
+        <div className="flex gap-2">
+          {(["h0", "h1"] as const).map((slot) => (
+            <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} onClick={() => open(slot)} />
+          ))}
+        </div>
+      </Step>
+
+      <Step n={3} title="Флоп" done={board.length >= 3} locked={!hero}>
+        <div className="flex gap-1">
+          {(["f0", "f1", "f2"] as const).map((slot) => (
+            <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} small onClick={() => open(slot)} />
+          ))}
+        </div>
+        {board.length >= 3 ? (
+          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" onAction={(seat, action) => chooseLine("flop", seat, action)} />
+        ) : (
+          <p className="mt-1 text-xs text-muted">Три карты, затем действие каждого оппонента по очереди.</p>
+        )}
+      </Step>
+
+      <Step n={4} title="Тёрн" done={board.length >= 4} locked={board.length < 3}>
+        <CardSlot card={cards.t ?? null} active={picking === "t"} small onClick={() => open("t")} />
+        {board.length >= 4 ? (
+          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" onAction={(seat, action) => chooseLine("turn", seat, action)} />
+        ) : null}
+      </Step>
+
+      <Step n={5} title="Ривер" done={board.length >= 5} locked={board.length < 4}>
+        <CardSlot card={cards.r ?? null} active={picking === "r"} small onClick={() => open("r")} />
+        {board.length >= 5 ? (
+          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" onAction={(seat, action) => chooseLine("river", seat, action)} />
+        ) : null}
+      </Step>
+
+      <Step n={6} title="Банк" done={pot != null} locked={!hero}>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+            Банк, bb
+            <input
+              inputMode="decimal"
+              value={potText}
+              placeholder="6"
+              onChange={(event) => setPotText(event.target.value)}
+              className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+            />
+          </label>
+          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+            Докинуть, bb
+            <input
+              inputMode="decimal"
+              value={callText}
+              placeholder="4"
+              onChange={(event) => setCallText(event.target.value)}
+              className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+            />
+          </label>
+        </div>
+        <p className="mt-2 font-mono text-xs text-muted">
+          {typedOdds != null
+            ? `Нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
+            : "Банк — уже лежит, со ставкой оппонента. Докинуть — ваша сумма."}
+        </p>
+      </Step>
+
+      <Step n={7} title="Рекомендация" done={Boolean(shown)} locked={!hero}>
+        {shown ? (
+          <div className="space-y-2">
+            <div className="flex items-end justify-between gap-2">
+              <div>
+                <p className="font-mono text-xs text-muted">
+                  {shown.street} · {shown.klass}
+                </p>
+                <p className="text-2xl font-semibold leading-none">{shown.verdict}</p>
+                {shown.street !== "Префлоп" ? (
+                  <p className="mt-1 text-lg leading-none">
+                    {shown.made ?? "борд"}
+                    {shown.draw ? ` · ${shown.draw}` : ""}
+                  </p>
+                ) : null}
+              </div>
+              <p className="font-mono text-3xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
+            </div>
+            <p className="text-sm leading-snug text-muted">{shown.text}</p>
+            <p className="font-mono text-xs text-subtle">
+              выигрыш {Math.round(shown.win * 100)}% · ничья {Math.round(shown.tie * 100)}%
+              {shown.need != null ? ` · нужно ${Math.round(shown.need * 100)}%` : ""}
+            </p>
+            {shown.likely.length ? (
+              <div>
+                <p className="text-xs text-muted">{lineActive(line) ? "Руки на этой линии" : "Верх диапазона оппонента"}</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {shown.likely.map((item) => (
+                    <span key={item.hand} className="rounded-full bg-surface px-2 py-0.5 font-mono text-xs">
+                      {item.hand}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted">
+                {lineActive(line)
+                  ? "На этой линии из префлоп-диапазона рук почти не остаётся."
+                  : "На этой глубине рейндж пустой, считаю против случайной руки."}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Сначала две ваши карты.</p>
+        )}
+      </Step>
+
       {picking ? (
         <div className="absolute top-12 right-2 left-2 z-20 rounded-xl border border-border bg-surface p-2 shadow-border">
           <div className="grid grid-cols-7 gap-1">
@@ -181,52 +249,9 @@ export function EquityDesk({
           </div>
         </div>
       ) : null}
-      {shown ? (
-        <div className="mt-3 space-y-2">
-          <div className="flex items-end justify-between gap-2">
-            <div>
-              <p className="font-mono text-xs text-muted">
-                {shown.street} · {shown.klass}
-              </p>
-              <p className="text-2xl font-semibold leading-none">{shown.verdict}</p>
-              {shown.street !== "Префлоп" ? (
-                <p className="mt-1 text-lg leading-none">{shown.made ?? "борд"}{shown.draw ? ` · ${shown.draw}` : ""}</p>
-              ) : null}
-            </div>
-            <p className="font-mono text-3xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
-          </div>
-          <p className="text-sm leading-snug text-muted">{shown.text}</p>
-          <p className="font-mono text-xs text-subtle">
-            выигрыш {Math.round(shown.win * 100)}% · ничья {Math.round(shown.tie * 100)}%
-            {shown.need != null ? ` · нужно ${Math.round(shown.need * 100)}%` : ""}
-          </p>
-          {shown.likely.length ? (
-            <div>
-              <p className="text-xs text-muted">
-                {lineActive(line) ? "Руки на этой линии" : "Верх диапазона оппонента"}
-              </p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {shown.likely.map((item) => (
-                  <span key={item.hand} className="rounded-full bg-surface px-2 py-0.5 font-mono text-xs">
-                    {item.hand}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted">
-              {lineActive(line)
-                ? "На этой линии из префлоп-диапазона рук почти не остаётся."
-                : "На этой глубине рейндж пустой, считаю против случайной руки."}
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-muted">Нажми пустую карту, выбери достоинство и масть.</p>
-      )}
       {hero ? (
-        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { setCards({}); setPicking(null); setLine(emptyLine()); }}>
-          Сбросить карты
+        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { setCards({}); setPicking(null); setLine(emptyLine()); setPotText(""); setCallText(""); }}>
+          Начать раздачу заново
         </button>
       ) : null}
     </div>
@@ -279,6 +304,30 @@ function trimNum(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function Step({
+  n,
+  title,
+  done,
+  locked,
+  children,
+}: {
+  n: number;
+  title: string;
+  done?: boolean;
+  locked?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={cn("mt-3 border-t border-border pt-3", locked ? "pointer-events-none opacity-40" : "")}>
+      <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
+        {n}. {title}
+        {done ? " · готово" : ""}
+      </p>
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
 function shownKlass(a: Card, b: Card): string {
   const order = "23456789TJQKA";
   const hi = order[Math.max(a.rank, b.rank)]!;
@@ -327,81 +376,63 @@ function WizardLine({
   hero,
   bb,
   line,
-  streetTab,
-  boardLength,
-  onStreet,
+  only,
   onAction,
 }: {
   spotId: string;
   hero: Seat;
   bb: number;
   line: Line;
-  streetTab: StreetId;
-  boardLength: number;
-  onStreet: (street: StreetId) => void;
+  only: StreetId;
   onAction: (seat: Seat, action: LineAction) => void;
 }) {
-  const streets = (
-    [
-      ["flop", "Флоп", boardLength >= 3],
-      ["turn", "Тёрн", boardLength >= 4],
-      ["river", "Ривер", boardLength >= 5],
-    ] as const
-  ).filter((item) => item[2]);
-  const street = streets.some((item) => item[0] === streetTab) ? streetTab : "flop";
   const seats = seatsInHand(spotId);
   return (
-    <div className="mt-3">
-      <div className="mb-2 flex gap-1">
-        {streets.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onStreet(id)}
-            className={cn("h-8 rounded-md px-2 text-xs", street === id ? "bg-fg text-bg" : "text-muted")}
+    <div className="mt-2 flex gap-1 overflow-x-auto">
+      {seats.map((seat, index) => {
+        const facing = seats.slice(0, index).some((prev) => {
+          const action = line[only][prev];
+          return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
+        });
+        const earlier = seats.slice(0, index).filter((prev) => prev !== hero);
+        const waiting = ! (seat === hero) && earlier.some((prev) => !line[only][prev]);
+        const actions = facing ? FACING_ACTIONS : OPEN_ACTIONS;
+        const chosen = line[only][seat];
+        const mine = seat === hero;
+        return (
+          <div
+            key={seat}
+            className={cn(
+              "w-[5.5rem] shrink-0 rounded-lg border p-1",
+              mine ? "border-ok" : waiting ? "border-border opacity-40" : "border-border",
+            )}
           >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1 overflow-x-auto">
-        {seats.map((seat, index) => {
-          const facing = seats.slice(0, index).some((prev) => {
-            const action = line[street][prev];
-            return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
-          });
-          const actions = facing ? FACING_ACTIONS : OPEN_ACTIONS;
-          const chosen = line[street][seat];
-          const mine = seat === hero;
-          return (
-            <div key={seat} className={cn("w-[5.5rem] shrink-0 rounded-lg border p-1", mine ? "border-ok" : "border-border")}>
-              <div className="flex items-center justify-between px-1 text-[11px]">
-                <span className="font-medium">{seat}</span>
-                <span className="font-mono text-muted">{seatStack(seat, bb)}</span>
-              </div>
-              <div className="mt-1 flex flex-col">
-                {mine ? (
-                  <p className="px-1 py-1 text-xs text-muted">ваш ход</p>
-                ) : (
-                  actions.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onAction(seat, item.id)}
-                      className={cn(
-                        "rounded px-1 py-1 text-left text-xs",
-                        chosen === item.id ? "bg-fg text-bg" : "text-muted",
-                      )}
-                    >
-                      {item.label}
-                    </button>
-                  ))
-                )}
-              </div>
+            <div className="flex items-center justify-between px-1 text-[11px]">
+              <span className="font-medium">{seat}</span>
+              <span className="font-mono text-muted">{seatStack(seat, bb)}</span>
             </div>
-          );
-        })}
-      </div>
+            <div className={cn("mt-1 flex flex-col", waiting ? "pointer-events-none" : "")}>
+              {mine ? (
+                <p className="px-1 py-1 text-xs text-muted">ваш ход</p>
+              ) : (
+                actions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onAction(seat, item.id)}
+                    className={cn(
+                      "rounded px-1 py-1 text-left text-xs",
+                      chosen === item.id ? "bg-fg text-bg" : "text-muted",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
