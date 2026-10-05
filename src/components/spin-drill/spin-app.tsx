@@ -485,7 +485,7 @@ export function SpinApp() {
                 </strong>
                 <Legend spot={{ ...spot, labels }} />
               </div>
-              <div className="flex items-stretch gap-1">
+              <div className="flex items-stretch gap-2 select-none">
                 <div className="min-w-0 flex-1">
                   <MixGrid range={range} selected={selected} onPick={setSelected} />
                 </div>
@@ -572,7 +572,7 @@ export function SpinApp() {
                   </label>
                 </div>
                 <Legend spot={{ ...spot, labels }} />
-                <div className="mt-3 flex items-stretch gap-1">
+                <div className="mt-3 flex items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
                     <MixGrid range={range} selected={current} onPick={setSelected} />
                   </div>
@@ -581,7 +581,7 @@ export function SpinApp() {
                 <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
               </section>
             )}
-            <section className="flex items-stretch gap-1 rounded-2xl border border-border bg-surface p-4">
+            <section className="flex items-stretch gap-2 rounded-2xl border border-border bg-surface p-4">
               <div className="min-w-0 flex-1">
               {quiz ? (
                 <QuizPanel quiz={quiz} setQuiz={setQuiz} onDone={() => deal()} />

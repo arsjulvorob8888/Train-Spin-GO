@@ -520,7 +520,7 @@ export function RangeExperiment() {
         ))}
       </div>
       <p className="text-sm text-muted">{stackNote(bb)}</p>
-      <Sapper key={`${spot.id}-${bb}`} spot={spot} bb={bb} onBb={setBb} autoplay={autoplay} onClear={cleared} />
+      <Sapper key={spot.id} spot={spot} bb={bb} onBb={setBb} autoplay={autoplay} onClear={cleared} />
       {splash ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg p-6">
           <div className="range-veil" />
@@ -642,6 +642,35 @@ function Sapper({
   const timers = useRef<number[]>([]);
   const openCount = Object.keys(marks).length;
   const done = phase === "win" || phase === "time" || openCount === 169;
+  const stackReady = useRef(false);
+
+  useEffect(() => {
+    if (!stackReady.current) {
+      stackReady.current = true;
+      return;
+    }
+    timers.current.forEach((id) => window.clearTimeout(id));
+    timers.current = [];
+    setMarks({});
+    setFx({});
+    setStreak(0);
+    setChain(0);
+    setMisses(0);
+    setPhase("play");
+    setClosing([]);
+    setLive(false);
+    setPaused(false);
+    setPeek(null);
+    setStrikeFx(false);
+    setLeft(120);
+    setTick(3);
+    setFreeze(0);
+    freezeRef.current = 0;
+    setQuiz(null);
+    setCheer(null);
+    busy.current = false;
+    told.current = false;
+  }, [bb]);
 
   useEffect(() => {
     if (!live || paused || quiz || phase === "win" || phase === "time") return;
@@ -1060,9 +1089,9 @@ function Sapper({
           <span className="mt-1 block font-mono text-sm opacity-60">пробел</span>
         </button>
       ) : null}
-      <div className="flex items-stretch gap-1">
+      <div className="flex items-stretch gap-2 select-none">
       <div className="relative min-w-0 flex-1">
-      <div className={cn("grid grid-cols-13 gap-px", live && !paused && tick === 1 && freeze === 0 && "range-urgent", (phase === "wave" || peek) && "range-flash range-peek", (!live || paused) && phase !== "time" && "range-live")}>
+      <div className={cn("grid grid-cols-13 gap-px select-none", live && !paused && tick === 1 && freeze === 0 && "range-urgent", (phase === "wave" || peek) && "range-flash range-peek", (!live || paused) && phase !== "time" && "range-live")}>
         {Array.from({ length: 13 }, (_, r) =>
           Array.from({ length: 13 }, (_, c) => {
             const h = handAt(r, c);
