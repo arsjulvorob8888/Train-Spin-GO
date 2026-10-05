@@ -16,6 +16,7 @@ import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
 import { useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const RANKS = [...RANK_CHARS].reverse();
 const SLOTS = ["h0", "h1", "f0", "f1", "f2", "t", "r"] as const;
@@ -36,6 +37,7 @@ export function EquityDesk({
 }) {
   const [cards, setCards] = useState<Partial<Record<Slot, Card>>>({});
   const [picking, setPicking] = useState<Slot | null>(null);
+  const [guard, setGuard] = useState(false);
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
   const [line, setLine] = useState<Line>(emptyLine);
@@ -72,7 +74,13 @@ export function EquityDesk({
     const next = { ...cards, [picking]: card };
     setCards(next);
     setPicking(null);
+    holdGuard();
     if (next.h0 && next.h1) onHand(shownKlass(next.h0, next.h1));
+  }
+
+  function holdGuard() {
+    setGuard(true);
+    window.setTimeout(() => setGuard(false), 250);
   }
 
   return (
@@ -177,40 +185,69 @@ export function EquityDesk({
         </p>
       </Step>
 
-      {picking ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={() => setPicking(null)}>
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onClick={(event) => event.stopPropagation()}>
-            <p className="text-sm font-medium">Карта</p>
-            <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
-              {RANKS.map((glyph) => {
-                const value = RANK_CHARS.indexOf(glyph);
-                return (
-                  <div key={glyph} className="grid grid-cols-4 gap-1">
-                    {SUIT_GLYPHS.map((suitGlyph, suit) => {
-                      const taken = used({ rank: value, suit }, picking);
+      {typeof document !== "undefined" && (picking || guard)
+        ? createPortal(
+            <div
+              className={cn(
+                "fixed inset-0 z-[80] flex items-end justify-center p-3 sm:items-center",
+                picking ? "bg-black/60" : "",
+              )}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (picking) {
+                  setPicking(null);
+                  holdGuard();
+                }
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            >
+              {picking ? (
+                <div
+                  className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3"
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <p className="text-sm font-medium">Карта</p>
+                  <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
+                    {RANKS.map((glyph) => {
+                      const value = RANK_CHARS.indexOf(glyph);
                       return (
-                        <button
-                          key={suitGlyph}
-                          type="button"
-                          disabled={taken}
-                          onClick={() => choose(value, suit)}
-                          className={cn(
-                            "h-9 rounded-md bg-card-face font-mono text-sm font-semibold disabled:opacity-20",
-                            isRedSuit(suit) ? "text-suit-red" : "text-card-ink",
-                          )}
-                        >
-                          {glyph === "T" ? "10" : glyph}
-                          {suitGlyph}
-                        </button>
+                        <div key={glyph} className="grid grid-cols-4 gap-1">
+                          {SUIT_GLYPHS.map((suitGlyph, suit) => {
+                            const taken = used({ rank: value, suit }, picking);
+                            return (
+                              <button
+                                key={suitGlyph}
+                                type="button"
+                                disabled={taken}
+                                onPointerDown={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (!taken) choose(value, suit);
+                                }}
+                                className={cn(
+                                  "h-9 rounded-md bg-card-face font-mono text-sm font-semibold disabled:opacity-20",
+                                  isRedSuit(suit) ? "text-suit-red" : "text-card-ink",
+                                )}
+                              >
+                                {glyph === "T" ? "10" : glyph}
+                                {suitGlyph}
+                              </button>
+                            );
+                          })}
+                        </div>
                       );
                     })}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
+                </div>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
       {hero ? (
         <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { setCards({}); setPicking(null); setLine(emptyLine()); setPotText(""); setCallText(""); }}>
           Начать раздачу заново
