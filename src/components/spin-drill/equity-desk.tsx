@@ -5,7 +5,6 @@ import {
   OPEN_ACTIONS,
   callSize,
   emptyLine,
-  lineActive,
   seatStack,
   seatsInHand,
   type Line,
@@ -83,6 +82,25 @@ export function EquityDesk({
 
   return (
     <div className="relative rounded-xl border border-border bg-surface-2 p-3">
+      <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 border-b border-ok bg-surface-2 px-3 py-3">
+        {shown ? (
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Действие</p>
+              <p className="text-3xl font-semibold leading-none">{shown.verdict}</p>
+              <p className="mt-1 text-xs text-muted">
+                {shown.street} · {shown.klass}
+                {shown.made ? ` · ${shown.made}` : ""}
+                {shown.draw ? ` · ${shown.draw}` : ""}
+              </p>
+            </div>
+            <p className="font-mono text-4xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Действие появится здесь сразу после двух карт.</p>
+        )}
+        {shown ? <p className="mt-2 text-sm leading-snug text-muted">{shown.text}</p> : null}
+      </div>
       <p className="text-sm font-medium">Раздача по шагам</p>
       <p className="mt-0.5 text-xs text-muted">Сверху вниз: стол, карты, оппоненты, банк. Рекомендация в конце.</p>
 
@@ -162,53 +180,6 @@ export function EquityDesk({
             ? `Нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
             : "Банк — уже лежит, со ставкой оппонента. Докинуть — ваша сумма."}
         </p>
-      </Step>
-
-      <Step n={7} title="Рекомендация" done={Boolean(shown)} locked={!hero}>
-        {shown ? (
-          <div className="space-y-2">
-            <div className="flex items-end justify-between gap-2">
-              <div>
-                <p className="font-mono text-xs text-muted">
-                  {shown.street} · {shown.klass}
-                </p>
-                <p className="text-2xl font-semibold leading-none">{shown.verdict}</p>
-                {shown.street !== "Префлоп" ? (
-                  <p className="mt-1 text-lg leading-none">
-                    {shown.made ?? "борд"}
-                    {shown.draw ? ` · ${shown.draw}` : ""}
-                  </p>
-                ) : null}
-              </div>
-              <p className="font-mono text-3xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
-            </div>
-            <p className="text-sm leading-snug text-muted">{shown.text}</p>
-            <p className="font-mono text-xs text-subtle">
-              выигрыш {Math.round(shown.win * 100)}% · ничья {Math.round(shown.tie * 100)}%
-              {shown.need != null ? ` · нужно ${Math.round(shown.need * 100)}%` : ""}
-            </p>
-            {shown.likely.length ? (
-              <div>
-                <p className="text-xs text-muted">{lineActive(line) ? "Руки на этой линии" : "Верх диапазона оппонента"}</p>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {shown.likely.map((item) => (
-                    <span key={item.hand} className="rounded-full bg-surface px-2 py-0.5 font-mono text-xs">
-                      {item.hand}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted">
-                {lineActive(line)
-                  ? "На этой линии из префлоп-диапазона рук почти не остаётся."
-                  : "На этой глубине рейндж пустой, считаю против случайной руки."}
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted">Сначала две ваши карты.</p>
-        )}
       </Step>
 
       {picking ? (
