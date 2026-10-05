@@ -2,6 +2,7 @@
 
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
+import { EquityDesk } from "@/components/spin-drill/equity-desk";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
 import { EquityHintLine, EquitySheet } from "@/components/spin-drill/equity-sheet";
@@ -480,7 +481,7 @@ export function SpinApp() {
 
       <main className="mx-auto w-full max-w-[1100px] flex-1 p-4 sm:p-5">
         {tab === "strategy" && (
-          <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+          <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
               <div className="mt-4">
                 <SpotPills compact group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
@@ -517,7 +518,8 @@ export function SpinApp() {
                 <SpotExplain spot={spot} />
               </div>
             </section>
-            <aside className="rounded-2xl border border-border bg-surface p-4">
+            <aside className="sticky top-4 max-h-[calc(100vh-1.5rem)] space-y-4 overflow-auto rounded-2xl border border-border bg-surface p-4">
+              <EquityDesk spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} />
               <Meta spot={spot} bb={bb} range={range} labels={labels} />
               <p className="mt-4 font-mono text-lg font-semibold">{selected}</p>
               <p className="mb-3 text-sm text-muted">
