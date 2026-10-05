@@ -14,7 +14,12 @@ const TREE: Branch[] = [
   },
   {
     label: "Limp",
-    children: [{ label: "Fold", spot: "bb_vs_btn_limp" }],
+    children: [
+      { label: "Fold", spot: "bb_vs_btn_limp" },
+      { label: "Call", spot: "bb_vs_limp_call" },
+      { label: "Raise 4", spot: "bb_vs_limp_iso" },
+      { label: "All-in", spot: "bb_vs_limp_jam" },
+    ],
   },
   {
     label: "Raise 2",
@@ -26,7 +31,10 @@ const TREE: Branch[] = [
   },
   {
     label: "All-in",
-    children: [{ label: "Fold", spot: "bb_vs_btn_jam" }],
+    children: [
+      { label: "Fold", spot: "bb_vs_btn_jam" },
+      { label: "Call", spot: "bb_vs_jam_call" },
+    ],
   },
 ];
 
