@@ -162,6 +162,9 @@ export function EquityDesk({
                 {shown.street} · {shown.klass}
               </p>
               <p className="text-2xl font-semibold leading-none">{shown.verdict}</p>
+              {shown.street !== "Префлоп" ? (
+                <p className="mt-1 text-lg leading-none">{shown.made ?? "борд"}{shown.draw ? ` · ${shown.draw}` : ""}</p>
+              ) : null}
             </div>
             <p className="font-mono text-3xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
           </div>
@@ -170,7 +173,6 @@ export function EquityDesk({
             выигрыш {Math.round(shown.win * 100)}% · ничья {Math.round(shown.tie * 100)}%
             {shown.need != null ? ` · нужно ${Math.round(shown.need * 100)}%` : ""}
           </p>
-          {shown.made ? <p className="text-sm">На борде: {shown.made}{shown.draw ? ` · ${shown.draw}` : ""}</p> : null}
           {shown.likely.length ? (
             <div>
               <p className="text-xs text-muted">Верх диапазона оппонента</p>
