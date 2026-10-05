@@ -11,7 +11,7 @@ import { RangeExperiment } from "@/components/spin-drill/range-experiment";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
-import { continueHands, grade, mixOf, primary, segs, type MixAction } from "@/lib/spin-drill/mix";
+import { continueHands, continuePct, grade, mixOf, primary, segs, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import {
   GROUPS,
   ICM,
@@ -35,6 +35,7 @@ import {
   spotStat,
   type Store,
 } from "@/lib/spin-drill/stats";
+import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -95,10 +96,10 @@ function dealCombo(hand: string): [Face, Face] {
   ];
 }
 
-function pickHand(spot: SpotDef, store: Store, includeFolds: boolean, avoid?: string) {
-  const playable = continueHands(spot.range, ALL);
+function pickHand(range: MixRange, statId: string, store: Store, includeFolds: boolean, avoid?: string) {
+  const playable = continueHands(range, ALL);
   const base = playable.length ? playable : ALL;
-  const st = spotStat(store, spot.id);
+  const st = spotStat(store, statId);
   const reps = store.reps ?? 0;
   let pool = !includeFolds || Math.random() < 0.62 ? [...base] : [...ALL];
   if (includeFolds) {
@@ -107,6 +108,54 @@ function pickHand(spot: SpotDef, store: Store, includeFolds: boolean, avoid?: st
     }
   }
   return chooseHand(pool, st, reps, avoid);
+}
+
+function labelsAt(spot: SpotDef, bb: number): SpotDef["labels"] {
+  return {
+    ...spot.labels,
+    allin: `All-in ${bb}`,
+    raise: bb >= 20 ? "Raise 2.5" : spot.labels.raise,
+    call: spot.id === "sb_fold" || spot.id === "hu_sb" ? "Limp" : spot.labels.call,
+  };
+}
+
+function StackControl({ bb, onChange }: { bb: number; onChange: (bb: number) => void }) {
+  return (
+    <div className={cn("rounded-2xl border p-3", bb === 15 ? "border-fg bg-surface" : "border-border bg-surface")}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className={cn("font-mono text-4xl font-semibold tabular-nums leading-none", bb === 15 ? "text-fg" : "text-muted")}>
+          {bb}
+          <span className="ml-1 text-lg">bb</span>
+        </p>
+        {bb === 15 ? (
+          <span className="rounded-full bg-fg px-3 py-1 text-sm text-bg">точный чарт</span>
+        ) : (
+          <button type="button" className="h-11 rounded-lg bg-fg px-3 text-sm font-medium text-bg" onClick={() => onChange(15)}>
+            На 15bb
+          </button>
+        )}
+      </div>
+      <div className="relative mt-4">
+        <span className="pointer-events-none absolute top-1/2 left-[48.3%] z-0 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-fg" />
+        <input
+          type="range"
+          min={1}
+          max={30}
+          value={bb}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="relative z-10 w-full accent-current"
+        />
+      </div>
+      <div className="mt-1 grid grid-cols-3 font-mono text-xs text-muted">
+        <span>1</span>
+        <button type="button" className={cn("text-center", bb === 15 ? "font-semibold text-fg" : "text-fg")} onClick={() => onChange(15)}>
+          15
+        </button>
+        <span className="text-right">30</span>
+      </div>
+      <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
+    </div>
+  );
 }
 
 function MixBars({ range, hand, labels }: { range: SpotDef["range"]; hand: string; labels: SpotDef["labels"] }) {
@@ -192,21 +241,21 @@ function Legend({ spot }: { spot: SpotDef }) {
   );
 }
 
-function Meta({ spot }: { spot: SpotDef }) {
-  const cont = spotContinue(spot);
+function Meta({ spot, bb, range, labels }: { spot: SpotDef; bb: number; range: MixRange; labels: SpotDef["labels"] }) {
+  const cont = continuePct(range, ALL);
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg border-2 border-ok bg-surface-2 p-3">
         <div className="flex justify-between">
           <strong>Вы: {SEAT_NAME[spot.hero]}</strong>
-          <span className="font-mono">{STACK}</span>
+          <span className="font-mono">{bb}bb</span>
         </div>
         <p className="mt-1 font-mono text-xs text-subtle">{spot.line}</p>
         <ul className="mt-2 space-y-1 text-sm">
           {spot.actions.map((a) => (
             <li key={a} className="flex items-center gap-2">
               <i className={cn("size-2.5 rounded-sm", BAR[a])} />
-              {spot.labels[a]}
+              {labels[a]}
             </li>
           ))}
         </ul>
@@ -214,7 +263,7 @@ function Meta({ spot }: { spot: SpotDef }) {
       <dl className="grid grid-cols-2 gap-2 font-mono text-xs">
         <div className="rounded-md bg-surface-2 px-2 py-1.5">
           <dt className="text-subtle">Stacks</dt>
-          <dd>{STACK}</dd>
+          <dd>{bb}bb</dd>
         </div>
         <div className="rounded-md bg-surface-2 px-2 py-1.5">
           <dt className="text-subtle">ICM</dt>
@@ -247,15 +296,20 @@ export function SpinApp() {
   const [mathPane, setMathPane] = useState<"lesson" | "anchors" | "drill">("lesson");
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
+  const [bb, setBb] = useState(15);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
+  const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
+  const labels = useMemo(() => labelsAt(spot, bb), [spot, bb]);
+  const statId = bb === 15 ? spot.id : `${spot.id}@${bb}`;
   const st = spotStat(store, spot.id);
+  const drillStat = spotStat(store, statId);
   const waiting = useMemo(() => {
-    const playable = continueHands(spot.range, ALL);
+    const playable = continueHands(range, ALL);
     const pool = includeFolds ? ALL : playable.length ? playable : ALL;
-    return dueInPool(st, pool, store.reps ?? 0);
-  }, [spot, st, includeFolds, store.reps]);
+    return dueInPool(drillStat, pool, store.reps ?? 0);
+  }, [range, drillStat, includeFolds, store.reps]);
   const leaks = useMemo(() => leakHands(st), [st]);
 
   useEffect(() => {
@@ -263,8 +317,8 @@ export function SpinApp() {
     setHideRange(localStorage.getItem("spin-hide-range") === "1");
   }, []);
 
-  function deal(nextSpot = spot, nextStore = store, avoid?: string) {
-    const picked = pickHand(nextSpot, nextStore, includeFolds, avoid);
+  function deal(nextRange = range, nextId = statId, nextStore = store, avoid?: string) {
+    const picked = pickHand(nextRange, nextId, nextStore, includeFolds, avoid);
     setQuiz(null);
     setReview(picked.review);
     setCurrent(picked.hand);
@@ -285,14 +339,29 @@ export function SpinApp() {
       setQuiz({ checked: false, ok: 0, guesses: {} });
       return;
     }
-    deal(spot, nextStore, avoid);
+    deal(range, statId, nextStore, avoid);
   }
 
   useEffect(() => () => clearAdvance(), []);
 
   useEffect(() => {
-    if (tab === "practice" && !current && !quiz) deal();
-  }, [tab]);
+    if (tab === "practice" && practiceMode === "ranges" && !current && !quiz) deal();
+  }, [tab, practiceMode]);
+
+  useEffect(() => {
+    if (tab !== "practice" || practiceMode !== "ranges") return;
+    clearAdvance();
+    setSession({ total: 0, correct: 0, streak: 0 });
+    setLocked(false);
+    setLastGrade(null);
+    setQuiz(null);
+    const picked = pickHand(range, statId, store, includeFolds);
+    setReview(picked.review);
+    setCurrent(picked.hand);
+    setCards(dealCombo(picked.hand));
+    // New stack means a new chart, so the open hand is dealt again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bb]);
 
   function changeSpot(id: string) {
     clearAdvance();
@@ -303,7 +372,9 @@ export function SpinApp() {
     setLocked(false);
     setLastGrade(null);
     setQuiz(null);
-    const picked = pickHand(s, store, includeFolds);
+    const nextRange = rangeAtStack(s.range, s.id, bb);
+    const nextId = bb === 15 ? s.id : `${s.id}@${bb}`;
+    const picked = pickHand(nextRange, nextId, store, includeFolds);
     setReview(picked.review);
     setCurrent(picked.hand);
     setCards(dealCombo(picked.hand));
@@ -317,12 +388,12 @@ export function SpinApp() {
   function answer(a: MixAction) {
     if (quiz || !current || locked) return;
     if (!spot.actions.includes(a)) return;
-    const g = grade(mixOf(spot.range, current), a);
+    const g = grade(mixOf(range, current), a);
     setLastGrade(g);
     setLocked(true);
     const ok = g !== "wrong";
     const nextTotal = session.total + 1;
-    const nextStore = record(store, spot.id, current, g);
+    const nextStore = record(store, statId, current, g);
     setStore(nextStore);
     setSession((s) => ({
       total: nextTotal,
@@ -443,22 +514,25 @@ export function SpinApp() {
         {tab === "strategy" && (
           <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
-              <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
+              <StackControl bb={bb} onChange={setBb} />
+              <div className="mt-4">
+                <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
+              </div>
               <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
                 <strong>
                   {spot.hero} vs {spot.vs}
                 </strong>
-                <Legend spot={spot} />
+                <Legend spot={{ ...spot, labels }} />
               </div>
-              <MixGrid range={spot.range} selected={selected} onPick={setSelected} />
+              <MixGrid range={range} selected={selected} onPick={setSelected} />
             </section>
             <aside className="rounded-2xl border border-border bg-surface p-4">
-              <Meta spot={spot} />
+              <Meta spot={spot} bb={bb} range={range} labels={labels} />
               <p className="mt-4 font-mono text-lg font-semibold">{selected}</p>
               <p className="mb-3 text-sm text-muted">
-                {spot.labels[primary(mixOf(spot.range, selected))]}
+                {labels[primary(mixOf(range, selected))]}
               </p>
-              <MixBars range={spot.range} hand={selected} labels={spot.labels} />
+              <MixBars range={range} hand={selected} labels={labels} />
             </aside>
           </div>
         )}
@@ -512,6 +586,8 @@ export function SpinApp() {
                 {mathDrill === "equity" ? <EquityDrill /> : <PotOddsDrill />}
               </div>
             ) : (
+          <div className="space-y-4">
+          <StackControl bb={bb} onChange={setBb} />
           <div className={cn("grid gap-5", hideRange ? "lg:grid-cols-1" : "lg:grid-cols-[1fr_minmax(22rem,26rem)]")}>
             {!hideRange && (
               <section className="rounded-2xl border border-border bg-surface p-4">
@@ -530,9 +606,9 @@ export function SpinApp() {
                     Скрыть рендж
                   </label>
                 </div>
-                <Legend spot={spot} />
+                <Legend spot={{ ...spot, labels }} />
                 <div className="mt-3">
-                  <MixGrid range={spot.range} selected={current} onPick={setSelected} />
+                  <MixGrid range={range} selected={current} onPick={setSelected} />
                 </div>
               </section>
             )}
@@ -583,8 +659,8 @@ export function SpinApp() {
                   >
                     {!lastGrade && "Выберите действие"}
                     {lastGrade === "correct" && "Верно"}
-                    {lastGrade === "mix" && current && `Микс · чаще ${spot.labels[primary(mixOf(spot.range, current))]}`}
-                    {lastGrade === "wrong" && current && `Ошибка · нужно ${spot.labels[primary(mixOf(spot.range, current))]}`}
+                    {lastGrade === "mix" && current && `Микс · чаще ${labels[primary(mixOf(range, current))]}`}
+                    {lastGrade === "wrong" && current && `Ошибка · нужно ${labels[primary(mixOf(range, current))]}`}
                   </p>
                   <p className="text-center font-mono text-sm text-muted">{current}</p>
                   <EquityHintLine hand={current} spotId={spot.id} />
@@ -602,14 +678,14 @@ export function SpinApp() {
                         onClick={() => answer(a)}
                         className={cn("h-14 rounded-[10px] text-sm font-semibold", ACT_CLS[a])}
                       >
-                        {spot.labels[a]}
+                        {labels[a]}
                         <kbd className="ml-1 text-[10px] opacity-70">{a[0]!.toUpperCase()}</kbd>
                       </button>
                     ))}
                   </div>
                   {locked && current && lastGrade !== "correct" && (
                     <div className="mt-4">
-                      <MixBars range={spot.range} hand={current} labels={spot.labels} />
+                      <MixBars range={range} hand={current} labels={labels} />
                       <button type="button" className="mt-3 h-11 w-full text-sm text-muted" onClick={afterHand}>
                         Следующая рука
                       </button>
@@ -625,6 +701,7 @@ export function SpinApp() {
                 </>
               )}
             </section>
+          </div>
           </div>
             )}
           </div>
