@@ -128,6 +128,8 @@ export type Consult = {
   made: string | null;
   draw: string | null;
   text: string;
+  street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
+  verdict: string;
   random: boolean;
 };
 
@@ -157,15 +159,61 @@ function advice(opts: {
   who: string;
   bb: number;
   need: number | null;
-}): string {
+  street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
+  made: string | null;
+  draw: string | null;
+}): { verdict: string; text: string } {
   const pct = Math.round(opts.equity * 100);
+  if (opts.street !== "Префлоп") {
+    const hand = [opts.made, opts.draw].filter(Boolean).join(", ") || "старшая карта";
+    const where = `${opts.street}. Открытие уже закрыто: на столе борд, в раздаче остались те, кто не сбросил. Сейчас ${hand}.`;
+    if (opts.need == null) {
+      const strong = (opts.made && opts.made !== "старшая карта" && opts.made !== "пара") || opts.equity >= 0.62;
+      if (strong) {
+        return {
+          verdict: "Ставка",
+          text: `${where} Против диапазона «${opts.who}» около ${pct}%. Ставки оппонента нет: ставь вэлью, рука впереди диапазона.`,
+        };
+      }
+      if (opts.draw || opts.equity >= 0.38) {
+        return {
+          verdict: "Чек",
+          text: `${where} Эквити около ${pct}%. Без ставки оппонента чаще чек: добирать можно маленькой ставкой, если хочешь цену дро.`,
+        };
+      }
+      return {
+        verdict: "Чек",
+        text: `${where} Эквити около ${pct}%. Чек. Блеф без аутов на коротком стеке чаще отдаёт банк.`,
+      };
+    }
+    const need = Math.round(opts.need * 100);
+    if (opts.equity >= opts.need + 0.18 && opts.equity >= 0.55) {
+      return {
+        verdict: "Рейз",
+        text: `${where} Нужно ${need}% на колл, у руки ${pct}%. Эквити сильно выше цены: рейз вэлью, а не просто колл.`,
+      };
+    }
+    if (opts.equity + 0.01 >= opts.need) {
+      return {
+        verdict: "Колл",
+        text: `${where} Нужно ${need}% на колл, у руки ${pct}%. Колл по шансам банка.`,
+      };
+    }
+    return {
+      verdict: "Фолд",
+      text: `${where} Нужно ${need}% на колл, у руки ${pct}%. Фолд: эквити не оплачивает эту ставку.`,
+    };
+  }
   if (opts.need != null) {
     const need = Math.round(opts.need * 100);
     const pricedIn = opts.equity + 0.01 >= opts.need;
     const price = pricedIn
       ? `Цена колла ${need}%, у руки ${pct}%. Колл по шансам банка.`
       : `Цена колла ${need}%, у руки ${pct}%. По шансам банка это фолд.`;
-    return `${price} Чарт на ${opts.bb}bb говорит: ${opts.label}. Если цифры расходятся, в коротком стеке верь чарту: в нём уже есть фолды оппонента и ICM.`;
+    return {
+      verdict: opts.label,
+      text: `${price} Префлоп-чарт на ${opts.bb}bb: ${opts.label}. Если цифры расходятся, на коротком стеке верь чарту: в нём уже есть фолды оппонента и ICM.`,
+    };
   }
   const why: Record<MixAction, string> = {
     allin: "Пуш забирает банк сразу, когда оппонент сбрасывает, и оставляет это эквити, когда коллирует.",
@@ -173,7 +221,10 @@ function advice(opts: {
     call: "Колл оставляет банк. Чарт не хочет ставить сюда весь стек.",
     fold: "В рейндж входа эта рука не входит: её слишком часто доминируют.",
   };
-  return `На ${opts.bb}bb чарт: ${opts.label}. Против диапазона «${opts.who}» у руки около ${pct}% банка. ${why[opts.action]}`;
+  return {
+    verdict: opts.label,
+    text: `Префлоп. На ${opts.bb}bb чарт: ${opts.label}. Против диапазона «${opts.who}» у руки около ${pct}% банка. ${why[opts.action]}`,
+  };
 }
 
 export function consult(opts: {
@@ -183,6 +234,8 @@ export function consult(opts: {
   bb: number;
   range: MixRange;
   labels: Record<MixAction, string>;
+  pot?: number | null;
+  toCall?: number | null;
   iterations?: number;
 }): Consult {
   const klass = handClass(opts.hero[0], opts.hero[1]);
@@ -242,7 +295,12 @@ export function consult(opts: {
   }
 
   const equity = share / iterations;
-  const price = spotPrice(opts.spotId, opts.bb);
+  const auto = opts.board.length < 3 ? spotPrice(opts.spotId, opts.bb) : null;
+  const userPrice =
+    opts.toCall != null && opts.toCall > 0 && opts.pot != null && opts.pot >= 0
+      ? opts.toCall / (opts.pot + opts.toCall)
+      : null;
+  const need = userPrice ?? (auto ? auto.toCall / (auto.pot + auto.toCall) : null);
   const draws = opts.board.length >= 3 ? analyzeDraws(opts.hero, opts.board) : null;
   const drawBits = [
     draws?.flushDraw ? "флеш-дро" : "",
@@ -252,6 +310,18 @@ export function consult(opts: {
   ].filter(Boolean);
   const made =
     opts.board.length >= 3 ? CAT_RU[evaluateBest([...opts.hero, ...opts.board]).category] ?? null : null;
+  const street = opts.board.length >= 5 ? "Ривер" : opts.board.length === 4 ? "Тёрн" : opts.board.length >= 3 ? "Флоп" : "Префлоп";
+  const said = advice({
+    action,
+    label: opts.labels[action],
+    equity,
+    who: villain.who,
+    bb: opts.bb,
+    need,
+    street,
+    made,
+    draw: drawBits.length ? drawBits.join(", ") : null,
+  });
 
   return {
     klass,
@@ -261,17 +331,12 @@ export function consult(opts: {
     tie: tie / iterations,
     who: villain.who,
     likely: villain.random ? [] : likelyHands(villain.combos),
-    need: price ? price.toCall / (price.pot + price.toCall) : null,
+    need,
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,
+    street,
+    verdict: said.verdict,
     random: villain.random,
-    text: advice({
-      action,
-      label: opts.labels[action],
-      equity,
-      who: villain.who,
-      bb: opts.bb,
-      need: price ? price.toCall / (price.pot + price.toCall) : null,
-    }),
+    text: said.text,
   };
 }

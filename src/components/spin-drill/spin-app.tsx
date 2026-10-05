@@ -514,6 +514,11 @@ export function SpinApp() {
                 <StackRail bb={bb} onChange={setBb} />
               </div>
               <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
+              <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
+                <p className="font-mono text-lg font-semibold">{selected}</p>
+                <p className="mb-3 text-sm text-muted">{labels[primary(mixOf(range, selected))]}</p>
+                <MixBars range={range} hand={selected} labels={labels} />
+              </div>
               <div className="mt-3">
                 <Meta spot={spot} bb={bb} range={range} labels={labels} />
               </div>
@@ -523,11 +528,6 @@ export function SpinApp() {
             </section>
             <aside className="sticky top-4 max-h-[calc(100vh-1.5rem)] space-y-4 overflow-auto rounded-2xl border border-border bg-surface p-4">
               <EquityDesk spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} />
-              <p className="mt-4 font-mono text-lg font-semibold">{selected}</p>
-              <p className="mb-3 text-sm text-muted">
-                {labels[primary(mixOf(range, selected))]}
-              </p>
-              <MixBars range={range} hand={selected} labels={labels} />
             </aside>
           </div>
         )}

@@ -25,6 +25,10 @@ export function EquityDesk({
   const [cards, setCards] = useState<Partial<Record<Slot, Card>>>({});
   const [picking, setPicking] = useState<Slot | null>(null);
   const [rank, setRank] = useState<number | null>(null);
+  const [potText, setPotText] = useState("");
+  const [callText, setCallText] = useState("");
+  const pot = parseBb(potText);
+  const toCall = parseBb(callText);
 
   const hero = useMemo(() => {
     if (!cards.h0 || !cards.h1) return null;
@@ -40,9 +44,11 @@ export function EquityDesk({
 
   const shown = useMemo(() => {
     if (!hero) return null;
-    const once = consult({ hero, board, spotId: spot.id, bb, range, labels });
+    const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall });
     return { ...once, label: labels[once.action] };
-  }, [hero, board, spot.id, bb, range, labels]);
+  }, [hero, board, spot.id, bb, range, labels, pot, toCall]);
+  const street = board.length >= 5 ? "Ривер" : board.length === 4 ? "Тёрн" : board.length >= 3 ? "Флоп" : "Префлоп";
+  const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
   function used(card: Card, except: Slot): boolean {
     return SLOTS.some((slot) => slot !== except && cards[slot] && cards[slot]!.rank === card.rank && cards[slot]!.suit === card.suit);
@@ -78,6 +84,38 @@ export function EquityDesk({
           <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} small onClick={() => open(slot)} />
         ))}
       </div>
+      {street !== "Префлоп" ? (
+        <p className="mt-2 text-sm text-fg">
+          {street}. Это уже не открытие: борд выложен, в раздаче только те, кто не сбросил.
+        </p>
+      ) : null}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+          Банк, bb
+          <input
+            inputMode="decimal"
+            value={potText}
+            placeholder="6"
+            onChange={(event) => setPotText(event.target.value)}
+            className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+          />
+        </label>
+        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+          Докинуть, bb
+          <input
+            inputMode="decimal"
+            value={callText}
+            placeholder="4"
+            onChange={(event) => setCallText(event.target.value)}
+            className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+          />
+        </label>
+      </div>
+      <p className="mt-2 font-mono text-xs text-muted">
+        {typedOdds != null
+          ? `Pot odds: нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
+          : "Банк — уже лежит, вместе со ставкой оппонента. Докинуть — твоя сумма."}
+      </p>
       {picking ? (
         <div className="absolute top-12 right-2 left-2 z-20 rounded-xl border border-border bg-surface p-2 shadow-border">
           <div className="grid grid-cols-7 gap-1">
@@ -120,8 +158,10 @@ export function EquityDesk({
         <div className="mt-3 space-y-2">
           <div className="flex items-end justify-between gap-2">
             <div>
-              <p className="font-mono text-xs text-muted">{shown.klass}</p>
-              <p className="text-2xl font-semibold leading-none">{shown.label}</p>
+              <p className="font-mono text-xs text-muted">
+                {shown.street} · {shown.klass}
+              </p>
+              <p className="text-2xl font-semibold leading-none">{shown.verdict}</p>
             </div>
             <p className="font-mono text-3xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
           </div>
@@ -168,6 +208,17 @@ export function EquityDesk({
     setPicking(slot);
     setRank(null);
   }
+}
+
+function parseBb(raw: string): number | null {
+  const text = raw.trim().replace(",", ".");
+  if (!text) return null;
+  const value = Number(text);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function trimNum(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function shownKlass(a: Card, b: Card): string {
