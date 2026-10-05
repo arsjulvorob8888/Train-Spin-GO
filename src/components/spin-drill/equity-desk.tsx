@@ -1,5 +1,6 @@
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
 import { consult } from "@/lib/spin-drill/equity-calc";
+import { LINE_ACTIONS, callSize, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function EquityDesk({
   const [rank, setRank] = useState<number | null>(null);
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
+  const [line, setLine] = useState<Line>({});
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -44,9 +46,9 @@ export function EquityDesk({
 
   const shown = useMemo(() => {
     if (!hero) return null;
-    const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall });
+    const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall, line });
     return { ...once, label: labels[once.action] };
-  }, [hero, board, spot.id, bb, range, labels, pot, toCall]);
+  }, [hero, board, spot.id, bb, range, labels, pot, toCall, line]);
   const street = board.length >= 5 ? "Ривер" : board.length === 4 ? "Тёрн" : board.length >= 3 ? "Флоп" : "Префлоп";
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
@@ -85,9 +87,47 @@ export function EquityDesk({
         ))}
       </div>
       {street !== "Префлоп" ? (
-        <p className="mt-2 text-sm text-fg">
-          {street}. Это уже не открытие: борд выложен, в раздаче только те, кто не сбросил.
-        </p>
+        <>
+          <p className="mt-2 text-sm text-fg">
+            {street}. Префлоп задан слева. Ниже — что сделал оппонент на каждой улице, как в солвере.
+          </p>
+          <div className="mt-3 flex gap-2 overflow-x-auto">
+            <div className="w-24 shrink-0">
+              <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Префлоп</p>
+              <p className="mt-1 rounded-md bg-fg px-2 py-2 text-xs leading-tight text-bg">{spot.vs}</p>
+            </div>
+            {(
+              [
+                ["flop", "Флоп", board.length >= 3],
+                ["turn", "Тёрн", board.length >= 4],
+                ["river", "Ривер", board.length >= 5],
+              ] as const
+            ).map(([id, title, ready]) => (
+              <div key={id} className={cn("w-24 shrink-0", ready ? "" : "opacity-40")}>
+                <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">{title}</p>
+                <div className="mt-1 flex flex-col gap-1">
+                  {ready ? (
+                    LINE_ACTIONS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => chooseLine(id, item.id)}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-left text-xs",
+                          line[id] === item.id ? "border-fg bg-fg text-bg" : "border-border bg-surface text-muted",
+                        )}
+                      >
+                        {item.label}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted">нет карты</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       ) : null}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
@@ -175,7 +215,9 @@ export function EquityDesk({
           </p>
           {shown.likely.length ? (
             <div>
-              <p className="text-xs text-muted">Верх диапазона оппонента</p>
+              <p className="text-xs text-muted">
+                {line.flop || line.turn || line.river ? "Руки на этой линии" : "Верх диапазона оппонента"}
+              </p>
               <div className="mt-1 flex flex-wrap gap-1">
                 {shown.likely.map((item) => (
                   <span key={item.hand} className="rounded-full bg-surface px-2 py-0.5 font-mono text-xs">
@@ -185,7 +227,11 @@ export function EquityDesk({
               </div>
             </div>
           ) : (
-            <p className="text-xs text-muted">На этой глубине рейндж пустой, считаю против случайной руки.</p>
+            <p className="text-xs text-muted">
+              {line.flop || line.turn || line.river
+                ? "На этой линии из префлоп-диапазона рук почти не остаётся."
+                : "На этой глубине рейндж пустой, считаю против случайной руки."}
+            </p>
           )}
         </div>
       ) : (
@@ -198,6 +244,20 @@ export function EquityDesk({
       ) : null}
     </div>
   );
+
+  function chooseLine(streetId: StreetId, action: LineAction) {
+    const turningOff = line[streetId] === action;
+    setLine((prev) => {
+      const next = { ...prev };
+      if (turningOff) delete next[streetId];
+      else next[streetId] = action;
+      return next;
+    });
+    if (turningOff) return;
+    const size = callSize(action, pot, bb);
+    if (size === 0) setCallText("");
+    else if (size != null) setCallText(trimNum(size));
+  }
 
   function open(slot: Slot) {
     if (cards[slot]) {

@@ -3,6 +3,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
+import { applyLine, lineNote, type Line } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
   "старшая карта",
@@ -133,7 +134,7 @@ export type Consult = {
   random: boolean;
 };
 
-function likelyHands(combos: Combo[]): { hand: string; pct: number }[] {
+function likelyHands(combos: Combo[], byWeight: boolean): { hand: string; pct: number }[] {
   const weight = new Map<string, number>();
   let total = 0;
   for (const combo of combos) {
@@ -147,7 +148,7 @@ function likelyHands(combos: Combo[]): { hand: string; pct: number }[] {
     return (klass.length === 2 ? 400 : 0) + hi * 16 + lo + (klass.endsWith("s") ? 8 : 0);
   };
   return [...weight.entries()]
-    .sort((a, b) => strength(b[0]) - strength(a[0]))
+    .sort((a, b) => (byWeight ? b[1] - a[1] : strength(b[0]) - strength(a[0])))
     .slice(0, 6)
     .map(([hand, value]) => ({ hand, pct: total ? Math.round((value / total) * 100) : 0 }));
 }
@@ -237,6 +238,7 @@ export function consult(opts: {
   labels: Record<MixAction, string>;
   pot?: number | null;
   toCall?: number | null;
+  line?: Line;
   iterations?: number;
 }): Consult {
   const klass = handClass(opts.hero[0], opts.hero[1]);
@@ -244,6 +246,9 @@ export function consult(opts: {
   const action = primary(mix);
   const used = new Set([...opts.hero, ...opts.board].map(keyOf));
   const villain = villainCombos(opts.spotId, opts.bb, used);
+  const combos = villain.random || !opts.line ? villain.combos : applyLine(villain.combos, opts.board, opts.line);
+  const note = opts.line ? lineNote(opts.line) : "";
+  const who = note && !villain.random ? `${villain.who}; ${note}` : villain.who;
   const iterations = opts.iterations ?? 1400;
   let win = 0;
   let tie = 0;
@@ -267,13 +272,13 @@ export function consult(opts: {
         share += 0.5;
       }
     }
-  } else {
+  } else if (combos.length > 0) {
     let total = 0;
-    for (const combo of villain.combos) total += combo.w;
+    for (const combo of combos) total += combo.w;
     for (let i = 0; i < iterations; i++) {
       let ticket = Math.random() * total;
-      let combo = villain.combos[0]!;
-      for (const item of villain.combos) {
+      let combo = combos[0]!;
+      for (const item of combos) {
         ticket -= item.w;
         if (ticket <= 0) {
           combo = item;
@@ -293,6 +298,11 @@ export function consult(opts: {
         share += 0.5;
       }
     }
+  }
+
+  if (!villain.random && note && combos.length === 0) {
+    win = iterations;
+    share = iterations;
   }
 
   const equity = share / iterations;
@@ -316,7 +326,7 @@ export function consult(opts: {
     action,
     label: opts.labels[action],
     equity,
-    who: villain.who,
+    who,
     bb: opts.bb,
     need,
     street,
@@ -330,8 +340,8 @@ export function consult(opts: {
     equity,
     win: win / iterations,
     tie: tie / iterations,
-    who: villain.who,
-    likely: villain.random ? [] : likelyHands(villain.combos),
+    who,
+    likely: villain.random || combos.length === 0 ? [] : likelyHands(combos, Boolean(note)),
     need,
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,
