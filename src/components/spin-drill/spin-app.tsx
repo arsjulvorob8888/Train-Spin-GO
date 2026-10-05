@@ -144,11 +144,13 @@ function SpotPills({
   spot,
   onGroup,
   onSpot,
+  compact = false,
 }: {
   group: SpotGroup;
   spot: SpotDef;
   onGroup: (g: SpotGroup) => void;
   onSpot: (id: string) => void;
+  compact?: boolean;
 }) {
   const list = spotsIn(group);
   return (
@@ -170,22 +172,26 @@ function SpotPills({
         ))}
       </div>
       <GroupHint group={group} />
-      <div className="flex flex-wrap gap-1.5">
-        {list.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => onSpot(s.id)}
-            className={cn(
-              "h-11 rounded-full border px-3 text-sm",
-              spot.id === s.id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
-            )}
-          >
-            {s.vs}
-          </button>
-        ))}
-      </div>
-      <SpotExplain spot={spot} />
+      {compact ? null : (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {list.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onSpot(s.id)}
+                className={cn(
+                  "h-11 rounded-full border px-3 text-sm",
+                  spot.id === s.id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
+                )}
+              >
+                {s.vs}
+              </button>
+            ))}
+          </div>
+          <SpotExplain spot={spot} />
+        </>
+      )}
     </div>
   );
 }
@@ -477,7 +483,7 @@ export function SpinApp() {
           <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
               <div className="mt-4">
-                <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
+                <SpotPills compact group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
               </div>
               <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
                 <strong>
@@ -485,13 +491,31 @@ export function SpinApp() {
                 </strong>
                 <Legend spot={{ ...spot, labels }} />
               </div>
-              <div className="flex items-stretch gap-2 select-none">
+              <div className="flex items-stretch gap-3 select-none">
+                <div className="flex w-40 shrink-0 flex-col gap-1.5">
+                  {spotsIn(group).map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => changeSpot(s.id)}
+                      className={cn(
+                        "min-h-11 rounded-xl border px-3 py-2 text-left text-sm leading-tight",
+                        s.id === spot.id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
+                      )}
+                    >
+                      {s.vs}
+                    </button>
+                  ))}
+                </div>
                 <div className="min-w-0 flex-1">
                   <MixGrid range={range} selected={selected} onPick={setSelected} />
                 </div>
                 <StackRail bb={bb} onChange={setBb} />
               </div>
               <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
+              <div className="mt-3">
+                <SpotExplain spot={spot} />
+              </div>
             </section>
             <aside className="rounded-2xl border border-border bg-surface p-4">
               <Meta spot={spot} bb={bb} range={range} labels={labels} />
