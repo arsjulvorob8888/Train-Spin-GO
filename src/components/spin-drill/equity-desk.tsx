@@ -36,7 +36,6 @@ export function EquityDesk({
 }) {
   const [cards, setCards] = useState<Partial<Record<Slot, Card>>>({});
   const [picking, setPicking] = useState<Slot | null>(null);
-  const [rank, setRank] = useState<number | null>(null);
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
   const [line, setLine] = useState<Line>(emptyLine);
@@ -66,18 +65,14 @@ export function EquityDesk({
     return SLOTS.some((slot) => slot !== except && cards[slot] && cards[slot]!.rank === card.rank && cards[slot]!.suit === card.suit);
   }
 
-  function choose(suit: number) {
-    if (picking == null || rank == null) return;
+  function choose(rank: number, suit: number) {
+    if (picking == null) return;
     const card = { rank, suit };
     if (used(card, picking)) return;
     const next = { ...cards, [picking]: card };
     setCards(next);
     setPicking(null);
-    setRank(null);
-    if (next.h0 && next.h1) {
-      const klass = shownKlass(next.h0, next.h1);
-      onHand(klass);
-    }
+    if (next.h0 && next.h1) onHand(shownKlass(next.h0, next.h1));
   }
 
   return (
@@ -183,40 +178,36 @@ export function EquityDesk({
       </Step>
 
       {picking ? (
-        <div className="absolute top-12 right-2 left-2 z-20 rounded-xl border border-border bg-surface p-2 shadow-border">
-          <div className="grid grid-cols-7 gap-1">
-            {RANKS.map((glyph) => {
-              const value = RANK_CHARS.indexOf(glyph);
-              return (
-                <button
-                  key={glyph}
-                  type="button"
-                  onClick={() => setRank(value)}
-                  className={cn(
-                    "h-8 rounded-md font-mono text-sm",
-                    rank === value ? "bg-fg text-bg" : "bg-surface-2 text-fg",
-                  )}
-                >
-                  {glyph === "T" ? "10" : glyph}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-2 grid grid-cols-4 gap-1">
-            {SUIT_GLYPHS.map((glyph, suit) => (
-              <button
-                key={glyph}
-                type="button"
-                disabled={rank == null}
-                onClick={() => choose(suit)}
-                className={cn(
-                  "h-10 rounded-md bg-card-face font-mono text-xl disabled:opacity-40",
-                  isRedSuit(suit) ? "text-suit-red" : "text-card-ink",
-                )}
-              >
-                {glyph}
-              </button>
-            ))}
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={() => setPicking(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onClick={(event) => event.stopPropagation()}>
+            <p className="text-sm font-medium">Карта</p>
+            <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
+              {RANKS.map((glyph) => {
+                const value = RANK_CHARS.indexOf(glyph);
+                return (
+                  <div key={glyph} className="grid grid-cols-4 gap-1">
+                    {SUIT_GLYPHS.map((suitGlyph, suit) => {
+                      const taken = used({ rank: value, suit }, picking);
+                      return (
+                        <button
+                          key={suitGlyph}
+                          type="button"
+                          disabled={taken}
+                          onClick={() => choose(value, suit)}
+                          className={cn(
+                            "h-9 rounded-md bg-card-face font-mono text-sm font-semibold disabled:opacity-20",
+                            isRedSuit(suit) ? "text-suit-red" : "text-card-ink",
+                          )}
+                        >
+                          {glyph === "T" ? "10" : glyph}
+                          {suitGlyph}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : null}
@@ -260,7 +251,6 @@ export function EquityDesk({
       return;
     }
     setPicking(slot);
-    setRank(null);
   }
 }
 
