@@ -57,6 +57,7 @@ type HandApi = {
   open: (slot: Slot) => void;
   resetHand: () => void;
   chooseLine: (streetId: StreetId, seat: Seat, action: LineAction) => void;
+  reviseLine: (streetId: StreetId, index: number, action: LineAction) => void;
   undoLine: (streetId: StreetId) => void;
   deviation: string | null;
   sizeText: string;
@@ -280,6 +281,32 @@ export function HandProvider({
     syncPrice(next);
   }
 
+  function reviseLine(streetId: StreetId, index: number, action: LineAction) {
+    const acts = line[streetId];
+    if (index < 0 || index >= acts.length || acts[index]?.action === action) return;
+    const seat = acts[index]!.seat;
+    const kept = acts.slice(0, index);
+    const prior: Line = {
+      flop: streetId === "flop" ? kept : line.flop,
+      turn: streetId === "flop" ? [] : streetId === "turn" ? kept : line.turn,
+      river: streetId === "river" ? kept : [],
+    };
+    const order = seatsInHand(spot.id);
+    const jammed = preflopAllin(spot.id);
+    const status = streetStatus(order, prior, streetId, jammed);
+    if (seat === spot.hero) {
+      const advice = suggested(shown?.verdict ?? "", status.facing);
+      setDeviation(
+        advice && action !== advice
+          ? `Солвер советует ${actionTitle(advice, pot, seatStack(seat, bb))}. Вы выбрали ${actionTitle(action, pot, seatStack(seat, bb))}. Так матожидание ниже линии чарта.`
+          : null,
+      );
+    } else setDeviation(null);
+    const next: Line = { ...prior, [streetId]: [...kept, { seat, action }] };
+    setLine(next);
+    syncPrice(next);
+  }
+
   function undoLine(streetId: StreetId) {
     if (!line[streetId].length) return;
     const next = { ...line, [streetId]: line[streetId].slice(0, -1) };
@@ -307,6 +334,7 @@ export function HandProvider({
     open,
     resetHand,
     chooseLine,
+    reviseLine,
     undoLine,
     deviation,
     sizeText,
@@ -663,6 +691,7 @@ function StreetColumns({
   only,
   hint,
   onAction,
+  onRevise,
   onUndo,
 }: {
   spotId: string;
@@ -672,6 +701,7 @@ function StreetColumns({
   only: StreetId;
   hint: string;
   onAction: (seat: Seat, action: LineAction) => void;
+  onRevise: (index: number, action: LineAction) => void;
   onUndo: () => void;
 }) {
   const seats = seatsInHand(spotId);
@@ -687,13 +717,13 @@ function StreetColumns({
   }));
   if (!status.closed && status.seat) cols.push({ seat: status.seat, selected: null, live: true });
   const suggest = status.seat === hero ? suggested(hint, status.facing) : null;
-  const liveMenu = status.facing ? FACING_ACTIONS : OPEN_ACTIONS;
   const opponentLive = !status.closed && status.seat != null && status.seat !== hero;
   return (
     <>
       {cols.map((col, index) => {
-        const menu =
-          col.live ? liveMenu : col.selected === "fold" || col.selected === "call" || col.selected === "raise" ? FACING_ACTIONS : OPEN_ACTIONS;
+        const prior: Line = { ...line, [only]: acts.slice(0, index) };
+        const faced = col.live ? status.facing : streetStatus(seats, prior, only, jammed).facing;
+        const menu = faced ? FACING_ACTIONS : OPEN_ACTIONS;
         return (
           <div
             key={`${col.seat}-${index}`}
@@ -711,12 +741,14 @@ function StreetColumns({
                   <button
                     key={item.id}
                     type="button"
-                    disabled={!col.live}
-                    onClick={() => col.live && onAction(col.seat, item.id)}
+                    onClick={() => {
+                      if (on) return;
+                      if (col.live) onAction(col.seat, item.id);
+                      else onRevise(index, item.id);
+                    }}
                     className={cn(
                       "rounded px-1 py-1 text-left text-xs",
                       on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
-                      !col.live && !on ? "opacity-40" : "",
                     )}
                   >
                     {title(item.id, col.seat)}
@@ -764,7 +796,7 @@ function CycleMark({ label }: { label: string }) {
 }
 
 export function BoardLine({ openBoard }: { openBoard: boolean }) {
-  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, undoLine } = useHand();
+  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine } = useHand();
   if (!openBoard) return null;
   const seats = seatsInHand(spot.id);
   const jammed = preflopAllin(spot.id);
@@ -785,7 +817,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
         <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
       </div>
       {board.length >= 3 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
       ) : null}
       {flopClosed ? <CycleMark label="флоп" /> : null}
       {flopClosed ? (
@@ -798,7 +830,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
         </div>
       ) : null}
       {board.length >= 4 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
       ) : null}
       {turnClosed ? <CycleMark label="тёрн" /> : null}
       {turnClosed ? (
@@ -811,7 +843,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
         </div>
       ) : null}
       {board.length >= 5 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
       ) : null}
       {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
     </>
