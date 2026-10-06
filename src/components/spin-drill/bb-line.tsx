@@ -64,6 +64,37 @@ export function ActionLine({
     <div className="mt-3">
       <div className="flex items-start gap-1 overflow-x-auto pb-1">
         <Hole />
+        {spot.group === "HU" ? (
+          <div className="w-[6.8rem] shrink-0 rounded-lg border border-ok p-1">
+            <p className="px-1 text-[11px] font-medium">Вы играете</p>
+            <div className="mt-1 flex flex-col">
+              <button
+                type="button"
+                onClick={() => {
+                  if (spot.hero === "SB") return;
+                  setSbAct("");
+                  setBbAct("");
+                  onSpot("hu_sb");
+                }}
+                className={cn("rounded px-1 py-1 text-left text-xs", spot.hero === "SB" ? "bg-fg font-medium text-bg" : "text-muted")}
+              >
+                SB · первым
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (spot.hero === "BB") return;
+                  setSbAct("");
+                  setBbAct("");
+                  onSpot("hu_bb_raise");
+                }}
+                className={cn("rounded px-1 py-1 text-left text-xs", spot.hero === "BB" ? "bg-fg font-medium text-bg" : "text-muted")}
+              >
+                BB · отвечаете
+              </button>
+            </div>
+          </div>
+        ) : null}
         {cols.map((col, index) => (
           <div
             key={`${col.seat}-${index}`}
