@@ -610,16 +610,16 @@ export function SpinApp() {
                   onGroup={changeGroup}
                   onSpot={changeSpot}
                   extra={
-                    <div className="ml-auto flex items-center gap-1.5">
+                    <>
                       <StackType bb={bb} onChange={setBb} />
                       <button
                         type="button"
                         onClick={() => setCardAsk((n) => n + 1)}
-                        className="h-11 rounded-full border border-fg bg-fg px-4 text-sm font-semibold text-bg"
+                        className="ml-auto h-11 rounded-full border border-fg bg-fg px-4 text-sm font-semibold text-bg"
                       >
                         Карты
                       </button>
-                    </div>
+                    </>
                   }
                 />
               </div>
