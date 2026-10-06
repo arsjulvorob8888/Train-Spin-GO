@@ -407,7 +407,7 @@ export function EquityDesk() {
         {shown ? (
           <div className="flex items-end gap-4">
             <div>
-              <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Действие</p>
+              <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Солвер ждёт</p>
               <p className="text-3xl font-semibold leading-none">{shown.verdict}</p>
               <p className="mt-1 text-xs text-muted">
                 {shown.street} · {shown.klass}

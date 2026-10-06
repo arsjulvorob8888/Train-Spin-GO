@@ -48,6 +48,8 @@ export function ActionLine({
   const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
   const chartSize = chartRaiseTo(spot.id, bb);
   const doneRight = cycleClosed(cols) && actionMatches(mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
+  const expected = wantedAction(selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
+  const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   return (
     <div className="mt-3">
       <div className="flex gap-1 overflow-x-auto pb-1">
@@ -57,12 +59,13 @@ export function ActionLine({
             className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.hero ? "border-ok" : "border-border")}
           >
             <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", head(col.seat))}>
-              <span className="font-medium">{col.seat}</span>
+              <span className="font-medium">{col.hero ? `${col.seat} · ваш ход` : col.seat}</span>
               <span className="font-mono">{trim(col.stack)}</span>
             </div>
             <div className="mt-1 flex flex-col">
               {col.actions.map((action) => {
                 const on = action.label === col.selected;
+                const wanted = Boolean(col.hero && expected && action.pick.mine === expected);
                 return (
                   <button
                     key={action.label}
@@ -91,10 +94,11 @@ export function ActionLine({
                     }}
                     className={cn(
                       "rounded px-1 py-1 text-left text-xs",
-                      on ? "bg-fg font-medium text-bg" : "text-muted",
+                      on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                     )}
                   >
                     {action.label}
+                    {wanted && !on ? " · солвер" : ""}
                   </button>
                 );
               })}
@@ -126,8 +130,12 @@ export function ActionLine({
         ) : null}
       </div>
       <BoardLine openBoard={live} />
-      <p className="mt-1 text-xs text-muted">
-        {mine ? `Ваш ход: ${heroLabel(spot, bb, mine)}. Рейндж ниже — чарт этого решения.` : "Отметьте своё действие в зелёной колонке. Чужие колонки меняют линию."}
+      <p className={cn("mt-1 text-sm", expected ? "font-medium text-fg" : "text-xs text-muted")}>
+        {expected
+          ? `Солвер ждёт: ${expectedLabel}. Эта кнопка подсвечена в колонке «ваш ход».`
+          : mine
+            ? `Вы отметили ${heroLabel(spot, bb, mine)}. Выберите руку в рейндже — солвер скажет, верно ли это.`
+            : "Зелёная колонка — ваш ход. Сначала выберите руку в рейндже, солвер подсветит кнопку."}
       </p>
     </div>
   );
@@ -138,13 +146,21 @@ function cycleClosed(cols: Column[]): boolean {
   return cols.every((col) => Boolean(col.selected) || col.actions.length <= 1);
 }
 
+function wantedAction(hand: string, range: MixRange, sizeText: string, verdict: string | null): MixAction | null {
+  if (!hand) return null;
+  if (sizeText.trim() && verdict) {
+    if (verdict === "Фолд" || verdict === "Fold") return "fold";
+    if (verdict === "Колл" || verdict === "Call" || verdict === "Чек") return "call";
+    if (verdict === "Рейз" || verdict === "Ставка") return "raise";
+    if (verdict === "Пуш") return "allin";
+    return null;
+  }
+  return primary(mixOf(range, hand));
+}
+
 function actionMatches(mine: MixAction | "", hand: string, range: MixRange, sizeText: string, verdict: string | null): boolean {
   if (!mine || !hand) return false;
-  if (sizeText.trim() && verdict) {
-    const want = verdict === "Фолд" || verdict === "Fold" ? "fold" : verdict === "Колл" || verdict === "Call" || verdict === "Чек" ? "call" : verdict === "Рейз" || verdict === "Ставка" ? "raise" : verdict === "Пуш" ? "allin" : "";
-    return want === mine;
-  }
-  return primary(mixOf(range, hand)) === mine;
+  return wantedAction(hand, range, sizeText, verdict) === mine;
 }
 
 function columns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind): Column[] {
