@@ -106,17 +106,17 @@ export function ActionLine({
           </div>
         ))}
         {sized ? (
-          <label className="w-[6.4rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
-            <span className="block px-1 font-medium">до, bb</span>
+          <label className="w-[8.5rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
+            <span className="block px-1 font-medium">Другой рейз, bb</span>
             <input
               inputMode="decimal"
               value={sizeText}
               placeholder={chartSize != null ? String(chartSize) : "2"}
-              aria-label="Фактический размер рейза, bb"
+              aria-label="Размер рейза оппонента, если он не как в чарте"
               onChange={(event) => setSizeText(event.target.value)}
               className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
             />
-            <span className="mt-1 block px-1 text-muted">пусто = чарт</span>
+            <span className="mt-1 block px-1 leading-tight text-muted">Пусто — размер из чарта. Впиши число, только если оппонент поставил иначе.</span>
           </label>
         ) : null}
         {doneRight ? (
