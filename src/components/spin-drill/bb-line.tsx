@@ -50,7 +50,8 @@ export function ActionLine({
   }, [handNonce]);
   const won = tookPot(spot, mine, sbAct, bbAct);
   const folded = mine === "fold";
-  const live = !won && !folded && (mine === "call" || mine === "raise" || mine === "allin");
+  const live = flopOpen(spot, mine, sbAct, bbAct);
+  const waiting = !won && !folded && !live && (mine === "call" || mine === "raise" || mine === "allin");
   const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
   const chartSize = chartRaiseTo(spot.id, bb);
   const doneRight = cycleClosed(cols) && actionMatches(mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
@@ -100,7 +101,10 @@ export function ActionLine({
                         setSbAct("");
                         setBbAct("");
                       }
-                      if (action.pick.spot && action.pick.spot !== spot.id) onSpot(action.pick.spot);
+                      if (action.pick.spot && action.pick.spot !== spot.id) {
+                        if (spot.group !== "BTN") setBbAct("");
+                        onSpot(action.pick.spot);
+                      }
                       if (action.pick.mine) onMine(action.pick.mine);
                     }}
                     className={cn(
@@ -153,15 +157,19 @@ export function ActionLine({
             <span className="text-sm font-semibold text-fg">Раздача закрыта</span>
             <span className="text-[10px] leading-tight">Вы сбросили</span>
           </div>
-        ) : (
-          <BoardLine openBoard={live} />
-        )}
+        ) : live ? (
+          <BoardLine openBoard />
+        ) : waiting ? (
+          <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
+        ) : null}
       </div>
       <p className={cn("mt-1 text-sm", expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."
           : folded
             ? "Раздача закрыта. Вы сбросили, карт дальше нет."
+            : waiting
+              ? "Отметьте действия оппонентов. Карты флопа появятся, только если раздача идёт дальше."
             : board.length >= 5
           ? "Лента слева направо: карты, ходы, галочка улицы. Последняя галочка — раздача закрыта."
           : board.length >= 3
@@ -176,9 +184,24 @@ export function ActionLine({
   );
 }
 
+function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind): boolean {
+  if (mine !== "call" && mine !== "raise" && mine !== "allin") return false;
+  if (tookPot(spot, mine, sbAct, bbAct)) return false;
+  if (spot.group === "BTN" && spot.id === "btn") {
+    const sbDone = sbAct === "fold" || sbAct === "call";
+    const bbDone = bbAct === "fold" || bbAct === "call";
+    return sbDone && bbDone && (sbAct === "call" || bbAct === "call");
+  }
+  if (spot.group === "SB" && (spot.id === "sb_raise" || spot.id === "sb_push")) return bbAct === "call";
+  if (spot.group === "SB" && spot.id === "sb_fold" && mine === "call") return bbAct === "call";
+  if (spot.group === "HU" && spot.id === "hu_sb") return bbAct === "call";
+  return true;
+}
+
 function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind): boolean {
   if (mine !== "raise" && mine !== "allin" && mine !== "call") return false;
   if (spot.group === "BTN" && spot.id === "btn") return sbAct === "fold" && bbAct === "fold";
+  if (spot.group === "SB" && spot.id === "sb_fold" && mine === "call") return bbAct === "fold";
   if (spot.group === "SB" && (spot.id === "sb_raise" || spot.id === "sb_push")) return bbAct === "fold";
   if (spot.group === "HU" && spot.id === "hu_sb") return bbAct === "fold";
   return false;
@@ -292,10 +315,12 @@ function sbColumns(spot: SpotDef, bb: number, mine: MixAction | "", bbAct: Blind
       seat: "BB",
       stack: bb - 1,
       actions: [
+        { label: "Fold", pick: {}, blind: { seat: "BB", act: "fold" } },
+        { label: "Call", pick: {}, blind: { seat: "BB", act: "call" } },
         { label: "Raise", pick: { spot: "sb_iso" } },
         { label: `All-in ${bb}`, pick: { spot: "sb_vs_bb_jam" } },
       ],
-      selected: spot.id === "sb_iso" ? "Raise" : spot.id === "sb_vs_bb_jam" ? `All-in ${bb}` : "",
+      selected: bbAct === "fold" ? "Fold" : bbAct === "call" ? "Call" : spot.id === "sb_iso" ? "Raise" : spot.id === "sb_vs_bb_jam" ? `All-in ${bb}` : "",
     });
   }
   if (spot.id === "sb_iso" || spot.id === "sb_vs_bb_jam" || !afterLimp) cols.push(heroColumn(spot, bb, mine));
