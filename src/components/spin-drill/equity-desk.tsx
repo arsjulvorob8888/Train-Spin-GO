@@ -7,9 +7,11 @@ import {
   facingPrice,
   heroFacing,
   openStreet,
+  preflopAllin,
   seatStack,
   seatsInHand,
   streetStatus,
+  actingOrder,
   type Line,
   type LineAction,
   type Seat,
@@ -192,7 +194,8 @@ export function HandProvider({
 
   function syncPrice(next: Line) {
     const order = seatsInHand(spot.id);
-    const face = heroFacing(next, spot.hero, board.length, order);
+    const jammed = preflopAllin(spot.id);
+    const face = heroFacing(next, spot.hero, board.length, order, jammed);
     if (!face) {
       setCallText("");
       return;
@@ -204,9 +207,11 @@ export function HandProvider({
 
   function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
     const order = seatsInHand(spot.id);
-    const open = openStreet(line, Math.max(board.length, streetId === "flop" ? 3 : streetId === "turn" ? 4 : 5), order);
+    const jammed = preflopAllin(spot.id);
+    const depth = Math.max(board.length, streetId === "flop" ? 3 : streetId === "turn" ? 4 : 5);
+    const open = openStreet(line, depth, order, jammed);
     if (open && open.street !== streetId) return;
-    const status = streetStatus(order, line[streetId]);
+    const status = streetStatus(order, line, streetId, jammed);
     if (status.closed || status.seat !== seat) return;
     const next = { ...line, [streetId]: [...line[streetId], { seat, action }] };
     setLine(next);
@@ -634,15 +639,21 @@ function WizardLine({
   onUndo: () => void;
 }) {
   const seats = seatsInHand(spotId);
+  const jammed = preflopAllin(spotId);
   const acts = line[only];
-  const status = streetStatus(seats, acts);
-  const earlier = openStreet(line, only === "flop" ? 3 : only === "turn" ? 4 : 5, seats);
+  const status = streetStatus(seats, line, only, jammed);
+  const earlier = openStreet(line, only === "flop" ? 3 : only === "turn" ? 4 : 5, seats, jammed);
   const blocked = earlier != null && earlier.street !== only;
+  const queue = actingOrder(seats, line, only, jammed);
   const actions = status.facing ? FACING_ACTIONS : OPEN_ACTIONS;
   const suggest = status.seat === hero && !blocked ? suggested(hint, status.facing) : null;
   return (
     <div className="mt-2">
-      <div className="flex flex-wrap items-center gap-1">
+      <p className="text-[11px] text-muted">
+        Очередь: {queue.length ? queue.join(" → ") : "ставок больше нет"}
+        {status.seat ? ` · сейчас ${status.seat}` : ""}
+      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-1">
         {acts.map((act, index) => (
           <span
             key={`${act.seat}-${index}`}

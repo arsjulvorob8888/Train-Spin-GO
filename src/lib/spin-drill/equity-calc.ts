@@ -3,7 +3,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
-import { facingPrice, lineNote, narrowSeat, openStreet, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
+import { facingPrice, lineNote, narrowSeat, openStreet, preflopAllin, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
   "старшая карта",
@@ -411,7 +411,8 @@ export function consult(opts: {
   const equity = share / iterations;
   const auto = opts.board.length < 3 ? spotPrice(opts.spotId, opts.bb) : null;
   const order = seatsInHand(opts.spotId);
-  const open = opts.line && opts.board.length >= 3 ? openStreet(opts.line, opts.board.length, order) : null;
+  const jammed = preflopAllin(opts.spotId);
+  const open = opts.line && opts.board.length >= 3 ? openStreet(opts.line, opts.board.length, order, jammed) : null;
   const face =
     open && open.status.seat === heroSeat && open.status.facing && open.status.action && open.status.aggressor
       ? { street: open.street, seat: open.status.aggressor, action: open.status.action }

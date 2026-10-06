@@ -72,45 +72,100 @@ export type StreetState = {
   action: LineAction | null;
 };
 
-/** Who acts next on this street. A raise reopens the players who already acted. */
-export function streetStatus(order: Seat[], acts: StreetLine): StreetState {
+/** Seats already all-in before the flop in this spot. */
+export function preflopAllin(spotId: string): Seat[] {
+  const known: Record<string, Seat[]> = {
+    bb_vs_btn_jam: ["BTN"],
+    bb_vs_sb_jam: ["SB"],
+    hu_bb_jam: ["SB"],
+    sb_push: ["BTN"],
+    sb_vs_bb_jam: ["BB"],
+    bb_vs_reshove: ["SB"],
+    bb_vs_limp_jam: ["SB"],
+    bb_vs_jam_call: ["BTN", "SB"],
+  };
+  return known[spotId] ?? [];
+}
+
+function previousStreets(street: StreetId): StreetId[] {
+  if (street === "turn") return ["flop"];
+  if (street === "river") return ["flop", "turn"];
+  return [];
+}
+
+function carried(line: Line, street: StreetId, alreadyAllin: Seat[]): { folded: Set<Seat>; allin: Set<Seat> } {
   const folded = new Set<Seat>();
-  for (const act of acts) if (act.action === "fold") folded.add(act.seat);
+  const allin = new Set<Seat>(alreadyAllin);
+  for (const prev of previousStreets(street)) {
+    for (const act of line[prev]) {
+      if (act.action === "fold") folded.add(act.seat);
+      if (act.action === "allin") allin.add(act.seat);
+    }
+  }
+  return { folded, allin };
+}
+
+/** Who acts next. Earlier folds and all-ins stay out. A raise sends the action back around. */
+export function streetStatus(order: Seat[], line: Line, street: StreetId, alreadyAllin: Seat[] = []): StreetState {
+  const prior = carried(line, street, alreadyAllin);
+  const folded = prior.folded;
+  const allin = prior.allin;
+  for (const act of line[street]) {
+    if (act.action === "fold") folded.add(act.seat);
+    if (act.action === "allin") allin.add(act.seat);
+  }
+  const acts = line[street];
   const live = order.filter((seat) => !folded.has(seat));
-  if (live.length <= 1) return { closed: true, seat: null, facing: false, aggressor: null, action: null };
+  const canAct = live.filter((seat) => !allin.has(seat));
+  if (live.length <= 1 || canAct.length === 0) {
+    return { closed: true, seat: null, facing: false, aggressor: null, action: null };
+  }
 
   let lastAgg = -1;
   acts.forEach((act, index) => {
     if (AGGRESSIVE.includes(act.action)) lastAgg = index;
   });
   if (lastAgg < 0) {
+    if (canAct.length <= 1) return { closed: true, seat: null, facing: false, aggressor: null, action: null };
     const acted = new Set(acts.map((act) => act.seat));
-    const seat = order.find((item) => live.includes(item) && !acted.has(item)) ?? null;
+    const seat = order.find((item) => canAct.includes(item) && !acted.has(item)) ?? null;
     return { closed: seat == null, seat, facing: false, aggressor: null, action: null };
   }
+
   const aggressor = acts[lastAgg]!.seat;
   const action = acts[lastAgg]!.action;
   const responded = new Set(acts.slice(lastAgg + 1).map((act) => act.seat));
-  const start = order.indexOf(aggressor);
+  const start = Math.max(0, order.indexOf(aggressor));
   for (let step = 1; step <= order.length; step++) {
     const seat = order[(start + step) % order.length]!;
-    if (!live.includes(seat) || seat === aggressor || responded.has(seat)) continue;
+    if (!canAct.includes(seat) || seat === aggressor || responded.has(seat)) continue;
     return { closed: false, seat, facing: true, aggressor, action };
   }
   return { closed: true, seat: null, facing: false, aggressor, action };
+}
+
+/** Seats who can still bet, in postflop order. */
+export function actingOrder(order: Seat[], line: Line, street: StreetId, alreadyAllin: Seat[] = []): Seat[] {
+  const prior = carried(line, street, alreadyAllin);
+  for (const act of line[street]) {
+    if (act.action === "fold") prior.folded.add(act.seat);
+    if (act.action === "allin") prior.allin.add(act.seat);
+  }
+  return order.filter((seat) => !prior.folded.has(seat) && !prior.allin.has(seat));
 }
 
 export function openStreet(
   line: Line,
   boardLength: number,
   order: Seat[],
+  alreadyAllin: Seat[] = [],
 ): { street: StreetId; status: StreetState } | null {
   const streets: StreetId[] = [];
   if (boardLength >= 3) streets.push("flop");
   if (boardLength >= 4) streets.push("turn");
   if (boardLength >= 5) streets.push("river");
   for (const street of streets) {
-    const status = streetStatus(order, line[street]);
+    const status = streetStatus(order, line, street, alreadyAllin);
     if (!status.closed) return { street, status };
   }
   return null;
@@ -122,8 +177,9 @@ export function heroFacing(
   hero: Seat,
   boardLength: number,
   order: Seat[],
+  alreadyAllin: Seat[] = [],
 ): { street: StreetId; seat: Seat; action: LineAction } | null {
-  const open = openStreet(line, boardLength, order);
+  const open = openStreet(line, boardLength, order, alreadyAllin);
   if (!open || open.status.seat !== hero || !open.status.facing || !open.status.action || !open.status.aggressor) return null;
   return { street: open.street, seat: open.status.aggressor, action: open.status.action };
 }
