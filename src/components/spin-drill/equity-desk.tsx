@@ -109,6 +109,33 @@ export function EquityDesk({
           <p className="text-sm text-muted">Действие появится здесь сразу после двух карт.</p>
         )}
         {shown ? <p className="mt-2 text-sm leading-snug text-muted">{shown.text}</p> : null}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+            Банк, bb
+            <input
+              inputMode="decimal"
+              value={potText}
+              placeholder="6"
+              onChange={(event) => setPotText(event.target.value)}
+              className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+            />
+          </label>
+          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+            Докинуть, bb
+            <input
+              inputMode="decimal"
+              value={callText}
+              placeholder="4"
+              onChange={(event) => setCallText(event.target.value)}
+              className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+            />
+          </label>
+        </div>
+        <p className="mt-2 font-mono text-xs text-muted">
+          {typedOdds != null
+            ? `Pot odds: нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
+            : "Банк уже лежит со ставкой. Докинуть — ваша сумма."}
+        </p>
       </div>
       <p className="text-sm font-medium">Раздача по шагам</p>
       <p className="mt-0.5 text-xs text-muted">Сверху вниз: стол, карты, оппоненты, банк. Рекомендация в конце.</p>
@@ -159,36 +186,6 @@ export function EquityDesk({
         {board.length >= 5 ? (
           <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" onAction={(seat, action) => chooseLine("river", seat, action)} />
         ) : null}
-      </Step>
-
-      <Step n={6} title="Банк" done={pot != null} locked={!hero}>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-            Банк, bb
-            <input
-              inputMode="decimal"
-              value={potText}
-              placeholder="6"
-              onChange={(event) => setPotText(event.target.value)}
-              className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-            />
-          </label>
-          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-            Докинуть, bb
-            <input
-              inputMode="decimal"
-              value={callText}
-              placeholder="4"
-              onChange={(event) => setCallText(event.target.value)}
-              className="mt-1 h-11 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-            />
-          </label>
-        </div>
-        <p className="mt-2 font-mono text-xs text-muted">
-          {typedOdds != null
-            ? `Нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
-            : "Банк — уже лежит, со ставкой оппонента. Докинуть — ваша сумма."}
-        </p>
       </Step>
 
       {typeof document !== "undefined" && (queue.length > 0 || guard)
