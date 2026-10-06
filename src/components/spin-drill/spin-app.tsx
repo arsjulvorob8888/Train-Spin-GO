@@ -533,7 +533,9 @@ export function SpinApp() {
                   ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."
                   : spot.id === "hu_bb_raise"
                     ? "BB против рейза SB до 2. Один цвет — действие с наибольшей долей. Цифра — размер 3-бета."
-                    : stackNote(bb)}
+                    : spot.id === "hu_bb_jam"
+                      ? "BB против пуша SB. Зелёный — колл, синий — фолд. Чем короче стек, тем шире колл."
+                      : stackNote(bb)}
               </p>
               <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
                 <p className="font-mono text-lg font-semibold">{gridName(selected)}</p>
