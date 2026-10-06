@@ -525,9 +525,7 @@ export function SpinApp() {
               </div>
               <p className="mt-2 text-sm text-muted">
                 {spot.id === "hu_bb_limp"
-                  ? paint
-                    ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза."
-                    : "Точный чарт этого стека ещё не снят. На 30bb уже стоят размеры рейза со скрина."
+                  ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."
                   : stackNote(bb)}
               </p>
               <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
