@@ -89,6 +89,16 @@ export function EquityDesk({
     window.setTimeout(() => setGuard(false), 250);
   }
 
+  function resetHand() {
+    cardsRef.current = {};
+    queueRef.current = [];
+    setCards({});
+    setQueue([]);
+    setLine(emptyLine());
+    setPotText("");
+    setCallText("");
+  }
+
   return (
     <div className="relative rounded-xl border border-border bg-surface-2 p-3">
       <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 border-b border-ok bg-surface-2 px-3 py-3">
@@ -108,7 +118,21 @@ export function EquityDesk({
         ) : (
           <p className="text-sm text-muted">Действие появится здесь сразу после двух карт.</p>
         )}
-        {shown ? <p className="mt-2 text-sm leading-snug text-muted">{shown.text}</p> : null}
+        <div className="mt-2 flex items-start gap-2">
+          <p className="min-w-0 flex-1 text-sm leading-snug text-muted">{shown ? shown.text : ""}</p>
+          <button
+            type="button"
+            aria-label="Новая раздача"
+            title="Новая раздача"
+            onClick={resetHand}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border text-fg"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.2-5.8" strokeLinecap="round" />
+              <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
             Банк, bb
@@ -254,7 +278,7 @@ export function EquityDesk({
           )
         : null}
       {hero ? (
-        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { cardsRef.current = {}; queueRef.current = []; setCards({}); setQueue([]); setLine(emptyLine()); setPotText(""); setCallText(""); }}>
+        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={resetHand}>
           Начать раздачу заново
         </button>
       ) : null}
