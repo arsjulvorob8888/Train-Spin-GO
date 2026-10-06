@@ -1,3 +1,4 @@
+import { huSbAt } from "./hu-sb-gto";
 import { ALL, handAt } from "./legacy-ranges";
 import { emptyMix, mixOf, primary, type MixAction, type MixRange } from "./mix";
 
@@ -225,9 +226,10 @@ export function stackNote(bb: number): string {
  */
 export function rangeAtStack(base: MixRange, spotId: string, bb: number): MixRange {
   const depth = Math.max(1, Math.min(30, Math.round(bb)));
+  if (spotId === "hu_sb") return huSbAt(depth);
   if (depth === 15) return base;
   if (spotId === "btn") return openRange(base, depth, false);
-  if (spotId === "sb_fold" || spotId === "hu_sb") return openRange(base, depth, true);
+  if (spotId === "sb_fold") return openRange(base, depth, true);
   if (spotId.includes("jam") || spotId === "sb_push") return callRange(base, depth);
   return shiftRange(base, depth);
 }
