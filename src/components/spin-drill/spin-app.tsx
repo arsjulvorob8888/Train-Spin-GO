@@ -3,7 +3,7 @@
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { ActionLine } from "@/components/spin-drill/bb-line";
-import { EquityDesk, HandProvider, QuickLine } from "@/components/spin-drill/equity-desk";
+import { EquityDesk, HandProvider, QuickLine, useHand } from "@/components/spin-drill/equity-desk";
 import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
@@ -271,6 +271,50 @@ function Legend({ spot }: { spot: SpotDef }) {
       ))}
     </div>
   );
+}
+
+function PreflopNote({
+  mine,
+  selected,
+  range,
+  labels,
+}: {
+  mine: MixAction | "";
+  selected: string;
+  range: MixRange;
+  labels: SpotDef["labels"];
+}) {
+  const { shown, sizeText } = useHand();
+  const chart = selected ? primary(mixOf(range, selected)) : null;
+  const custom = sizeText.trim().length > 0;
+  if (!mine) return null;
+  if (custom && shown?.street === "Префлоп") {
+    const want = verdictMix(shown.verdict);
+    if (want && want !== mine) {
+      return (
+        <p className="mt-2 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">
+          Против рейза до {sizeText}bb солвер: {shown.verdict}. Вы отметили {labels[mine]}. Для этого размера чарт уже не действует.
+        </p>
+      );
+    }
+    return null;
+  }
+  if (chart && chart !== mine) {
+    return (
+      <p className="mt-2 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">
+        Чарт {gridName(selected)}: {labels[chart]}. Вы отметили {labels[mine]}. На стандартном размере верное действие — цвет клетки.
+      </p>
+    );
+  }
+  return null;
+}
+
+function verdictMix(verdict: string): MixAction | null {
+  if (verdict === "Фолд" || verdict === "Fold") return "fold";
+  if (verdict === "Колл" || verdict === "Call" || verdict === "Чек") return "call";
+  if (verdict === "Рейз" || verdict === "Ставка") return "raise";
+  if (verdict === "Пуш") return "allin";
+  return null;
 }
 
 function Meta({ spot, bb, range, labels }: { spot: SpotDef; bb: number; range: MixRange; labels: SpotDef["labels"] }) {
@@ -580,11 +624,7 @@ export function SpinApp() {
                 />
               </div>
               <ActionLine spot={spot} bb={bb} mine={mine} onSpot={changeSpot} onMine={setMine} />
-              {mine && selected && primary(mixOf(range, selected)) !== mine ? (
-                <p className="mt-2 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">
-                  Чарт {gridName(selected)}: {labels[primary(mixOf(range, selected))]}. Вы отметили {labels[mine]}. На префлопе верное действие — цвет клетки, не соседняя кнопка.
-                </p>
-              ) : null}
+              <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
               <EquityDesk />
               <div className="mt-3 flex items-stretch gap-3 select-none">
                 <div className="min-w-0 flex-1">

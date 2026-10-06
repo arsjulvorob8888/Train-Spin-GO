@@ -117,6 +117,57 @@ function spotPrice(spotId: string, bb: number): { toCall: number; pot: number } 
   return null;
 }
 
+/** Raise size the chart assumes, in bb. Null when this spot has no single size. */
+export function chartRaiseTo(spotId: string, bb: number): number | null {
+  if (
+    spotId === "hu_bb_jam" ||
+    spotId === "bb_vs_sb_jam" ||
+    spotId === "bb_vs_btn_jam" ||
+    spotId === "sb_push" ||
+    spotId === "btn_vs_jam" ||
+    spotId === "bb_vs_reshove" ||
+    spotId === "sb_vs_bb_jam" ||
+    spotId === "bb_vs_limp_jam" ||
+    spotId === "bb_vs_jam_call"
+  ) {
+    return bb;
+  }
+  if (spotId === "hu_bb_limp" || spotId === "bb_vs_sb_limp" || spotId === "bb_vs_btn_limp" || spotId === "sb_limp") return 1;
+  if (spotId === "btn_vs_3bet") return Math.min(bb, Math.max(4, Math.round(bb / 3)));
+  if (
+    spotId === "hu_bb_raise" ||
+    spotId === "bb_vs_btn_raise" ||
+    spotId === "bb_vs_sb_raise" ||
+    spotId === "sb_raise" ||
+    spotId === "bb_vs_limp_iso" ||
+    spotId === "sb_iso"
+  ) {
+    return spotId === "bb_vs_limp_iso" ? 4 : spotId === "sb_iso" ? 4 : 2;
+  }
+  return null;
+}
+
+/** Pot and the amount left to call when the opponent raised to `raiseTo` instead of the chart size. */
+export function priceFromRaise(spotId: string, raiseTo: number): { toCall: number; pot: number } | null {
+  const to = Math.round(raiseTo * 10) / 10;
+  if (!(to > 0)) return null;
+  const call = (posted: number, dead = 0) => {
+    const toCall = Math.max(0, Math.round((to - posted) * 10) / 10);
+    const pot = Math.round((to + posted + dead) * 10) / 10;
+    return { toCall, pot };
+  };
+  if (spotId === "btn_vs_3bet" || spotId === "btn_vs_jam") return call(2, 1);
+  if (spotId === "sb_raise" || spotId === "sb_push" || spotId === "sb_limp") return call(0.5, 1);
+  if (spotId === "sb_iso" || spotId === "sb_vs_bb_jam") return call(1, 0);
+  if (spotId === "bb_vs_reshove" || spotId === "bb_squeeze") return call(1, 2);
+  if (spotId.startsWith("bb_vs_btn") || spotId === "bb_vs_limp_iso" || spotId === "bb_vs_limp_call" || spotId === "bb_vs_limp_jam") {
+    return call(1, 0.5);
+  }
+  if (spotId.startsWith("bb_") || spotId.startsWith("hu_bb")) return call(1, 0);
+  if (spotId === "hu_sb") return call(0.5, 1);
+  return null;
+}
+
 export type Consult = {
   klass: string;
   action: MixAction;
@@ -167,8 +218,20 @@ function advice(opts: {
   aggressor: string;
   phase: "act" | "wait" | "done";
   waiting: string;
+  customTo: number | null;
+  customOff: boolean;
 }): { verdict: string; text: string } {
   const pct = Math.round(opts.equity * 100);
+  if (opts.customOff && opts.street === "Префлоп" && opts.need != null && opts.customTo != null) {
+    const need = Math.round(opts.need * 100);
+    const allin = opts.customTo >= opts.bb - 0.15;
+    const pricedIn = opts.equity + 0.01 >= opts.need;
+    const verdict = pricedIn && !allin && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55 ? "Рейз" : pricedIn ? "Колл" : "Фолд";
+    return {
+      verdict,
+      text: `Оппонент поставил до ${opts.customTo}bb, это не размер чарта. Нужно ${need}% на колл, у руки ${pct}%. ${verdict}. Чарт на стандартный размер говорил: ${opts.label}.`,
+    };
+  }
   if (opts.street !== "Префлоп" && opts.phase === "wait") {
     const hand = opts.made ?? "старшая карта";
     return {
@@ -300,6 +363,7 @@ export function consult(opts: {
   toCall?: number | null;
   line?: Line;
   heroSeat?: Seat;
+  raiseTo?: number | null;
   iterations?: number;
 }): Consult {
   const klass = handClass(opts.hero[0], opts.hero[1]);
@@ -409,7 +473,11 @@ export function consult(opts: {
   }
 
   const equity = share / iterations;
-  const auto = opts.board.length < 3 ? spotPrice(opts.spotId, opts.bb) : null;
+  const raiseTo = opts.raiseTo != null && opts.raiseTo > 0 ? opts.raiseTo : null;
+  const chartTo = chartRaiseTo(opts.spotId, opts.bb);
+  const customOff = raiseTo != null && chartTo != null && Math.abs(raiseTo - chartTo) > 0.2;
+  const customPrice = raiseTo != null ? priceFromRaise(opts.spotId, raiseTo) : null;
+  const auto = opts.board.length < 3 ? (customOff && customPrice ? customPrice : spotPrice(opts.spotId, opts.bb)) : null;
   const order = seatsInHand(opts.spotId);
   const jammed = preflopAllin(opts.spotId);
   const open = opts.line && opts.board.length >= 3 ? openStreet(opts.line, opts.board.length, order, jammed) : null;
@@ -451,6 +519,8 @@ export function consult(opts: {
     waiting: open?.status.seat && open.status.seat !== heroSeat ? open.status.seat : "",
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,
+    customTo: customOff ? raiseTo : null,
+    customOff,
   });
 
   return {

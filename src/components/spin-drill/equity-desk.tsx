@@ -1,5 +1,5 @@
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
-import { consult } from "@/lib/spin-drill/equity-calc";
+import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import {
   FACING_ACTIONS,
   OPEN_ACTIONS,
@@ -58,6 +58,8 @@ type HandApi = {
   chooseLine: (streetId: StreetId, seat: Seat, action: LineAction) => void;
   undoLine: (streetId: StreetId) => void;
   deviation: string | null;
+  sizeText: string;
+  setSizeText: (value: string) => void;
   used: (card: Card) => boolean;
   choose: (rank: number, suit: number) => void;
   holdGuard: () => void;
@@ -68,7 +70,7 @@ type HandApi = {
 
 const HandCtx = createContext<HandApi | null>(null);
 
-function useHand() {
+export function useHand() {
   const ctx = useContext(HandCtx);
   if (!ctx) throw new Error("HandProvider");
   return ctx;
@@ -100,6 +102,7 @@ export function HandProvider({
   const [callText, setCallText] = useState("");
   const [line, setLine] = useState<Line>(emptyLine);
   const [deviation, setDeviation] = useState<string | null>(null);
+  const [sizeText, setSizeText] = useState("");
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -133,11 +136,47 @@ export function HandProvider({
     return flop;
   }, [cards]);
 
+  useEffect(() => {
+    if (board.length >= 3) return;
+    const raiseTo = parseBb(sizeText);
+    if (raiseTo == null) {
+      setPotText("");
+      setCallText("");
+      return;
+    }
+    const priced = priceFromRaise(spot.id, raiseTo);
+    if (!priced) return;
+    setPotText(trimNum(priced.pot));
+    setCallText(trimNum(priced.toCall));
+  }, [sizeText, spot.id, board.length]);
+
+  const preflopPot = useRef(true);
+  useEffect(() => {
+    if (preflopPot.current && board.length >= 3) {
+      setPotText("");
+      setCallText("");
+    }
+    preflopPot.current = board.length < 3;
+  }, [board.length]);
+
   const shown = useMemo(() => {
     if (!hero) return null;
-    const once = consult({ hero, board, spotId: spot.id, bb, range, labels, pot, toCall, line, heroSeat: spot.hero });
+    const raiseTo = parseBb(sizeText);
+    const once = consult({
+      hero,
+      board,
+      spotId: spot.id,
+      bb,
+      range,
+      labels,
+      pot,
+      toCall,
+      line,
+      heroSeat: spot.hero,
+      raiseTo,
+    });
     return { ...once, label: labels[once.action] };
-  }, [hero, board, spot.id, bb, range, labels, pot, toCall, line]);
+  }, [hero, board, spot.id, bb, range, labels, pot, toCall, line, sizeText]);
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
   function used(card: Card): boolean {
@@ -173,6 +212,7 @@ export function HandProvider({
     setPotText("");
     setCallText("");
     setDeviation(null);
+    setSizeText("");
   }
 
   function open(slot: Slot) {
@@ -258,6 +298,8 @@ export function HandProvider({
     chooseLine,
     undoLine,
     deviation,
+    sizeText,
+    setSizeText,
     used,
     choose,
     holdGuard,
@@ -419,42 +461,6 @@ export function EquityDesk() {
           : "Банк уже лежит со ставкой. Докинуть — ваша сумма."}
       </p>
       {deviation ? <p className="mt-3 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">{deviation}</p> : null}
-      <div className="mt-3 grid items-start gap-2 md:grid-cols-2 lg:grid-cols-4">
-        <Step n={1} title="Ваши карты" done={Boolean(hero)}>
-          <div className="flex gap-2">
-            {(["h0", "h1"] as const).map((slot) => (
-              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} onClick={() => open(slot)} />
-            ))}
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            {spot.hero} · {bb}bb · {spot.vs}
-          </p>
-        </Step>
-        <Step n={2} title="Флоп" done={board.length >= 3} locked={!hero}>
-          <div className="flex gap-1">
-            {(["f0", "f1", "f2"] as const).map((slot) => (
-              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
-            ))}
-          </div>
-          {board.length >= 3 ? (
-            <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
-          ) : (
-            <p className="mt-1 text-xs text-muted">Три карты, затем ход по очереди.</p>
-          )}
-        </Step>
-        <Step n={3} title="Тёрн" done={board.length >= 4} locked={board.length < 3}>
-          <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
-          {board.length >= 4 ? (
-            <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
-          ) : null}
-        </Step>
-        <Step n={4} title="Ривер" done={board.length >= 5} locked={board.length < 4}>
-          <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
-          {board.length >= 5 ? (
-            <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
-          ) : null}
-        </Step>
-      </div>
 
       {typeof document !== "undefined" && (queue.length > 0 || guard)
         ? createPortal(
@@ -549,30 +555,6 @@ function parseBb(raw: string): number | null {
 
 function trimNum(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function Step({
-  n,
-  title,
-  done,
-  locked,
-  children,
-}: {
-  n: number;
-  title: string;
-  done?: boolean;
-  locked?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section className={cn("rounded-lg border border-border p-2", locked ? "pointer-events-none opacity-40" : "")}>
-      <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
-        {n}. {title}
-        {done ? " · готово" : ""}
-      </p>
-      <div className="mt-2">{children}</div>
-    </section>
-  );
 }
 
 function shownKlass(a: Card, b: Card): string {
@@ -699,6 +681,61 @@ function WizardLine({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export function BoardLine({ openBoard }: { openBoard: boolean }) {
+  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, undoLine } = useHand();
+  return (
+    <div className="mt-2 flex items-start gap-2 overflow-x-auto pb-1">
+      <div className="w-[7.2rem] shrink-0 rounded-lg border border-border p-1">
+        <p className="px-1 text-[11px] font-medium">Вы</p>
+        <div className="mt-1 flex gap-1">
+          {(["h0", "h1"] as const).map((slot) => (
+            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+          ))}
+        </div>
+      </div>
+      {openBoard ? (
+        <>
+          <StreetBlock title="Флоп" locked={!hero}>
+            <div className="flex gap-1">
+              {(["f0", "f1", "f2"] as const).map((slot) => (
+                <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+              ))}
+            </div>
+            {board.length >= 3 ? (
+              <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
+            ) : (
+              <p className="mt-1 text-[11px] text-muted">Три карты, потом ходы.</p>
+            )}
+          </StreetBlock>
+          <StreetBlock title="Тёрн" locked={board.length < 3}>
+            <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
+            {board.length >= 4 ? (
+              <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
+            ) : null}
+          </StreetBlock>
+          <StreetBlock title="Ривер" locked={board.length < 4}>
+            <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
+            {board.length >= 5 ? (
+              <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
+            ) : null}
+          </StreetBlock>
+        </>
+      ) : (
+        <p className="self-center text-xs text-muted">Флоп откроется здесь, когда вы не сбросите карты.</p>
+      )}
+    </div>
+  );
+}
+
+function StreetBlock({ title, locked, children }: { title: string; locked?: boolean; children: ReactNode }) {
+  return (
+    <div className={cn("min-w-[9rem] shrink-0 rounded-lg border border-ok p-1", locked ? "pointer-events-none opacity-40" : "")}>
+      <p className="px-1 text-[11px] font-medium">{title}</p>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }

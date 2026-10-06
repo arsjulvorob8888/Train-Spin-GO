@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
+import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
+import { BoardLine, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
 type Pick = { spot?: string; mine?: MixAction };
@@ -36,6 +38,10 @@ export function ActionLine({
     }
   }, [spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct);
+  const { sizeText, setSizeText } = useHand();
+  const live = mine === "call" || mine === "raise" || mine === "allin";
+  const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
+  const chartSize = chartRaiseTo(spot.id, bb);
   return (
     <div className="mt-3">
       <div className="flex gap-1 overflow-x-auto pb-1">
@@ -89,7 +95,22 @@ export function ActionLine({
             </div>
           </div>
         ))}
+        {sized ? (
+          <label className="w-[6.4rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
+            <span className="block px-1 font-medium">до, bb</span>
+            <input
+              inputMode="decimal"
+              value={sizeText}
+              placeholder={chartSize != null ? String(chartSize) : "2"}
+              aria-label="Фактический размер рейза, bb"
+              onChange={(event) => setSizeText(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
+            />
+            <span className="mt-1 block px-1 text-muted">пусто = чарт</span>
+          </label>
+        ) : null}
       </div>
+      <BoardLine openBoard={live} />
       <p className="mt-1 text-xs text-muted">
         {mine ? `Ваш ход: ${heroLabel(spot, bb, mine)}. Рейндж ниже — чарт этого решения.` : "Отметьте своё действие в зелёной колонке. Чужие колонки меняют линию."}
       </p>
