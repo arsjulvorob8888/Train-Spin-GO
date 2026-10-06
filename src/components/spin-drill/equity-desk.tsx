@@ -15,7 +15,7 @@ import {
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const RANKS = [...RANK_CHARS].reverse();
@@ -28,12 +28,14 @@ export function EquityDesk({
   bb,
   labels,
   onHand,
+  openCards = 0,
 }: {
   spot: SpotDef;
   range: MixRange;
   bb: number;
   labels: SpotDef["labels"];
   onHand: (hand: string) => void;
+  openCards?: number;
 }) {
   const [cards, setCards] = useState<Partial<Record<Slot, Card>>>({});
   const [queue, setQueue] = useState<Slot[]>([]);
@@ -45,6 +47,24 @@ export function EquityDesk({
   const [line, setLine] = useState<Line>(emptyLine);
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
+
+  useEffect(() => {
+    if (!openCards) return;
+    const prev = cardsRef.current;
+    const empty = (["h0", "h1"] as const).filter((slot) => !prev[slot]);
+    if (empty.length === 0) {
+      const next = { ...prev };
+      delete next.h0;
+      delete next.h1;
+      cardsRef.current = next;
+      setCards(next);
+      queueRef.current = ["h0", "h1"];
+      setQueue(["h0", "h1"]);
+      return;
+    }
+    queueRef.current = [...empty];
+    setQueue([...empty]);
+  }, [openCards]);
 
   const hero = useMemo(() => {
     if (!cards.h0 || !cards.h1) return null;

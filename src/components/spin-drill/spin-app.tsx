@@ -43,7 +43,7 @@ import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type Tab = "practice" | "strategy" | "table" | "experiment" | "hands" | "math" | "stats";
 
@@ -150,17 +150,19 @@ function SpotPills({
   onGroup,
   onSpot,
   compact = false,
+  extra,
 }: {
   group: SpotGroup;
   spot: SpotDef;
   onGroup: (g: SpotGroup) => void;
   onSpot: (id: string) => void;
   compact?: boolean;
+  extra?: ReactNode;
 }) {
   const list = spotsIn(group);
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {GROUPS.map((g) => (
           <button
             key={g}
@@ -175,6 +177,7 @@ function SpotPills({
             <span className="ml-1.5 font-mono text-xs opacity-60">{spotsIn(g).length}</span>
           </button>
         ))}
+        {extra}
       </div>
       <GroupHint group={group} />
       {compact ? null : (
@@ -198,6 +201,55 @@ function SpotPills({
         </>
       )}
     </div>
+  );
+}
+
+function StackType({ bb, onChange }: { bb: number; onChange: (bb: number) => void }) {
+  const [text, setText] = useState(String(bb));
+  const wait = useRef<number | null>(null);
+
+  useEffect(() => {
+    setText(String(bb));
+  }, [bb]);
+
+  useEffect(() => {
+    return () => {
+      if (wait.current != null) window.clearTimeout(wait.current);
+    };
+  }, []);
+
+  function apply(raw: string) {
+    const n = Number(raw);
+    if (n >= 1 && n <= 30) onChange(n);
+  }
+
+  function type(raw: string) {
+    const next = raw.replace(/\D/g, "").slice(0, 2);
+    setText(next);
+    if (wait.current != null) window.clearTimeout(wait.current);
+    if (!next) return;
+    const n = Number(next);
+    const done = next.length === 2 || (next.length === 1 && n >= 4);
+    if (n >= 1 && n <= 30 && done) apply(next);
+    else if (n >= 1 && n <= 3) wait.current = window.setTimeout(() => apply(next), 450);
+  }
+
+  return (
+    <label className="flex h-11 items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3">
+      <span className="text-xs text-muted">Стек</span>
+      <input
+        inputMode="numeric"
+        aria-label="Размер стека"
+        value={text}
+        onChange={(event) => type(event.target.value)}
+        onBlur={() => setText(String(bb))}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") apply(text);
+        }}
+        className="w-8 bg-transparent text-center font-mono text-base font-semibold text-fg outline-none"
+      />
+      <span className="font-mono text-xs text-muted">bb</span>
+    </label>
   );
 }
 
@@ -270,6 +322,7 @@ export function SpinApp() {
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
+  const [cardAsk, setCardAsk] = useState(0);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
@@ -496,7 +549,25 @@ export function SpinApp() {
           <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
               <div className="mt-4">
-                <SpotPills compact group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
+                <SpotPills
+                  compact
+                  group={group}
+                  spot={spot}
+                  onGroup={changeGroup}
+                  onSpot={changeSpot}
+                  extra={
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <StackType bb={bb} onChange={setBb} />
+                      <button
+                        type="button"
+                        onClick={() => setCardAsk((n) => n + 1)}
+                        className="h-11 rounded-full border border-fg bg-fg px-4 text-sm font-semibold text-bg"
+                      >
+                        Карты
+                      </button>
+                    </div>
+                  }
+                />
               </div>
               <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
                 <strong>
@@ -552,7 +623,7 @@ export function SpinApp() {
               </div>
             </section>
             <aside className="sticky top-4 max-h-[calc(100vh-1.5rem)] space-y-4 overflow-auto rounded-2xl border border-border bg-surface p-4">
-              <EquityDesk spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} />
+              <EquityDesk spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} openCards={cardAsk} />
             </aside>
           </div>
         )}
