@@ -3,6 +3,7 @@ import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import {
   FACING_ACTIONS,
   OPEN_ACTIONS,
+  actionTitle,
   emptyLine,
   facingPrice,
   heroFacing,
@@ -260,7 +261,7 @@ export function HandProvider({
       const advice = suggested(shown?.verdict ?? "", status.facing);
       setDeviation(
         advice && action !== advice
-          ? `Солвер советует ${ACTION_NAME[advice]}. Вы выбрали ${ACTION_NAME[action]}. Так матожидание ниже линии чарта.`
+          ? `Солвер советует ${actionTitle(advice, pot, seatStack(seat, bb))}. Вы выбрали ${actionTitle(action, pot, seatStack(seat, bb))}. Так матожидание ниже линии чарта.`
           : null,
       );
     }
@@ -628,6 +629,8 @@ function WizardLine({
   const queue = actingOrder(seats, line, only, jammed);
   const actions = status.facing ? FACING_ACTIONS : OPEN_ACTIONS;
   const suggest = status.seat === hero && !blocked ? suggested(hint, status.facing) : null;
+  const { pot } = useHand();
+  const title = (action: LineAction, seat: Seat) => actionTitle(action, pot, seatStack(seat, bb));
   return (
     <div className="mt-2">
       <p className="text-[11px] text-muted">
@@ -643,7 +646,7 @@ function WizardLine({
               act.seat === hero ? "border-ok text-fg" : "border-border text-muted",
             )}
           >
-            {act.seat} {act.action === "bet33" ? "Bet 33%" : act.action === "bet66" ? "Bet 66%" : act.action === "allin" ? "All-in" : act.action[0]!.toUpperCase() + act.action.slice(1)}
+            {act.seat} {title(act.action, act.seat)}
           </span>
         ))}
         {acts.length > 0 ? (
@@ -674,7 +677,7 @@ function WizardLine({
                   suggest === item.id ? "border-ok font-semibold text-fg" : "border-border text-muted",
                 )}
               >
-                {item.label}
+                {title(item.id, status.seat ?? hero)}
                 {suggest === item.id ? " · совет" : ""}
               </button>
             ))}
@@ -739,16 +742,6 @@ function StreetBlock({ title, locked, children }: { title: string; locked?: bool
     </div>
   );
 }
-
-const ACTION_NAME: Record<LineAction, string> = {
-  check: "чек",
-  bet33: "ставку 33%",
-  bet66: "ставку 66%",
-  fold: "фолд",
-  call: "колл",
-  raise: "рейз",
-  allin: "олл-ин",
-};
 
 function suggested(verdict: string, facing: boolean): LineAction | null {
   if (verdict === "Фолд") return "fold";

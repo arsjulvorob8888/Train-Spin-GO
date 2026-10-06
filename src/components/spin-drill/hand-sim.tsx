@@ -14,7 +14,7 @@ import {
   type Seat,
 } from "@/lib/spin-drill/hand-sim";
 import { mixOf, primary, type MixAction } from "@/lib/spin-drill/mix";
-import { emptyLine, lastBySeat, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
+import { actionTitle, emptyLine, lastBySeat, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
@@ -403,13 +403,7 @@ function verdictAction(verdict: string, order: Seat[], acts: Partial<Record<Seat
 }
 
 function postName(action: LineAction): string {
-  if (action === "check") return "Check";
-  if (action === "bet33") return "Bet 33%";
-  if (action === "bet66") return "Bet 66%";
-  if (action === "fold") return "Fold";
-  if (action === "call") return "Call";
-  if (action === "raise") return "Raise";
-  return "All-in";
+  return actionTitle(action, null, 15);
 }
 
 function describePrompt(

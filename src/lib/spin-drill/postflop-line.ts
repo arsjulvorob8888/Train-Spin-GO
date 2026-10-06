@@ -7,8 +7,8 @@ export type LineAction = "check" | "bet33" | "bet66" | "fold" | "call" | "raise"
 
 export const OPEN_ACTIONS: { id: LineAction; label: string }[] = [
   { id: "check", label: "Check" },
-  { id: "bet33", label: "Bet 33%" },
-  { id: "bet66", label: "Bet 66%" },
+  { id: "bet33", label: "Raise 2" },
+  { id: "bet66", label: "Raise 4" },
   { id: "allin", label: "All-in" },
 ];
 
@@ -21,8 +21,8 @@ export const FACING_ACTIONS: { id: LineAction; label: string }[] = [
 
 const LABEL: Record<LineAction, string> = {
   check: "Check",
-  bet33: "Bet 33%",
-  bet66: "Bet 66%",
+  bet33: "Raise",
+  bet66: "Raise",
   fold: "Fold",
   call: "Call",
   raise: "Raise",
@@ -203,9 +203,25 @@ export function callSize(action: LineAction, pot: number | null, stackBb: number
   if (action === "call") return null;
   if (action === "allin") return stackBb;
   if (pot == null || pot <= 0) return null;
-  if (action === "bet33") return roundBb(pot / 3);
-  if (action === "bet66") return roundBb(pot * 0.66);
-  return roundBb(pot);
+  if (action === "bet33") return roundMult(pot / 3);
+  if (action === "bet66") return roundMult((pot * 2) / 3);
+  return roundMult(pot);
+}
+
+function roundMult(value: number): number {
+  return Math.max(1, Math.round(value * 2) / 2);
+}
+
+/** Size the way the charts write it: Raise 2, Raise 2.5, Raise 4.5. */
+export function actionTitle(action: LineAction, pot: number | null, stackBb: number): string {
+  if (action === "check") return "Check";
+  if (action === "fold") return "Fold";
+  if (action === "call") return "Call";
+  if (action === "allin") return "All-in";
+  const size = callSize(action, pot != null && pot > 0 ? pot : 6, stackBb);
+  const stepped = size ?? (action === "bet33" ? 2 : action === "bet66" ? 4 : 4);
+  const text = Number.isInteger(stepped) ? String(stepped) : stepped.toFixed(1);
+  return `Raise ${text}`;
 }
 
 function roundBb(value: number): number {
