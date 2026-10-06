@@ -29,11 +29,17 @@ const LABEL: Record<LineAction, string> = {
   allin: "All-in",
 };
 
-export type StreetLine = Partial<Record<Seat, LineAction>>;
+export type StreetLine = { seat: Seat; action: LineAction }[];
 export type Line = Record<StreetId, StreetLine>;
 
 export function emptyLine(): Line {
-  return { flop: {}, turn: {}, river: {} };
+  return { flop: [], turn: [], river: [] };
+}
+
+export function lastBySeat(acts: StreetLine): Partial<Record<Seat, LineAction>> {
+  const out: Partial<Record<Seat, LineAction>> = {};
+  for (const act of acts) out[act.seat] = act.action;
+  return out;
 }
 
 /** Postflop acting order. Heads-up is BB then SB. Three-handed is SB, BB, BTN. */
@@ -58,42 +64,80 @@ export function seatStack(seat: Seat, bb: number): number {
 
 const AGGRESSIVE: LineAction[] = ["bet33", "bet66", "raise", "allin"];
 
-/** The bet the hero still has to answer. A shove on an earlier street still counts. */
+export type StreetState = {
+  closed: boolean;
+  seat: Seat | null;
+  facing: boolean;
+  aggressor: Seat | null;
+  action: LineAction | null;
+};
+
+/** Who acts next on this street. A raise reopens the players who already acted. */
+export function streetStatus(order: Seat[], acts: StreetLine): StreetState {
+  const folded = new Set<Seat>();
+  for (const act of acts) if (act.action === "fold") folded.add(act.seat);
+  const live = order.filter((seat) => !folded.has(seat));
+  if (live.length <= 1) return { closed: true, seat: null, facing: false, aggressor: null, action: null };
+
+  let lastAgg = -1;
+  acts.forEach((act, index) => {
+    if (AGGRESSIVE.includes(act.action)) lastAgg = index;
+  });
+  if (lastAgg < 0) {
+    const acted = new Set(acts.map((act) => act.seat));
+    const seat = order.find((item) => live.includes(item) && !acted.has(item)) ?? null;
+    return { closed: seat == null, seat, facing: false, aggressor: null, action: null };
+  }
+  const aggressor = acts[lastAgg]!.seat;
+  const action = acts[lastAgg]!.action;
+  const responded = new Set(acts.slice(lastAgg + 1).map((act) => act.seat));
+  const start = order.indexOf(aggressor);
+  for (let step = 1; step <= order.length; step++) {
+    const seat = order[(start + step) % order.length]!;
+    if (!live.includes(seat) || seat === aggressor || responded.has(seat)) continue;
+    return { closed: false, seat, facing: true, aggressor, action };
+  }
+  return { closed: true, seat: null, facing: false, aggressor, action };
+}
+
+export function openStreet(
+  line: Line,
+  boardLength: number,
+  order: Seat[],
+): { street: StreetId; status: StreetState } | null {
+  const streets: StreetId[] = [];
+  if (boardLength >= 3) streets.push("flop");
+  if (boardLength >= 4) streets.push("turn");
+  if (boardLength >= 5) streets.push("river");
+  for (const street of streets) {
+    const status = streetStatus(order, line[street]);
+    if (!status.closed) return { street, status };
+  }
+  return null;
+}
+
+/** The bet the hero still has to answer on his turn. */
 export function heroFacing(
   line: Line,
   hero: Seat,
   boardLength: number,
   order: Seat[],
 ): { street: StreetId; seat: Seat; action: LineAction } | null {
-  const streets: StreetId[] = [];
-  if (boardLength >= 3) streets.push("flop");
-  if (boardLength >= 4) streets.push("turn");
-  if (boardLength >= 5) streets.push("river");
-  let found: { street: StreetId; seat: Seat; action: LineAction } | null = null;
-  for (const street of streets) {
-    if (line[street][hero] === "fold" || line[street][hero] === "call" || line[street][hero] === "raise" || line[street][hero] === "allin") {
-      continue;
-    }
-    for (const seat of order) {
-      if (seat === hero) continue;
-      const action = line[street][seat];
-      if (action && AGGRESSIVE.includes(action)) found = { street, seat, action };
-    }
-  }
-  return found;
+  const open = openStreet(line, boardLength, order);
+  if (!open || open.status.seat !== hero || !open.status.facing || !open.status.action || !open.status.aggressor) return null;
+  return { street: open.street, seat: open.status.aggressor, action: open.status.action };
 }
 
 export function lineActive(line: Line): boolean {
-  return (["flop", "turn", "river"] as const).some((street) => Object.keys(line[street]).length > 0);
+  return (["flop", "turn", "river"] as const).some((street) => line[street].length > 0);
 }
 
 export function lineNote(line: Line): string {
   const bits: string[] = [];
   for (const street of ["flop", "turn", "river"] as const) {
-    const names = (["SB", "BB", "BTN"] as const)
-      .filter((seat) => line[street][seat])
-      .map((seat) => `${seat} ${LABEL[line[street][seat]!]}`);
-    if (names.length) bits.push(`${street === "flop" ? "флоп" : street === "turn" ? "тёрн" : "ривер"} ${names.join(", ")}`);
+    if (!line[street].length) continue;
+    const names = line[street].map((act) => `${act.seat} ${LABEL[act.action]}`);
+    bits.push(`${street === "flop" ? "флоп" : street === "turn" ? "тёрн" : "ривер"} ${names.join(" → ")}`);
   }
   return bits.join(" · ");
 }
@@ -169,9 +213,15 @@ export function narrowSeat<T extends { a: Card; b: Card; w: number }>(
 ): T[] {
   let current = combos;
   const steps: { action: LineAction; cards: Card[] }[] = [];
-  if (line.flop[seat] && board.length >= 3) steps.push({ action: line.flop[seat]!, cards: board.slice(0, 3) });
-  if (line.turn[seat] && board.length >= 4) steps.push({ action: line.turn[seat]!, cards: board.slice(0, 4) });
-  if (line.river[seat] && board.length >= 5) steps.push({ action: line.river[seat]!, cards: board.slice(0, 5) });
+  if (board.length >= 3) {
+    for (const act of line.flop) if (act.seat === seat) steps.push({ action: act.action, cards: board.slice(0, 3) });
+  }
+  if (board.length >= 4) {
+    for (const act of line.turn) if (act.seat === seat) steps.push({ action: act.action, cards: board.slice(0, 4) });
+  }
+  if (board.length >= 5) {
+    for (const act of line.river) if (act.seat === seat) steps.push({ action: act.action, cards: board.slice(0, 5) });
+  }
   for (const step of steps) {
     if (step.action === "fold") return [];
     current = current

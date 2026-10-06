@@ -14,7 +14,7 @@ import {
   type Seat,
 } from "@/lib/spin-drill/hand-sim";
 import { mixOf, primary, type MixAction } from "@/lib/spin-drill/mix";
-import { emptyLine, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
+import { emptyLine, lastBySeat, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
@@ -102,7 +102,8 @@ export function HandSim() {
     const need = street === "flop" ? 3 : street === "turn" ? 4 : 5;
     if (board.length < need) return null;
     const order = postOrder(liveSeats(stack, history));
-    const actor = order.find((seat) => !line[street][seat]);
+    const acted = lastBySeat(line[street]);
+    const actor = order.find((seat) => !acted[seat]);
     if (!actor || actor !== hero) return { actor: actor ?? null, order, result: null as null };
     const spot = findSpot(chartId);
     const range = rangeAtStack(spot.range, spot.id, stack);
@@ -115,7 +116,7 @@ export function HandSim() {
       range,
       labels,
       pot: money.pot,
-      toCall: facingSize(order, line[street], money.pot, stack),
+      toCall: facingSize(order, acted, money.pot, stack),
       line,
       heroSeat: hero,
     });
@@ -225,7 +226,7 @@ export function HandSim() {
 
         {post?.actor && post.actor !== hero ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            {(facing(post.order, line[street as StreetId], post.actor) ? ["fold", "call", "raise", "allin"] : ["check", "bet33", "bet66", "allin"]).map((action) => (
+            {(facing(post.order, lastBySeat(line[street as StreetId]), post.actor) ? ["fold", "call", "raise", "allin"] : ["check", "bet33", "bet66", "allin"]).map((action) => (
               <button
                 key={action}
                 type="button"
@@ -241,7 +242,7 @@ export function HandSim() {
           <Verdict
             title={post.result.verdict}
             text={post.result.text}
-            onPlay={() => playPost(hero, verdictAction(post.result!.verdict, post.order, line[street as StreetId]))}
+            onPlay={() => playPost(hero, verdictAction(post.result!.verdict, post.order, lastBySeat(line[street as StreetId])))}
           />
         ) : null}
         {note ? <p className="mt-3 text-sm">{note}</p> : null}
@@ -298,22 +299,24 @@ export function HandSim() {
 
   function playPost(seat: Seat, action: LineAction) {
     if (street !== "flop" && street !== "turn" && street !== "river") return;
-    const next = { ...line, [street]: { ...line[street], [seat]: action } };
+    const map = { ...lastBySeat(line[street]), [seat]: action };
+    const order = postOrder(liveSeats(stack, history));
+    const acts = order.filter((item) => map[item]).map((item) => ({ seat: item, action: map[item]! }));
+    const next = { ...line, [street]: acts };
     setLine(next);
     if (seat === hero && action === "fold") {
       setStreet("over");
       setNote("Фолд. Цена банка или сила руки не оплачивают продолжение.");
       return;
     }
-    const order = postOrder(liveSeats(stack, history));
-    const left = order.filter((item) => item !== seat && next[street][item] !== "fold" && !next[street][item]);
-    const foldedNow = order.filter((item) => next[street][item] === "fold");
+    const left = order.filter((item) => item !== seat && map[item] !== "fold" && !map[item]);
+    const foldedNow = order.filter((item) => map[item] === "fold");
     if (order.length - foldedNow.length <= 1 && left.length === 0) {
       setStreet("over");
       setNote("Остальные сбросили. Банк ваш.");
       return;
     }
-    if (order.every((item) => next[street][item])) {
+    if (order.every((item) => map[item])) {
       if (street === "flop") setStreet("turn");
       else if (street === "turn") setStreet("river");
       else {

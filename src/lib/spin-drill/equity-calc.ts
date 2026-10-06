@@ -3,7 +3,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
-import { facingPrice, heroFacing, lineNote, narrowSeat, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
+import { facingPrice, lineNote, narrowSeat, openStreet, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
   "старшая карта",
@@ -165,8 +165,24 @@ function advice(opts: {
   draw: string | null;
   facing: "none" | "bet" | "allin";
   aggressor: string;
+  phase: "act" | "wait" | "done";
+  waiting: string;
 }): { verdict: string; text: string } {
   const pct = Math.round(opts.equity * 100);
+  if (opts.street !== "Префлоп" && opts.phase === "wait") {
+    const hand = opts.made ?? "старшая карта";
+    return {
+      verdict: `Ход ${opts.waiting}`,
+      text: `${opts.street}: сейчас ходит ${opts.waiting}. Эквити ${pct}%, ${hand}${opts.draw ? `, ${opts.draw}` : ""}. Отметь его действие — совет для тебя пересчитается.`,
+    };
+  }
+  if (opts.street !== "Префлоп" && opts.phase === "done") {
+    const hand = opts.made ?? "старшая карта";
+    return {
+      verdict: "Дальше",
+      text: `${opts.street} закрыт. Эквити ${pct}%, ${hand}${opts.draw ? `, ${opts.draw}` : ""}. Открой следующую карту или ход оппонента на ней.`,
+    };
+  }
   if (opts.street !== "Префлоп") {
     const hand = opts.made ?? "старшая карта";
     const extra = opts.draw ? `, ${opts.draw}` : "";
@@ -294,7 +310,7 @@ export function consult(opts: {
   const heroSeat = opts.heroSeat ?? "BTN";
   const opponents = seatsInHand(opts.spotId).filter((seat) => seat !== heroSeat);
   const acted = opponents.filter((seat) =>
-    opts.line ? Boolean(opts.line.flop[seat] || opts.line.turn[seat] || opts.line.river[seat]) : false,
+    opts.line ? (["flop", "turn", "river"] as const).some((street) => opts.line![street].some((act) => act.seat === seat)) : false,
   );
   const perSeat =
     opts.line && acted.length
@@ -394,9 +410,11 @@ export function consult(opts: {
 
   const equity = share / iterations;
   const auto = opts.board.length < 3 ? spotPrice(opts.spotId, opts.bb) : null;
+  const order = seatsInHand(opts.spotId);
+  const open = opts.line && opts.board.length >= 3 ? openStreet(opts.line, opts.board.length, order) : null;
   const face =
-    opts.line && opts.board.length >= 3
-      ? heroFacing(opts.line, heroSeat, opts.board.length, seatsInHand(opts.spotId))
+    open && open.status.seat === heroSeat && open.status.facing && open.status.action && open.status.aggressor
+      ? { street: open.street, seat: open.status.aggressor, action: open.status.action }
       : null;
   const priced = face ? facingPrice(face, heroSeat, opts.bb, opts.pot ?? null) : null;
   const userPrice =
@@ -414,7 +432,10 @@ export function consult(opts: {
   ].filter(Boolean);
   const made =
     opts.board.length >= 3 ? CAT_RU[evaluateBest([...opts.hero, ...opts.board]).category] ?? null : null;
-  const street = opts.board.length >= 5 ? "Ривер" : opts.board.length === 4 ? "Тёрн" : opts.board.length >= 3 ? "Флоп" : "Префлоп";
+  const boardStreet = opts.board.length >= 5 ? "Ривер" : opts.board.length === 4 ? "Тёрн" : opts.board.length >= 3 ? "Флоп" : "Префлоп";
+  const streetName = { flop: "Флоп", turn: "Тёрн", river: "Ривер" } as const;
+  const street = open ? streetName[open.street] : boardStreet;
+  const phase = open ? (open.status.seat === heroSeat ? "act" : "wait") : opts.board.length >= 3 ? "done" : "act";
   const said = advice({
     action,
     label: opts.labels[action],
@@ -425,6 +446,8 @@ export function consult(opts: {
     street,
     facing,
     aggressor: face?.seat ?? "",
+    phase,
+    waiting: open?.status.seat && open.status.seat !== heroSeat ? open.status.seat : "",
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,
   });

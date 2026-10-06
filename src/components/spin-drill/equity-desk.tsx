@@ -6,8 +6,10 @@ import {
   emptyLine,
   facingPrice,
   heroFacing,
+  openStreet,
   seatStack,
   seatsInHand,
+  streetStatus,
   type Line,
   type LineAction,
   type Seat,
@@ -52,6 +54,7 @@ type HandApi = {
   open: (slot: Slot) => void;
   resetHand: () => void;
   chooseLine: (streetId: StreetId, seat: Seat, action: LineAction) => void;
+  undoLine: (streetId: StreetId) => void;
   used: (card: Card) => boolean;
   choose: (rank: number, suit: number) => void;
   holdGuard: () => void;
@@ -187,15 +190,7 @@ export function HandProvider({
     setQueue([...next]);
   }
 
-  function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
-    const turningOff = line[streetId][seat] === action;
-    const next = {
-      ...line,
-      [streetId]: { ...line[streetId] },
-    };
-    if (turningOff) delete next[streetId][seat];
-    else next[streetId][seat] = action;
-    setLine(next);
+  function syncPrice(next: Line) {
     const order = seatsInHand(spot.id);
     const face = heroFacing(next, spot.hero, board.length, order);
     if (!face) {
@@ -205,6 +200,24 @@ export function HandProvider({
     const priced = facingPrice(face, spot.hero, bb, pot);
     if (!potText.trim()) setPotText(trimNum(priced.pot));
     setCallText(trimNum(priced.toCall));
+  }
+
+  function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
+    const order = seatsInHand(spot.id);
+    const open = openStreet(line, Math.max(board.length, streetId === "flop" ? 3 : streetId === "turn" ? 4 : 5), order);
+    if (open && open.street !== streetId) return;
+    const status = streetStatus(order, line[streetId]);
+    if (status.closed || status.seat !== seat) return;
+    const next = { ...line, [streetId]: [...line[streetId], { seat, action }] };
+    setLine(next);
+    syncPrice(next);
+  }
+
+  function undoLine(streetId: StreetId) {
+    if (!line[streetId].length) return;
+    const next = { ...line, [streetId]: line[streetId].slice(0, -1) };
+    setLine(next);
+    syncPrice(next);
   }
 
   const api: HandApi = {
@@ -226,6 +239,7 @@ export function HandProvider({
     open,
     resetHand,
     chooseLine,
+    undoLine,
     used,
     choose,
     holdGuard,
@@ -316,6 +330,7 @@ export function EquityDesk() {
     open,
     resetHand,
     chooseLine,
+    undoLine,
     used,
     choose,
     holdGuard,
@@ -417,7 +432,7 @@ export function EquityDesk() {
           ))}
         </div>
         {board.length >= 3 ? (
-          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" onAction={(seat, action) => chooseLine("flop", seat, action)} />
+          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
         ) : (
           <p className="mt-1 text-xs text-muted">Три карты, затем действие каждого оппонента по очереди.</p>
         )}
@@ -426,14 +441,14 @@ export function EquityDesk() {
       <Step n={4} title="Тёрн" done={board.length >= 4} locked={board.length < 3}>
         <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
         {board.length >= 4 ? (
-          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" onAction={(seat, action) => chooseLine("turn", seat, action)} />
+          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
         ) : null}
       </Step>
 
       <Step n={5} title="Ривер" done={board.length >= 5} locked={board.length < 4}>
         <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
         {board.length >= 5 ? (
-          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" onAction={(seat, action) => chooseLine("river", seat, action)} />
+          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
         ) : null}
       </Step>
 
@@ -605,62 +620,84 @@ function WizardLine({
   bb,
   line,
   only,
+  hint,
   onAction,
+  onUndo,
 }: {
   spotId: string;
   hero: Seat;
   bb: number;
   line: Line;
   only: StreetId;
+  hint: string;
   onAction: (seat: Seat, action: LineAction) => void;
+  onUndo: () => void;
 }) {
   const seats = seatsInHand(spotId);
+  const acts = line[only];
+  const status = streetStatus(seats, acts);
+  const earlier = openStreet(line, only === "flop" ? 3 : only === "turn" ? 4 : 5, seats);
+  const blocked = earlier != null && earlier.street !== only;
+  const actions = status.facing ? FACING_ACTIONS : OPEN_ACTIONS;
+  const suggest = status.seat === hero && !blocked ? suggested(hint, status.facing) : null;
   return (
-    <div className="mt-2 flex gap-1 overflow-x-auto">
-      {seats.map((seat, index) => {
-        const facing = seats.slice(0, index).some((prev) => {
-          const action = line[only][prev];
-          return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
-        });
-        const earlier = seats.slice(0, index).filter((prev) => prev !== hero);
-        const waiting = ! (seat === hero) && earlier.some((prev) => !line[only][prev]);
-        const actions = facing ? FACING_ACTIONS : OPEN_ACTIONS;
-        const chosen = line[only][seat];
-        const mine = seat === hero;
-        return (
-          <div
-            key={seat}
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-1">
+        {acts.map((act, index) => (
+          <span
+            key={`${act.seat}-${index}`}
             className={cn(
-              "w-[5.5rem] shrink-0 rounded-lg border p-1",
-              mine ? "border-ok" : waiting ? "border-border opacity-40" : "border-border",
+              "rounded-full border px-2 py-1 text-xs",
+              act.seat === hero ? "border-ok text-fg" : "border-border text-muted",
             )}
           >
-            <div className="flex items-center justify-between px-1 text-[11px]">
-              <span className="font-medium">{seat}</span>
-              <span className="font-mono text-muted">{seatStack(seat, bb)}</span>
-            </div>
-            <div className={cn("mt-1 flex flex-col", waiting ? "pointer-events-none" : "")}>
-              {mine ? (
-                <p className="px-1 py-1 text-xs text-muted">ваш ход</p>
-              ) : (
-                actions.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => onAction(seat, item.id)}
-                    className={cn(
-                      "rounded px-1 py-1 text-left text-xs",
-                      chosen === item.id ? "bg-fg text-bg" : "text-muted",
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                ))
-              )}
-            </div>
+            {act.seat} {act.action === "bet33" ? "Bet 33%" : act.action === "bet66" ? "Bet 66%" : act.action === "allin" ? "All-in" : act.action[0]!.toUpperCase() + act.action.slice(1)}
+          </span>
+        ))}
+        {acts.length > 0 ? (
+          <button type="button" onClick={onUndo} className="rounded-full border border-border px-2 py-1 text-xs text-muted">
+            назад
+          </button>
+        ) : null}
+      </div>
+      {blocked ? (
+        <p className="mt-2 text-xs text-muted">Сначала закрой предыдущую улицу.</p>
+      ) : status.closed ? (
+        <p className="mt-2 text-xs text-muted">Улица закрыта.</p>
+      ) : (
+        <div className={cn("mt-2 rounded-lg border p-2", status.seat === hero ? "border-ok" : "border-border")}>
+          <p className="text-xs">
+            <span className="font-medium">{status.seat}</span>
+            <span className="ml-2 font-mono text-muted">{status.seat ? seatStack(status.seat, bb) : ""}</span>
+            <span className="ml-2 text-muted">{status.seat === hero ? "ваш ход" : "ход оппонента"}</span>
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {actions.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => status.seat && onAction(status.seat, item.id)}
+                className={cn(
+                  "h-9 rounded-md border px-2 text-xs",
+                  suggest === item.id ? "border-ok font-semibold text-fg" : "border-border text-muted",
+                )}
+              >
+                {item.label}
+                {suggest === item.id ? " · совет" : ""}
+              </button>
+            ))}
           </div>
-        );
-      })}
+        </div>
+      )}
     </div>
   );
+}
+
+function suggested(verdict: string, facing: boolean): LineAction | null {
+  if (verdict === "Фолд") return "fold";
+  if (verdict === "Колл") return "call";
+  if (verdict === "Рейз") return "raise";
+  if (verdict === "Чек") return "check";
+  if (verdict === "Ставка" || verdict === "Пуш") return facing ? "allin" : "bet66";
+  return null;
 }
