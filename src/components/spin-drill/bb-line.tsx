@@ -3,7 +3,7 @@ import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
-import { BoardLine, useHand } from "@/components/spin-drill/equity-desk";
+import { BoardLine, Hole, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
 type Pick = { spot?: string; mine?: MixAction };
@@ -52,7 +52,8 @@ export function ActionLine({
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   return (
     <div className="mt-3">
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex items-start gap-1 overflow-x-auto pb-1">
+        <Hole />
         {cols.map((col, index) => (
           <div
             key={`${col.seat}-${index}`}
@@ -128,18 +129,18 @@ export function ActionLine({
             <span className="text-[10px] font-medium">верно</span>
           </div>
         ) : null}
+        <BoardLine openBoard={live} />
       </div>
-      <BoardLine openBoard={live} />
       <p className={cn("mt-1 text-sm", expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {board.length >= 5
-          ? "На каждой улице подписано, чем рука стала. Галочка справа — раздача закрыта, это итог."
+          ? "Лента слева направо: карты, ходы, галочка улицы. Последняя галочка — раздача закрыта."
           : board.length >= 3
-            ? "На улице крупно: комбинация или «нет пары · старшая карта»."
+            ? "После галочки префлопа идут карты улицы и колонки ходов. Галочка — улица закрыта."
             : expected
               ? `Солвер ждёт: ${expectedLabel}. Эта кнопка подсвечена в колонке «ваш ход».`
               : mine
                 ? `Вы отметили ${heroLabel(spot, bb, mine)}. Выберите руку в рейндже — солвер скажет, верно ли это.`
-                : "Зелёная колонка — ваш ход. Сначала выберите руку в рейндже, солвер подсветит кнопку."}
+                : "Слева ваши карты, потом ваш ход, потом оппоненты. Галочка — цикл закрыт."}
       </p>
     </div>
   );

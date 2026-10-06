@@ -13,7 +13,6 @@ import {
   seatStack,
   seatsInHand,
   streetStatus,
-  actingOrder,
   type Line,
   type LineAction,
   type Seat,
@@ -606,7 +605,27 @@ function CardSlot({
   );
 }
 
-function WizardLine({
+function seatHead(seat: string): string {
+  if (seat === "SB") return "bg-amber-800/80 text-amber-50";
+  if (seat === "BB") return "bg-orange-900/80 text-orange-50";
+  return "bg-zinc-700 text-zinc-50";
+}
+
+export function Hole() {
+  const { cards, queue, open } = useHand();
+  return (
+    <div className="w-[5.6rem] shrink-0 rounded-lg border border-border p-1">
+      <p className="px-1 text-[11px] font-medium">Вы</p>
+      <div className="mt-1 flex gap-1">
+        {(["h0", "h1"] as const).map((slot) => (
+          <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StreetColumns({
   spotId,
   hero,
   bb,
@@ -629,121 +648,143 @@ function WizardLine({
   const jammed = preflopAllin(spotId);
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
-  const earlier = openStreet(line, only === "flop" ? 3 : only === "turn" ? 4 : 5, seats, jammed);
-  const blocked = earlier != null && earlier.street !== only;
-  const queue = actingOrder(seats, line, only, jammed);
-  const actions = status.facing ? FACING_ACTIONS : OPEN_ACTIONS;
-  const suggest = status.seat === hero && !blocked ? suggested(hint, status.facing) : null;
-  const { pot } = useHand();
+  const { pot, callText, setCallText } = useHand();
   const title = (action: LineAction, seat: Seat) => actionTitle(action, pot, seatStack(seat, bb));
+  const cols: { seat: Seat; selected: LineAction | null; live: boolean }[] = acts.map((act) => ({
+    seat: act.seat,
+    selected: act.action,
+    live: false,
+  }));
+  if (!status.closed && status.seat) cols.push({ seat: status.seat, selected: null, live: true });
+  const suggest = status.seat === hero ? suggested(hint, status.facing) : null;
+  const liveMenu = status.facing ? FACING_ACTIONS : OPEN_ACTIONS;
+  const opponentLive = !status.closed && status.seat != null && status.seat !== hero;
   return (
-    <div className="mt-2">
-      <p className="text-[11px] text-muted">
-        Очередь: {queue.length ? queue.join(" → ") : "ставок больше нет"}
-        {status.seat ? ` · сейчас ${status.seat}` : ""}
-      </p>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
-        {acts.map((act, index) => (
-          <span
-            key={`${act.seat}-${index}`}
-            className={cn(
-              "rounded-full border px-2 py-1 text-xs",
-              act.seat === hero ? "border-ok text-fg" : "border-border text-muted",
-            )}
+    <>
+      {cols.map((col, index) => {
+        const menu =
+          col.live ? liveMenu : col.selected === "fold" || col.selected === "call" || col.selected === "raise" ? FACING_ACTIONS : OPEN_ACTIONS;
+        return (
+          <div
+            key={`${col.seat}-${index}`}
+            className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.seat === hero ? "border-ok" : "border-border")}
           >
-            {act.seat} {title(act.action, act.seat)}
-          </span>
-        ))}
-        {acts.length > 0 ? (
-          <button type="button" onClick={onUndo} className="rounded-full border border-border px-2 py-1 text-xs text-muted">
-            назад
-          </button>
-        ) : null}
-      </div>
-      {blocked ? (
-        <p className="mt-2 text-xs text-muted">Сначала закрой предыдущую улицу.</p>
-      ) : status.closed ? (
-        <p className="mt-2 text-xs text-muted">Улица закрыта.</p>
-      ) : (
-        <div className={cn("mt-2 rounded-lg border p-2", status.seat === hero ? "border-ok" : "border-border")}>
-          <p className="text-xs">
-            <span className="font-medium">{status.seat}</span>
-            <span className="ml-2 font-mono text-muted">{status.seat ? seatStack(status.seat, bb) : ""}</span>
-            <span className="ml-2 text-muted">{status.seat === hero ? "ваш ход" : "ход оппонента"}</span>
-          </p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {actions.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => status.seat && onAction(status.seat, item.id)}
-                className={cn(
-                  "h-9 rounded-md border px-2 text-xs",
-                  suggest === item.id ? "border-ok font-semibold text-fg" : "border-border text-muted",
-                )}
-              >
-                {title(item.id, status.seat ?? hero)}
-                {suggest === item.id ? " · совет" : ""}
+            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", seatHead(col.seat))}>
+              <span className="font-medium">{col.seat === hero ? `${col.seat} · ваш ход` : col.seat}</span>
+              <span className="font-mono">{seatStack(col.seat, bb)}</span>
+            </div>
+            <div className="mt-1 flex flex-col">
+              {menu.map((item) => {
+                const on = col.selected === item.id;
+                const wanted = col.live && col.seat === hero && suggest === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={!col.live}
+                    onClick={() => col.live && onAction(col.seat, item.id)}
+                    className={cn(
+                      "rounded px-1 py-1 text-left text-xs",
+                      on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
+                      !col.live && !on ? "opacity-40" : "",
+                    )}
+                  >
+                    {title(item.id, col.seat)}
+                    {wanted && !on ? " · солвер" : ""}
+                  </button>
+                );
+              })}
+            </div>
+            {index === cols.length - 1 && acts.length > 0 ? (
+              <button type="button" onClick={onUndo} className="mt-1 w-full rounded px-1 py-0.5 text-left text-[11px] text-muted">
+                назад
               </button>
-            ))}
+            ) : null}
           </div>
-        </div>
-      )}
+        );
+      })}
+      {opponentLive ? (
+        <label className="w-[6.4rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
+          <span className="block px-1 font-medium">Его рейз, bb</span>
+          <input
+            inputMode="decimal"
+            value={callText}
+            placeholder="2"
+            aria-label="Размер ставки оппонента, если он не как на кнопке"
+            onChange={(event) => setCallText(event.target.value)}
+            className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
+          />
+          <span className="mt-1 block px-1 leading-tight text-muted">Если поставил не 2 и не 4.</span>
+        </label>
+      ) : null}
+    </>
+  );
+}
+
+function CycleMark({ label }: { label: string }) {
+  return (
+    <div className="grid w-14 shrink-0 place-items-center self-center text-center text-ok" title={label}>
+      <svg viewBox="0 0 24 24" className="h-9 w-9" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="text-[10px] font-medium">{label}</span>
     </div>
   );
 }
 
 export function BoardLine({ openBoard }: { openBoard: boolean }) {
   const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, undoLine } = useHand();
-  const finished = openBoard && handFinished(spot.id, line, board.length);
+  if (!openBoard) return null;
+  const seats = seatsInHand(spot.id);
+  const jammed = preflopAllin(spot.id);
   const hole = hero ? [hero[0], hero[1]] : [];
+  const flopClosed = board.length >= 3 && streetStatus(seats, line, "flop", jammed).closed;
+  const turnClosed = board.length >= 4 && streetStatus(seats, line, "turn", jammed).closed;
+  const finished = handFinished(spot.id, line, board.length);
+  const hint = shown?.verdict ?? "";
   return (
-    <div className="mt-2">
-      <div className="flex items-start gap-2 overflow-x-auto pb-1">
-        <div className="w-[7.2rem] shrink-0 rounded-lg border border-border p-1">
-          <p className="px-1 text-[11px] font-medium">Вы</p>
-          <div className="mt-1 flex gap-1">
-            {(["h0", "h1"] as const).map((slot) => (
-              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
-            ))}
-          </div>
+    <>
+      <div className={cn("shrink-0 rounded-lg border border-border p-1", !hero ? "pointer-events-none opacity-40" : "")}>
+        <p className="px-1 text-[11px] font-medium">Флоп</p>
+        <div className="mt-1 flex gap-1">
+          {(["f0", "f1", "f2"] as const).map((slot) => (
+            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+          ))}
         </div>
-        {openBoard ? (
-          <>
-            <StreetBlock title="Флоп" locked={!hero}>
-              <div className="flex gap-1">
-                {(["f0", "f1", "f2"] as const).map((slot) => (
-                  <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
-                ))}
-              </div>
-              <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
-              {board.length >= 3 ? (
-                <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
-              ) : (
-                <p className="mt-1 text-[11px] text-muted">Три карты, потом ходы.</p>
-              )}
-            </StreetBlock>
-            <StreetBlock title="Тёрн" locked={board.length < 3}>
-              <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
-              <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
-              {board.length >= 4 ? (
-                <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
-              ) : null}
-            </StreetBlock>
-            <StreetBlock title="Ривер" locked={board.length < 4}>
-              <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
-              <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
-              {board.length >= 5 ? (
-                <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
-              ) : null}
-            </StreetBlock>
-            {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
-          </>
-        ) : (
-          <p className="self-center text-xs text-muted">Флоп откроется здесь, когда вы не сбросите карты.</p>
-        )}
+        <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
       </div>
-    </div>
+      {board.length >= 3 ? (
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
+      ) : null}
+      {flopClosed ? <CycleMark label="флоп" /> : null}
+      {flopClosed ? (
+        <div className="shrink-0 rounded-lg border border-border p-1">
+          <p className="px-1 text-[11px] font-medium">Тёрн</p>
+          <div className="mt-1">
+            <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
+          </div>
+          <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
+        </div>
+      ) : null}
+      {board.length >= 4 ? (
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
+      ) : null}
+      {turnClosed ? <CycleMark label="тёрн" /> : null}
+      {turnClosed ? (
+        <div className="shrink-0 rounded-lg border border-border p-1">
+          <p className="px-1 text-[11px] font-medium">Ривер</p>
+          <div className="mt-1">
+            <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
+          </div>
+          <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
+        </div>
+      ) : null}
+      {board.length >= 5 ? (
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
+      ) : null}
+      {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
+    </>
   );
 }
 
@@ -795,15 +836,6 @@ function handFinished(spotId: string, line: Line, boardLength: number): boolean 
   if (!streetStatus(seats, line, last, jammed).closed) return false;
   const folded = (["flop", "turn", "river"] as const).some((street) => line[street].some((act) => act.action === "fold"));
   return last === "river" || folded;
-}
-
-function StreetBlock({ title, locked, children }: { title: string; locked?: boolean; children: ReactNode }) {
-  return (
-    <div className={cn("min-w-[9rem] shrink-0 rounded-lg border border-ok p-1", locked ? "pointer-events-none opacity-40" : "")}>
-      <p className="px-1 text-[11px] font-medium">{title}</p>
-      <div className="mt-1">{children}</div>
-    </div>
-  );
 }
 
 function isSummary(verdict: string, street: string): boolean {
