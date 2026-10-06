@@ -5,6 +5,7 @@ import { COMBOS, type Combo } from "@/lib/spin-drill/combos";
 import { ALL, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
+import { paintHex, huBbLimpPaint, sizeCaption, sizeMark, SIZE_ORDER } from "@/lib/spin-drill/hu-bb-limp";
 import { cellDistance, nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
@@ -604,12 +605,17 @@ function Sapper({
   onClear: () => void;
 }) {
   const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
-  const shape = useMemo(() => buildShape(range), [range]);
+  const sizes = useMemo(() => (spot.id === "hu_bb_limp" ? huBbLimpPaint(bb) : null), [spot.id, bb]);
+  const shape = useMemo(() => buildShape(range, sizes), [range, sizes]);
   const actions = useMemo(() => {
+    if (sizes) {
+      const used = new Set(Object.values(sizes));
+      return SIZE_ORDER.filter((size) => used.has(size));
+    }
     const used = new Set(Object.values(shape.action));
     return spot.actions.filter((action) => used.has(action));
-  }, [shape, spot.actions]);
-  const [armed, setArmed] = useState<MixAction | null>(null);
+  }, [sizes, shape, spot.actions]);
+  const [armed, setArmed] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, CellMark>>({});
   const [fx, setFx] = useState<Record<string, "pop" | "blast">>({});
   const [streak, setStreak] = useState(0);
@@ -723,7 +729,7 @@ function Sapper({
   }, [tick, paused, quiz, phase]);
 
   useEffect(() => {
-    const keys = ["a", "s", "d", "f"];
+    const keys = ["a", "s", "d", "f", "g", "h", "j", "k"];
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === " " || event.code === "Space") {
@@ -969,7 +975,7 @@ function Sapper({
   }
 
   const rewardShape = useMemo(
-    () => buildShape(rangeAtStack(spot.range, spot.id, rewardBb)),
+    () => buildShape(rangeAtStack(spot.range, spot.id, rewardBb), spot.id === "hu_bb_limp" ? huBbLimpPaint(rewardBb) : null),
     [spot, rewardBb],
   );
 
@@ -1032,21 +1038,25 @@ function Sapper({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {actions.map((a, i) => (
+        {actions.map((a, i) => {
+          const hex = paintHex(a);
+          return (
           <button
             key={a}
             type="button"
             onClick={() => setArmed(a)}
+            style={hex ? { background: hex } : undefined}
             className={cn(
-              "h-11 rounded-lg px-3 text-sm",
-              ACT[a],
+              "h-11 rounded-lg px-3 text-sm text-fg",
+              !hex && ACT[a as MixAction],
               armed === a ? "scale-110 text-base outline outline-2 outline-offset-2 outline-fg" : "opacity-70",
             )}
           >
-            <span className="mr-1.5 font-mono">{["A", "S", "D", "F"][i]}</span>
-            {actionLabel(spot, a, bb)}
+            <span className="mr-1.5 font-mono">{["A", "S", "D", "F", "G", "H", "J", "K"][i]}</span>
+            {sizes ? sizeCaption(a, bb) : actionLabel(spot, a as MixAction, bb)}
           </button>
-        ))}
+          );
+        })}
         <span className="font-mono text-xs text-muted">
           {streak === 0 ? "A S D F · закрытая граница закрашивает середину" : `цепочка ${streak}/5`}
         </span>
@@ -1097,6 +1107,7 @@ function Sapper({
             const h = handAt(r, c);
             const mark = marks[h];
             const action = shape.action[h]!;
+            const hex = paintHex(action);
             const n = shape.diffCount[h] ?? 0;
             const inPart = peek === "part" && cellDistance(lastHand.current, h) <= 3;
             const revealed = Boolean(mark) || !live || paused || peek === "all" || inPart || phase === "time" || phase === "win";
@@ -1106,9 +1117,12 @@ function Sapper({
                 type="button"
                 disabled={!live || paused || peek != null || Boolean(mark) || done || quiz != null || closing.includes(h)}
                 onClick={() => paint(h)}
+                style={revealed && hex ? { background: hex } : undefined}
                 className={cn(
                   "relative flex aspect-square origin-center items-center justify-center font-mono text-base font-bold leading-none tracking-tighter sm:text-xl md:text-2xl",
-                  revealed ? ACT[action] : "bg-surface-2 text-muted",
+                  revealed && !hex ? ACT[action as MixAction] : "",
+                  revealed && hex ? "text-fg" : "",
+                  !revealed && "bg-surface-2 text-muted",
                   mark === "miss" && "outline outline-2 outline-bad",
                   closing.includes(h) && "range-shut",
                   doomed.includes(h) && "range-warn",
@@ -1117,6 +1131,9 @@ function Sapper({
                   !closing.includes(h) && fx[h] === "blast" && "range-blast",
                 )}
               >
+                {revealed && sizeMark(action) ? (
+                  <span className="absolute top-0.5 left-0.5 text-[10px] leading-none sm:text-xs">{sizeMark(action)}</span>
+                ) : null}
                 {h}
                 {revealed && n > 0 ? (
                   <span className="absolute top-0.5 right-0.5 text-[9px] text-fg/80">{n}</span>
@@ -1194,17 +1211,19 @@ function Sapper({
                     Array.from({ length: 13 }, (_, c) => {
                       const h = handAt(r, c);
                       const action = rewardShape.action[h]!;
+                      const hex = paintHex(action);
                       const changed = action !== shape.action[h];
                       return (
                         <div
                           key={h}
+                          style={hex ? { background: hex } : undefined}
                           className={cn(
                             "flex aspect-square items-center justify-center font-mono text-xs font-bold leading-none tracking-tighter sm:text-sm",
-                            ACT[action],
+                            !hex && ACT[action as MixAction],
                             changed && "outline outline-2 outline-fg",
                           )}
                         >
-                          {h}
+                          {sizeMark(action) || h}
                         </div>
                       );
                     }),

@@ -1,4 +1,5 @@
 import { huSbAt } from "./hu-sb-gto";
+import { huBbLimpRange } from "./hu-bb-limp";
 import { ALL, handAt } from "./legacy-ranges";
 import { emptyMix, mixOf, primary, type MixAction, type MixRange } from "./mix";
 
@@ -227,6 +228,10 @@ export function stackNote(bb: number): string {
 export function rangeAtStack(base: MixRange, spotId: string, bb: number): MixRange {
   const depth = Math.max(1, Math.min(30, Math.round(bb)));
   if (spotId === "hu_sb") return huSbAt(depth);
+  if (spotId === "hu_bb_limp") {
+    const sized = huBbLimpRange(depth);
+    if (sized) return sized;
+  }
   if (depth === 15) return base;
   if (spotId === "btn") return openRange(base, depth, false);
   if (spotId === "sb_fold") return openRange(base, depth, true);

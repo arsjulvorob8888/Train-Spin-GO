@@ -39,6 +39,7 @@ import {
   spotStat,
   type Store,
 } from "@/lib/spin-drill/stats";
+import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -272,6 +273,7 @@ export function SpinApp() {
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
+  const paint = useMemo(() => (spot.id === "hu_bb_limp" ? huBbLimpPaint(bb) : null), [spot.id, bb]);
   const labels = useMemo(() => labelsAt(spot, bb), [spot, bb]);
   const statId = bb === 15 ? spot.id : `${spot.id}@${bb}`;
   const st = spotStat(store, spot.id);
@@ -517,14 +519,22 @@ export function SpinApp() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <MixGrid range={range} selected={selected} onPick={setSelected} />
+                  <MixGrid range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
                 </div>
                 <StackRail bb={bb} onChange={setBb} />
               </div>
-              <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
+              <p className="mt-2 text-sm text-muted">
+                {spot.id === "hu_bb_limp"
+                  ? paint
+                    ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза."
+                    : "Точный чарт этого стека ещё не снят. На 30bb уже стоят размеры рейза со скрина."
+                  : stackNote(bb)}
+              </p>
               <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
                 <p className="font-mono text-lg font-semibold">{selected}</p>
-                <p className="mb-3 text-sm text-muted">{labels[primary(mixOf(range, selected))]}</p>
+                <p className="mb-3 text-sm text-muted">
+                  {paint?.[selected] ? sizeCaption(paint[selected], bb) : labels[primary(mixOf(range, selected))]}
+                </p>
                 <MixBars range={range} hand={selected} labels={labels} />
               </div>
               <div className="mt-3">
@@ -610,7 +620,7 @@ export function SpinApp() {
                 <Legend spot={{ ...spot, labels }} />
                 <div className="mt-3 flex items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
-                    <MixGrid range={range} selected={current} onPick={setSelected} />
+                    <MixGrid range={range} paint={paint} bb={bb} selected={current} onPick={setSelected} />
                   </div>
                   <StackRail bb={bb} onChange={setBb} />
                 </div>
@@ -667,7 +677,7 @@ export function SpinApp() {
                     {!lastGrade && "Выберите действие"}
                     {lastGrade === "correct" && "Верно"}
                     {lastGrade === "mix" && current && `Микс · чаще ${labels[primary(mixOf(range, current))]}`}
-                    {lastGrade === "wrong" && current && `Ошибка · нужно ${labels[primary(mixOf(range, current))]}`}
+                    {lastGrade === "wrong" && current && `Ошибка · нужно ${paint?.[current] ? sizeCaption(paint[current], bb) : labels[primary(mixOf(range, current))]}`}
                   </p>
                   <p className="text-center font-mono text-sm text-muted">{current}</p>
                   <EquityHintLine hand={current} spotId={spot.id} />

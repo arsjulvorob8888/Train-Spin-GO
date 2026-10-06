@@ -1,20 +1,20 @@
 import { handAt } from "./legacy-ranges";
-import { mixOf, primary, type MixAction, type MixRange } from "./mix";
+import { mixOf, primary, type MixRange } from "./mix";
 
 export type Shape = {
-  action: Record<string, MixAction>;
+  action: Record<string, string>;
   neighbors: Record<string, string[]>;
   /** How many neighbors play a different primary action. 0 = deep inside one color. */
   diffCount: Record<string, number>;
 };
 
 /** One color per hand: the most frequent action. Mixes are collapsed. */
-export function buildShape(range: MixRange): Shape {
-  const action: Record<string, MixAction> = {};
+export function buildShape(range: MixRange, paint?: Record<string, string> | null): Shape {
+  const action: Record<string, string> = {};
   for (let r = 0; r < 13; r++) {
     for (let c = 0; c < 13; c++) {
       const h = handAt(r, c);
-      action[h] = primary(mixOf(range, h));
+      action[h] = paint?.[h] ?? primary(mixOf(range, h));
     }
   }
   const neighbors: Record<string, string[]> = {};

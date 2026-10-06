@@ -1,4 +1,5 @@
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
+import { paintHex, sizeMark, SIZE_ORDER, sizeCaption, type BbSize } from "@/lib/spin-drill/hu-bb-limp";
 import { mixOf, segs, type MixRange } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
 import type { SpotStat } from "@/lib/spin-drill/stats";
@@ -38,16 +39,22 @@ export function MixGrid({
   selected,
   stats,
   onPick,
+  paint,
+  bb = 30,
 }: {
   range: MixRange;
   selected?: string | null;
   stats?: SpotStat;
   onPick?: (h: string) => void;
+  paint?: Record<string, BbSize> | null;
+  bb?: number;
 }) {
   const cells = [];
   for (let i = 0; i < 13; i++) {
     for (let j = 0; j < 13; j++) {
       const h = handAt(i, j);
+      const sized = paint?.[h];
+      const hex = sized ? paintHex(sized) : null;
       const m = mixOf(range, h);
       const rec = stats?.hands[h];
       const acc = rec && rec.total ? Math.round((rec.correct / rec.total) * 100) : null;
@@ -61,8 +68,10 @@ export function MixGrid({
             selected === h && "z-2 outline outline-2 outline-offset-1 outline-fg",
           )}
         >
-          <div className="absolute inset-0 flex">
-            {segs(m).map((s) => (
+          <div className="absolute inset-0 flex" style={hex ? { background: hex } : undefined}>
+            {hex
+              ? null
+              : segs(m).map((s) => (
               <span
                 key={s.a}
                 className={cn("relative block h-full", BAR[s.a])}
@@ -76,6 +85,11 @@ export function MixGrid({
               </span>
             ))}
           </div>
+          {sized && sizeMark(sized) ? (
+            <span className="absolute top-0.5 left-0.5 z-10 font-mono text-[11px] font-bold leading-none text-fg [text-shadow:0_1px_2px_#000a] sm:text-sm">
+              {sizeMark(sized)}
+            </span>
+          ) : null}
           <span className="relative z-10 flex h-full flex-col justify-end p-0.5 font-mono text-xs font-bold leading-none tracking-tighter text-fg [text-shadow:0_1px_2px_#0008] sm:text-sm">
             {h}
             {acc != null && <span className="self-end text-[9px]">{acc}%</span>}
@@ -84,8 +98,19 @@ export function MixGrid({
       );
     }
   }
+  const used = paint ? SIZE_ORDER.filter((size) => Object.values(paint).includes(size)) : [];
   return (
     <div className="w-full overflow-x-auto">
+      {used.length ? (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {used.map((size) => (
+            <span key={size} className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1 font-mono text-xs text-fg">
+              <i className="block h-3 w-3 rounded-sm" style={{ background: paintHex(size) ?? undefined }} />
+              {sizeCaption(size, bb)}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="relative grid min-w-0 grid-cols-13 gap-px bg-bg">
         {cells}
         <PairLine />
