@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SpotDef } from "@/lib/spin-drill/spots";
-import type { MixAction } from "@/lib/spin-drill/mix";
+import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
+import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
 import { BoardLine, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
@@ -20,12 +21,16 @@ export function ActionLine({
   spot,
   bb,
   mine,
+  range,
+  selected,
   onSpot,
   onMine,
 }: {
   spot: SpotDef;
   bb: number;
   mine: MixAction | "";
+  range: MixRange;
+  selected: string;
   onSpot: (id: string) => void;
   onMine: (action: MixAction) => void;
 }) {
@@ -38,10 +43,11 @@ export function ActionLine({
     }
   }, [spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct);
-  const { sizeText, setSizeText } = useHand();
+  const { sizeText, setSizeText, shown } = useHand();
   const live = mine === "call" || mine === "raise" || mine === "allin";
   const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
   const chartSize = chartRaiseTo(spot.id, bb);
+  const doneRight = cycleClosed(cols) && actionMatches(mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
   return (
     <div className="mt-3">
       <div className="flex gap-1 overflow-x-auto pb-1">
@@ -109,6 +115,15 @@ export function ActionLine({
             <span className="mt-1 block px-1 text-muted">пусто = чарт</span>
           </label>
         ) : null}
+        {doneRight ? (
+          <div className="grid w-14 shrink-0 place-items-center self-center text-ok" title="Цикл закрыт, действие верное">
+            <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[10px] font-medium">верно</span>
+          </div>
+        ) : null}
       </div>
       <BoardLine openBoard={live} />
       <p className="mt-1 text-xs text-muted">
@@ -116,6 +131,20 @@ export function ActionLine({
       </p>
     </div>
   );
+}
+
+function cycleClosed(cols: Column[]): boolean {
+  if (!cols.some((col) => col.hero && col.selected)) return false;
+  return cols.every((col) => Boolean(col.selected) || col.actions.length <= 1);
+}
+
+function actionMatches(mine: MixAction | "", hand: string, range: MixRange, sizeText: string, verdict: string | null): boolean {
+  if (!mine || !hand) return false;
+  if (sizeText.trim() && verdict) {
+    const want = verdict === "Фолд" || verdict === "Fold" ? "fold" : verdict === "Колл" || verdict === "Call" || verdict === "Чек" ? "call" : verdict === "Рейз" || verdict === "Ставка" ? "raise" : verdict === "Пуш" ? "allin" : "";
+    return want === mine;
+  }
+  return primary(mixOf(range, hand)) === mine;
 }
 
 function columns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind): Column[] {

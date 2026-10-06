@@ -623,7 +623,7 @@ export function SpinApp() {
                   }
                 />
               </div>
-              <ActionLine spot={spot} bb={bb} mine={mine} onSpot={changeSpot} onMine={setMine} />
+              <ActionLine spot={spot} bb={bb} mine={mine} range={range} selected={selected} onSpot={changeSpot} onMine={setMine} />
               <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
               <EquityDesk />
               <div className="mt-3 flex items-stretch gap-3 select-none">
