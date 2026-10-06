@@ -309,7 +309,7 @@ function Meta({ spot, bb, range, labels }: { spot: SpotDef; bb: number; range: M
 }
 
 export function SpinApp() {
-  const [tab, setTab] = useState<Tab>("experiment");
+  const [tab, setTab] = useState<Tab>("strategy");
   const [spotId, setSpotId] = useState("btn");
   const [mine, setMine] = useState<MixAction | "">("");
   const [group, setGroup] = useState<SpotGroup>("BTN");
