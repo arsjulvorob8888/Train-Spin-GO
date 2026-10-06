@@ -15,7 +15,7 @@ import {
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const RANKS = [...RANK_CHARS].reverse();
@@ -36,7 +36,9 @@ export function EquityDesk({
   onHand: (hand: string) => void;
 }) {
   const [cards, setCards] = useState<Partial<Record<Slot, Card>>>({});
-  const [picking, setPicking] = useState<Slot | null>(null);
+  const [queue, setQueue] = useState<Slot[]>([]);
+  const queueRef = useRef<Slot[]>([]);
+  const cardsRef = useRef<Partial<Record<Slot, Card>>>({});
   const [guard, setGuard] = useState(false);
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
@@ -63,18 +65,22 @@ export function EquityDesk({
   }, [hero, board, spot.id, bb, range, labels, pot, toCall, line]);
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
-  function used(card: Card, except: Slot): boolean {
-    return SLOTS.some((slot) => slot !== except && cards[slot] && cards[slot]!.rank === card.rank && cards[slot]!.suit === card.suit);
+  function used(card: Card): boolean {
+    return SLOTS.some((slot) => cards[slot] && cards[slot]!.rank === card.rank && cards[slot]!.suit === card.suit);
   }
 
   function choose(rank: number, suit: number) {
-    if (picking == null) return;
-    const card = { rank, suit };
-    if (used(card, picking)) return;
-    const next = { ...cards, [picking]: card };
+    const slot = queueRef.current[0];
+    if (!slot) return;
+    const prev = cardsRef.current;
+    if (SLOTS.some((item) => prev[item] && prev[item]!.rank === rank && prev[item]!.suit === suit)) return;
+    const next = { ...prev, [slot]: { rank, suit } };
+    cardsRef.current = next;
     setCards(next);
-    setPicking(null);
-    holdGuard();
+    const rest = queueRef.current.slice(1);
+    queueRef.current = rest;
+    setQueue(rest);
+    if (rest.length === 0) holdGuard();
     if (next.h0 && next.h1) onHand(shownKlass(next.h0, next.h1));
   }
 
@@ -123,7 +129,7 @@ export function EquityDesk({
       <Step n={2} title="Ваши карты" done={Boolean(hero)}>
         <div className="flex gap-2">
           {(["h0", "h1"] as const).map((slot) => (
-            <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} onClick={() => open(slot)} />
+            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} onClick={() => open(slot)} />
           ))}
         </div>
       </Step>
@@ -131,7 +137,7 @@ export function EquityDesk({
       <Step n={3} title="Флоп" done={board.length >= 3} locked={!hero}>
         <div className="flex gap-1">
           {(["f0", "f1", "f2"] as const).map((slot) => (
-            <CardSlot key={slot} card={cards[slot] ?? null} active={picking === slot} small onClick={() => open(slot)} />
+            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
           ))}
         </div>
         {board.length >= 3 ? (
@@ -142,14 +148,14 @@ export function EquityDesk({
       </Step>
 
       <Step n={4} title="Тёрн" done={board.length >= 4} locked={board.length < 3}>
-        <CardSlot card={cards.t ?? null} active={picking === "t"} small onClick={() => open("t")} />
+        <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
         {board.length >= 4 ? (
           <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" onAction={(seat, action) => chooseLine("turn", seat, action)} />
         ) : null}
       </Step>
 
       <Step n={5} title="Ривер" done={board.length >= 5} locked={board.length < 4}>
-        <CardSlot card={cards.r ?? null} active={picking === "r"} small onClick={() => open("r")} />
+        <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
         {board.length >= 5 ? (
           <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" onAction={(seat, action) => chooseLine("river", seat, action)} />
         ) : null}
@@ -185,18 +191,19 @@ export function EquityDesk({
         </p>
       </Step>
 
-      {typeof document !== "undefined" && (picking || guard)
+      {typeof document !== "undefined" && (queue.length > 0 || guard)
         ? createPortal(
             <div
               className={cn(
                 "fixed inset-0 z-[80] flex items-end justify-center p-3 sm:items-center",
-                picking ? "bg-black/60" : "",
+                queue.length > 0 ? "bg-black/60" : "",
               )}
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (picking) {
-                  setPicking(null);
+                if (queue.length > 0) {
+                  queueRef.current = [];
+                  setQueue([]);
                   holdGuard();
                 }
               }}
@@ -205,19 +212,19 @@ export function EquityDesk({
                 event.stopPropagation();
               }}
             >
-              {picking ? (
+              {queue.length > 0 ? (
                 <div
                   className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3"
                   onPointerDown={(event) => event.stopPropagation()}
                 >
-                  <p className="text-sm font-medium">Карта</p>
+                  <p className="text-sm font-medium">{pickerTitle(queue[0]!)}</p>
                   <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
                     {RANKS.map((glyph) => {
                       const value = RANK_CHARS.indexOf(glyph);
                       return (
                         <div key={glyph} className="grid grid-cols-4 gap-1">
                           {SUIT_GLYPHS.map((suitGlyph, suit) => {
-                            const taken = used({ rank: value, suit }, picking);
+                            const taken = used({ rank: value, suit });
                             return (
                               <button
                                 key={suitGlyph}
@@ -229,7 +236,8 @@ export function EquityDesk({
                                   if (!taken) choose(value, suit);
                                 }}
                                 className={cn(
-                                  "h-9 rounded-md bg-card-face font-mono text-sm font-semibold disabled:opacity-20",
+                                  "h-9 rounded-md bg-card-face font-mono text-sm font-semibold disabled:opacity-100",
+                                  taken ? "ring-2 ring-yellow-400" : "",
                                   isRedSuit(suit) ? "text-suit-red" : "text-card-ink",
                                 )}
                               >
@@ -249,7 +257,7 @@ export function EquityDesk({
           )
         : null}
       {hero ? (
-        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { setCards({}); setPicking(null); setLine(emptyLine()); setPotText(""); setCallText(""); }}>
+        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={() => { cardsRef.current = {}; queueRef.current = []; setCards({}); setQueue([]); setLine(emptyLine()); setPotText(""); setCallText(""); }}>
           Начать раздачу заново
         </button>
       ) : null}
@@ -284,11 +292,29 @@ export function EquityDesk({
       const next = { ...cards };
       delete next[slot];
       setCards(next);
-      setPicking(null);
+      cardsRef.current = next;
+      setQueue([]);
+      queueRef.current = [];
       return;
     }
-    setPicking(slot);
+    const next = slot === "h0" || slot === "h1"
+      ? (["h0", "h1"] as const).filter((item) => !cards[item])
+      : slot === "f0" || slot === "f1" || slot === "f2"
+        ? (["f0", "f1", "f2"] as const).filter((item) => !cards[item])
+        : [slot];
+    queueRef.current = [...next];
+    setQueue([...next]);
   }
+}
+
+function pickerTitle(slot: Slot): string {
+  if (slot === "h0") return "Ваши карты · первая";
+  if (slot === "h1") return "Ваши карты · вторая";
+  if (slot === "f0") return "Флоп · первая";
+  if (slot === "f1") return "Флоп · вторая";
+  if (slot === "f2") return "Флоп · третья";
+  if (slot === "t") return "Тёрн";
+  return "Ривер";
 }
 
 function parseBb(raw: string): number | null {
