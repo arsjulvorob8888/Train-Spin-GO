@@ -3,7 +3,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
-import { lineNote, narrowSeat, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
+import { facingPrice, heroFacing, lineNote, narrowSeat, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
   "старшая карта",
@@ -163,11 +163,35 @@ function advice(opts: {
   street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
   made: string | null;
   draw: string | null;
+  facing: "none" | "bet" | "allin";
+  aggressor: string;
 }): { verdict: string; text: string } {
   const pct = Math.round(opts.equity * 100);
   if (opts.street !== "Префлоп") {
     const hand = opts.made ?? "старшая карта";
     const extra = opts.draw ? `, ${opts.draw}` : "";
+    const bare = !opts.draw && (opts.made == null || opts.made === "старшая карта");
+    const shape = bare ? "Пары и дро нет." : "";
+    if (opts.facing !== "none") {
+      const who = opts.facing === "allin" ? `${opts.aggressor} в олл-ине` : `${opts.aggressor} уже поставил`;
+      const need = opts.need == null ? null : Math.round(opts.need * 100);
+      if (opts.facing !== "allin" && opts.need != null && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55) {
+        return {
+          verdict: "Рейз",
+          text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} Нужно ${need}% на колл, у руки ${pct}%. Рейз вэлью.`,
+        };
+      }
+      if (opts.need != null && opts.equity + 0.01 >= opts.need) {
+        return {
+          verdict: "Колл",
+          text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} Нужно ${need}% на колл, у руки ${pct}%. Колл. Чек уже невозможен.`,
+        };
+      }
+      return {
+        verdict: "Фолд",
+        text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} ${need == null ? "" : `Нужно ${need}% на колл, у руки ${pct}%. `}Фолд: в ответ на ставку чек невозможен.`,
+      };
+    }
     const dropped = `Префлоп-чарт этой руки (${opts.label}) здесь не действие: борд уже открыт.`;
     if (opts.need == null) {
       const strong = (opts.made != null && opts.made !== "старшая карта" && opts.made !== "пара") || opts.equity >= 0.62;
@@ -368,18 +392,19 @@ export function consult(opts: {
     }
   }
 
-  if (!villain.random && note && combos.length === 0) {
-    win = iterations;
-    share = iterations;
-  }
-
   const equity = share / iterations;
   const auto = opts.board.length < 3 ? spotPrice(opts.spotId, opts.bb) : null;
+  const face =
+    opts.line && opts.board.length >= 3
+      ? heroFacing(opts.line, heroSeat, opts.board.length, seatsInHand(opts.spotId))
+      : null;
+  const priced = face ? facingPrice(face, heroSeat, opts.bb, opts.pot ?? null) : null;
   const userPrice =
     opts.toCall != null && opts.toCall > 0 && opts.pot != null && opts.pot >= 0
       ? opts.toCall / (opts.pot + opts.toCall)
       : null;
-  const need = userPrice ?? (auto ? auto.toCall / (auto.pot + auto.toCall) : null);
+  const need = userPrice ?? (priced ? priced.toCall / (priced.pot + priced.toCall) : auto ? auto.toCall / (auto.pot + auto.toCall) : null);
+  const facing = face ? (face.action === "allin" ? "allin" : "bet") : "none";
   const draws = opts.board.length >= 3 ? analyzeDraws(opts.hero, opts.board) : null;
   const drawBits = [
     draws?.flushDraw ? "флеш-дро" : "",
@@ -398,6 +423,8 @@ export function consult(opts: {
     bb: opts.bb,
     need,
     street,
+    facing,
+    aggressor: face?.seat ?? "",
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,
   });

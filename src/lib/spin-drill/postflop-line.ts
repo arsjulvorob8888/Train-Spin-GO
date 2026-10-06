@@ -56,6 +56,33 @@ export function seatStack(seat: Seat, bb: number): number {
   return Math.round(Math.max(0.5, left) * 10) / 10;
 }
 
+const AGGRESSIVE: LineAction[] = ["bet33", "bet66", "raise", "allin"];
+
+/** The bet the hero still has to answer. A shove on an earlier street still counts. */
+export function heroFacing(
+  line: Line,
+  hero: Seat,
+  boardLength: number,
+  order: Seat[],
+): { street: StreetId; seat: Seat; action: LineAction } | null {
+  const streets: StreetId[] = [];
+  if (boardLength >= 3) streets.push("flop");
+  if (boardLength >= 4) streets.push("turn");
+  if (boardLength >= 5) streets.push("river");
+  let found: { street: StreetId; seat: Seat; action: LineAction } | null = null;
+  for (const street of streets) {
+    if (line[street][hero] === "fold" || line[street][hero] === "call" || line[street][hero] === "raise" || line[street][hero] === "allin") {
+      continue;
+    }
+    for (const seat of order) {
+      if (seat === hero) continue;
+      const action = line[street][seat];
+      if (action && AGGRESSIVE.includes(action)) found = { street, seat, action };
+    }
+  }
+  return found;
+}
+
 export function lineActive(line: Line): boolean {
   return (["flop", "turn", "river"] as const).some((street) => Object.keys(line[street]).length > 0);
 }
@@ -83,6 +110,27 @@ export function callSize(action: LineAction, pot: number | null, stackBb: number
 
 function roundBb(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/** Pot the hero is calling, and how much he must add. User-typed pot wins. */
+export function facingPrice(
+  facing: { seat: Seat; action: LineAction },
+  hero: Seat,
+  bb: number,
+  typedPot: number | null,
+): { toCall: number; pot: number } {
+  const heroLeft = seatStack(hero, bb);
+  const oppLeft = seatStack(facing.seat, bb);
+  if (facing.action === "allin") {
+    const toCall = Math.min(heroLeft, oppLeft);
+    const pot = typedPot != null && typedPot > 0 ? typedPot : roundBb(1.5 + oppLeft);
+    return { toCall, pot };
+  }
+  const base = typedPot != null && typedPot > 0 ? typedPot : 1.5;
+  const bet = callSize(facing.action, base, heroLeft) ?? Math.min(heroLeft, base);
+  const toCall = Math.min(heroLeft, bet);
+  const pot = typedPot != null && typedPot > 0 ? typedPot : roundBb(base + toCall);
+  return { toCall, pot };
 }
 
 function keep(category: number, draw: boolean, action: LineAction): number {

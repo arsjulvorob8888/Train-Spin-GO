@@ -3,8 +3,9 @@ import { consult } from "@/lib/spin-drill/equity-calc";
 import {
   FACING_ACTIONS,
   OPEN_ACTIONS,
-  callSize,
   emptyLine,
+  facingPrice,
+  heroFacing,
   seatStack,
   seatsInHand,
   type Line,
@@ -195,18 +196,15 @@ export function HandProvider({
     if (turningOff) delete next[streetId][seat];
     else next[streetId][seat] = action;
     setLine(next);
-    if (turningOff) return;
-    const order = seatsInHand(spot.id).filter((item) => item !== spot.hero);
-    let size: number | null = null;
-    for (const item of order) {
-      const picked = next[streetId][item];
-      if (!picked) continue;
-      const priced = callSize(picked, pot, bb);
-      if (priced != null && picked !== "check" && picked !== "fold") size = priced;
-      if (priced === 0 && (picked === "check" || picked === "fold")) size = size ?? 0;
+    const order = seatsInHand(spot.id);
+    const face = heroFacing(next, spot.hero, board.length, order);
+    if (!face) {
+      setCallText("");
+      return;
     }
-    if (size === 0) setCallText("");
-    else if (size != null) setCallText(trimNum(size));
+    const priced = facingPrice(face, spot.hero, bb, pot);
+    if (!potText.trim()) setPotText(trimNum(priced.pot));
+    setCallText(trimNum(priced.toCall));
   }
 
   const api: HandApi = {
