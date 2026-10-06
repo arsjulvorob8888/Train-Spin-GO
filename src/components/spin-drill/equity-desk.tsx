@@ -61,6 +61,8 @@ type HandApi = {
   deviation: string | null;
   sizeText: string;
   setSizeText: (value: string) => void;
+  result: "" | "win" | "fold";
+  setResult: (value: "" | "win" | "fold") => void;
   used: (card: Card) => boolean;
   choose: (rank: number, suit: number) => void;
   holdGuard: () => void;
@@ -104,6 +106,7 @@ export function HandProvider({
   const [line, setLine] = useState<Line>(emptyLine);
   const [deviation, setDeviation] = useState<string | null>(null);
   const [sizeText, setSizeText] = useState("");
+  const [result, setResult] = useState<"" | "win" | "fold">("");
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -214,6 +217,7 @@ export function HandProvider({
     setCallText("");
     setDeviation(null);
     setSizeText("");
+    setResult("");
   }
 
   function open(slot: Slot) {
@@ -301,6 +305,8 @@ export function HandProvider({
     deviation,
     sizeText,
     setSizeText,
+    result,
+    setResult,
     used,
     choose,
     holdGuard,
@@ -393,6 +399,7 @@ export function EquityDesk() {
     chooseLine,
     undoLine,
     deviation,
+    result,
     used,
     choose,
     holdGuard,
@@ -404,7 +411,15 @@ export function EquityDesk() {
   return (
     <div className="rounded-xl border border-border bg-surface-2 p-3">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ok pb-3">
-        {shown ? (
+        {result === "win" || result === "fold" ? (
+          <div>
+            <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Итог раздачи</p>
+            <p className={cn("text-3xl font-semibold leading-none", result === "win" ? "text-ok" : "")}>
+              {result === "win" ? "Вы выиграли" : "Вы сбросили"}
+            </p>
+            <p className="mt-1 text-xs text-muted">Префлоп закрыт. Карт дальше нет.</p>
+          </div>
+        ) : shown ? (
           <div className="flex items-end gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
@@ -437,7 +452,15 @@ export function EquityDesk() {
           </svg>
         </button>
       </div>
-      <p className="mt-2 text-sm leading-snug text-muted">{shown ? shown.text : "Сначала карты, потом линия префлопа, потом борд. Совет пересчитывается после каждого хода."}</p>
+      <p className="mt-2 text-sm leading-snug text-muted">
+        {result === "win"
+          ? "Все оппоненты сбросили. Вы забираете банк без флопа."
+          : result === "fold"
+            ? "Вы сбросили. Раздача закрыта, выбирать карты больше не нужно."
+            : shown
+              ? shown.text
+              : "Сначала карты, потом линия префлопа, потом борд. Совет пересчитывается после каждого хода."}
+      </p>
       <div className="mt-3 grid max-w-sm grid-cols-2 gap-2">
         <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
           Банк, bb
