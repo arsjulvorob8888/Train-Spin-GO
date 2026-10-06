@@ -1,4 +1,4 @@
-import { handAt } from "@/lib/spin-drill/legacy-ranges";
+import { gridName, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { paintHex, sizeMark, SIZE_ORDER, sizeCaption, type BbSize } from "@/lib/spin-drill/hu-bb-limp";
 import { mixOf, segs, type MixRange } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
@@ -91,7 +91,7 @@ export function MixGrid({
             </span>
           ) : null}
           <span className="relative z-10 flex h-full flex-col justify-end p-0.5 font-mono text-xs font-bold leading-none tracking-tighter text-fg [text-shadow:0_1px_2px_#0008] sm:text-sm">
-            {h}
+            {gridName(h)}
             {acc != null && <span className="self-end text-[9px]">{acc}%</span>}
           </span>
         </button>,

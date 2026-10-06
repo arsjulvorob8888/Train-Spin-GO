@@ -10,6 +10,11 @@ export function handAt(r: number, c: number): string {
   if (r === c) return a + b;
   return c > r ? a + b + "s" : b + a + "o";
 }
+
+/** Grid label. Suited sits above the pairs, offsuit below, so s/o is noise. */
+export function gridName(hand: string): string {
+  return hand.length > 2 ? hand.slice(0, 2) : hand;
+}
 export function allHands(): string[] {
   const h: string[] = [];
   for (let i = 0; i < 13; i++) for (let j = 0; j < 13; j++) h.push(handAt(i, j));

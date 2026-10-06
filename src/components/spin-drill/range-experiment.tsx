@@ -2,7 +2,7 @@ import { StackRail } from "@/components/spin-drill/stack-rail";
 import { PairLine } from "@/components/spin-drill/mix-grid";
 import { PipCard } from "@/components/spin-drill/pip-card";
 import { COMBOS, type Combo } from "@/lib/spin-drill/combos";
-import { ALL, handAt } from "@/lib/spin-drill/legacy-ranges";
+import { ALL, gridName, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
 import { paintHex, huBbLimpPaint, sizeCaption, sizeMark, SIZE_ORDER } from "@/lib/spin-drill/hu-bb-limp";
@@ -1134,7 +1134,7 @@ function Sapper({
                 {revealed && sizeMark(action) ? (
                   <span className="absolute top-0.5 left-0.5 text-[10px] leading-none sm:text-xs">{sizeMark(action)}</span>
                 ) : null}
-                {h}
+                {gridName(h)}
                 {revealed && n > 0 ? (
                   <span className="absolute top-0.5 right-0.5 text-[9px] text-fg/80">{n}</span>
                 ) : null}
@@ -1223,7 +1223,7 @@ function Sapper({
                             changed && "outline outline-2 outline-fg",
                           )}
                         >
-                          {sizeMark(action) || h}
+                          {sizeMark(action) || gridName(h)}
                         </div>
                       );
                     }),

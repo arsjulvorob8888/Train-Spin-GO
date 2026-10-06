@@ -42,7 +42,7 @@ export function RangeMatrix({
                   on && "ring-2 ring-accent ring-inset",
                 )}
               >
-                {h}
+                {h.length > 2 ? h.slice(0, 2) : h}
               </button>
             );
           }),

@@ -14,7 +14,7 @@ import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
 import { RangeExperiment } from "@/components/spin-drill/range-experiment";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
-import { ALL } from "@/lib/spin-drill/legacy-ranges";
+import { ALL, gridName } from "@/lib/spin-drill/legacy-ranges";
 import { continueHands, continuePct, grade, mixOf, primary, segs, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import {
   GROUPS,
@@ -529,7 +529,7 @@ export function SpinApp() {
                   : stackNote(bb)}
               </p>
               <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
-                <p className="font-mono text-lg font-semibold">{selected}</p>
+                <p className="font-mono text-lg font-semibold">{gridName(selected)}</p>
                 <p className="mb-3 text-sm text-muted">
                   {paint?.[selected] ? sizeCaption(paint[selected], bb) : labels[primary(mixOf(range, selected))]}
                 </p>
