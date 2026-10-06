@@ -1,5 +1,5 @@
 import { ALL } from "./legacy-ranges";
-import { emptyMix, type MixRange } from "./mix";
+import { emptyMix, primary, type MixRange } from "./mix";
 import { HU_SB_KNOWN, type Cell } from "./hu-sb-data";
 
 /** Pictured GTOBase depths. Every other stack is a blend of the two neighbors. */
@@ -7,8 +7,8 @@ const KNOWN = [5, 6, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 25, 30];
 
 export function huSbAt(bb: number): MixRange {
   const depth = Math.max(1, Math.min(30, Math.round(bb)));
-  if (HU_SB_KNOWN[depth]) return materialize(HU_SB_KNOWN[depth]);
-  if (depth < KNOWN[0]!) return materialize(HU_SB_KNOWN[KNOWN[0]!]!);
+  if (HU_SB_KNOWN[depth]) return solid(materialize(HU_SB_KNOWN[depth]));
+  if (depth < KNOWN[0]!) return solid(materialize(HU_SB_KNOWN[KNOWN[0]!]!));
   let lo = KNOWN[0]!;
   let hi = KNOWN[KNOWN.length - 1]!;
   for (const key of KNOWN) if (key <= depth) lo = key;
@@ -17,7 +17,17 @@ export function huSbAt(bb: number): MixRange {
     break;
   }
   const t = (depth - lo) / (hi - lo);
-  return blend(HU_SB_KNOWN[lo]!, HU_SB_KNOWN[hi]!, t);
+  return solid(blend(HU_SB_KNOWN[lo]!, HU_SB_KNOWN[hi]!, t));
+}
+
+function solid(range: MixRange): MixRange {
+  const out: MixRange = {};
+  for (const hand of ALL) {
+    const mix = emptyMix();
+    mix[primary(range[hand]!)] = 100;
+    out[hand] = mix;
+  }
+  return out;
 }
 
 function materialize(src: Record<string, Cell>): MixRange {
