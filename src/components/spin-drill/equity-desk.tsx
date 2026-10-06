@@ -63,6 +63,7 @@ type HandApi = {
   setSizeText: (value: string) => void;
   result: "" | "win" | "fold";
   setResult: (value: "" | "win" | "fold") => void;
+  handNonce: number;
   used: (card: Card) => boolean;
   choose: (rank: number, suit: number) => void;
   holdGuard: () => void;
@@ -86,6 +87,7 @@ export function HandProvider({
   bb,
   labels,
   onHand,
+  onReset,
   openCards = 0,
 }: {
   children: ReactNode;
@@ -94,6 +96,7 @@ export function HandProvider({
   bb: number;
   labels: SpotDef["labels"];
   onHand: (hand: string) => void;
+  onReset?: () => void;
   openCards?: number;
 }) {
   const [cards, setCards] = useState<Partial<Record<Slot, Card>>>({});
@@ -107,6 +110,7 @@ export function HandProvider({
   const [deviation, setDeviation] = useState<string | null>(null);
   const [sizeText, setSizeText] = useState("");
   const [result, setResult] = useState<"" | "win" | "fold">("");
+  const [handNonce, setHandNonce] = useState(0);
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -218,6 +222,8 @@ export function HandProvider({
     setDeviation(null);
     setSizeText("");
     setResult("");
+    setHandNonce((n) => n + 1);
+    onReset?.();
   }
 
   function open(slot: Slot) {
@@ -307,6 +313,7 @@ export function HandProvider({
     setSizeText,
     result,
     setResult,
+    handNonce,
     used,
     choose,
     holdGuard,

@@ -43,7 +43,11 @@ export function ActionLine({
     }
   }, [spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct);
-  const { sizeText, setSizeText, shown, board, setResult } = useHand();
+  const { sizeText, setSizeText, shown, board, setResult, handNonce } = useHand();
+  useEffect(() => {
+    setSbAct("");
+    setBbAct("");
+  }, [handNonce]);
   const won = tookPot(spot, mine, sbAct, bbAct);
   const folded = mine === "fold";
   const live = !won && !folded && (mine === "call" || mine === "raise" || mine === "allin");

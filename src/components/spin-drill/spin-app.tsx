@@ -446,6 +446,13 @@ export function SpinApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bb]);
 
+  function resetLine() {
+    setMine("");
+    setSelected("");
+    const first = spotsIn(group)[0];
+    if (first) setSpotId(first.id);
+  }
+
   function changeSpot(id: string) {
     clearAdvance();
     const s = findSpot(id);
@@ -599,7 +606,7 @@ export function SpinApp() {
         {tab === "table" && <HandSim />}
 
         {tab === "strategy" && (
-          <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} openCards={cardAsk}>
+          <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
               <div className="mt-4">
                 <SpotPills
