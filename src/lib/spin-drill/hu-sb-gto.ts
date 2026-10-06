@@ -3,7 +3,7 @@ import { emptyMix, type MixRange } from "./mix";
 import { HU_SB_KNOWN, type Cell } from "./hu-sb-data";
 
 /** Pictured GTOBase depths. Every other stack is a blend of the two neighbors. */
-const KNOWN = [5, 7, 9, 11, 13, 16, 20, 22, 25, 30];
+const KNOWN = [5, 6, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 25, 30];
 
 export function huSbAt(bb: number): MixRange {
   const depth = Math.max(1, Math.min(30, Math.round(bb)));
