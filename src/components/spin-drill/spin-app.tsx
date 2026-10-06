@@ -2,7 +2,7 @@
 
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
-import { BbLine } from "@/components/spin-drill/bb-line";
+import { ActionLine } from "@/components/spin-drill/bb-line";
 import { EquityDesk, HandProvider, QuickLine } from "@/components/spin-drill/equity-desk";
 import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
@@ -311,6 +311,7 @@ function Meta({ spot, bb, range, labels }: { spot: SpotDef; bb: number; range: M
 export function SpinApp() {
   const [tab, setTab] = useState<Tab>("experiment");
   const [spotId, setSpotId] = useState("btn");
+  const [mine, setMine] = useState<MixAction | "">("");
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [store, setStore] = useState<Store>({ spots: {}, reps: 0 });
   const [selected, setSelected] = useState("AA");
@@ -403,6 +404,7 @@ export function SpinApp() {
     clearAdvance();
     const s = findSpot(id);
     setSpotId(id);
+    setMine("");
     setGroup(s.group);
     setSession({ total: 0, correct: 0, streak: 0 });
     setLocked(false);
@@ -575,31 +577,8 @@ export function SpinApp() {
                   }
                 />
               </div>
-              <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
-                <strong>
-                  {spot.hero} vs {spot.vs}
-                </strong>
-                <Legend spot={{ ...spot, labels }} />
-              </div>
-              {group === "BB" ? <BbLine spotId={spot.id} bb={bb} onSpot={changeSpot} /> : null}
+              <ActionLine spot={spot} bb={bb} mine={mine} onSpot={changeSpot} onMine={setMine} />
               <div className="mt-3 flex items-stretch gap-3 select-none">
-                {group === "BB" ? null : (
-                  <div className="flex w-40 shrink-0 flex-col gap-1.5">
-                    {spotsIn(group).map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => changeSpot(s.id)}
-                        className={cn(
-                          "min-h-11 rounded-xl border px-3 py-2 text-left text-sm leading-tight",
-                          s.id === spot.id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
-                        )}
-                      >
-                        {s.vs}
-                      </button>
-                    ))}
-                  </div>
-                )}
                 <div className="min-w-0 flex-1">
                   <MixGrid range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
                 </div>

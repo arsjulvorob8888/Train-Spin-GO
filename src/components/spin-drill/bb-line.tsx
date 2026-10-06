@@ -1,12 +1,192 @@
+import type { SpotDef } from "@/lib/spin-drill/spots";
+import type { MixAction } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
 
-type Leaf = { label: string; spot: string };
-type Branch = { label: string; children: Leaf[] };
+type Pick = { spot?: string; mine?: MixAction };
 
-const TREE: Branch[] = [
+type Column = {
+  seat: string;
+  stack: number;
+  hero?: boolean;
+  actions: { label: string; pick: Pick }[];
+  selected: string;
+};
+
+export function ActionLine({
+  spot,
+  bb,
+  mine,
+  onSpot,
+  onMine,
+}: {
+  spot: SpotDef;
+  bb: number;
+  mine: MixAction | "";
+  onSpot: (id: string) => void;
+  onMine: (action: MixAction) => void;
+}) {
+  const cols = columns(spot, bb, mine);
+  return (
+    <div className="mt-3">
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {cols.map((col, index) => (
+          <div
+            key={`${col.seat}-${index}`}
+            className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.hero ? "border-ok" : "border-border")}
+          >
+            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", head(col.seat))}>
+              <span className="font-medium">{col.seat}</span>
+              <span className="font-mono">{trim(col.stack)}</span>
+            </div>
+            <div className="mt-1 flex flex-col">
+              {col.actions.map((action) => {
+                const on = action.label === col.selected;
+                return (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => {
+                      if (action.pick.spot && action.pick.spot !== spot.id) onSpot(action.pick.spot);
+                      if (action.pick.mine) onMine(action.pick.mine);
+                    }}
+                    className={cn(
+                      "rounded px-1 py-1 text-left text-xs",
+                      on ? "bg-fg font-medium text-bg" : "text-muted",
+                    )}
+                  >
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        {mine ? `Ваш ход: ${heroLabel(spot, bb, mine)}. Рейндж ниже — чарт этого решения.` : "Отметьте своё действие в зелёной колонке. Чужие колонки меняют линию."}
+      </p>
+    </div>
+  );
+}
+
+function columns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+  if (spot.group === "BTN") return btnColumns(spot, bb, mine);
+  if (spot.group === "SB") return sbColumns(spot, bb, mine);
+  if (spot.group === "HU") return huColumns(spot, bb, mine);
+  return bbColumns(spot, bb, mine);
+}
+
+function btnColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+  const open = spot.id === "btn";
+  const vs3 = spot.id === "btn_vs_3bet";
+  const vsJam = spot.id === "btn_vs_jam";
+  const raised = vs3 || vsJam || (open && mine === "raise");
+  const shoved = open && mine === "allin";
+  const cols: Column[] = [
+    {
+      seat: "BTN",
+      stack: bb,
+      hero: open,
+      actions: [
+        { label: "Fold", pick: { spot: "btn", mine: "fold" } },
+        { label: "Raise 2", pick: { spot: "btn", mine: "raise" } },
+        { label: `All-in ${bb}`, pick: { spot: "btn", mine: "allin" } },
+      ],
+      selected: open ? chosen(spot, bb, mine) : "Raise 2",
+    },
+  ];
+  if (raised && !shoved) {
+    cols.push({
+      seat: "SB",
+      stack: bb - 0.5,
+      actions: [
+        { label: "Fold", pick: { spot: "btn", mine: "raise" } },
+        { label: "3-bet", pick: { spot: "btn_vs_3bet" } },
+        { label: `All-in ${bb}`, pick: { spot: "btn_vs_jam" } },
+      ],
+      selected: vs3 ? "3-bet" : vsJam ? `All-in ${bb}` : "",
+    });
+  }
+  if (vs3 || vsJam) cols.push(heroColumn(spot, bb, mine));
+  return cols;
+}
+
+function sbColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+  const btn =
+    spot.id === "sb_limp" ? "Limp" : spot.id === "sb_raise" ? "Raise 2" : spot.id === "sb_push" ? `All-in ${bb}` : "Fold";
+  const cols: Column[] = [
+    {
+      seat: "BTN",
+      stack: bb,
+      actions: [
+        { label: "Fold", pick: { spot: "sb_fold" } },
+        { label: "Limp", pick: { spot: "sb_limp" } },
+        { label: "Raise 2", pick: { spot: "sb_raise" } },
+        { label: `All-in ${bb}`, pick: { spot: "sb_push" } },
+      ],
+      selected: btn,
+    },
+  ];
+  const afterLimp = spot.id === "sb_iso" || spot.id === "sb_vs_bb_jam" || (spot.id === "sb_fold" && mine === "call");
+  if (afterLimp) {
+    cols.push({
+      seat: "SB",
+      stack: bb - 0.5,
+      actions: [{ label: "Limp", pick: { spot: "sb_fold", mine: "call" } }],
+      selected: "Limp",
+    });
+    cols.push({
+      seat: "BB",
+      stack: bb - 1,
+      actions: [
+        { label: "Raise", pick: { spot: "sb_iso" } },
+        { label: `All-in ${bb}`, pick: { spot: "sb_vs_bb_jam" } },
+      ],
+      selected: spot.id === "sb_iso" ? "Raise" : spot.id === "sb_vs_bb_jam" ? `All-in ${bb}` : "",
+    });
+  }
+  if (spot.id === "sb_iso" || spot.id === "sb_vs_bb_jam" || !afterLimp) cols.push(heroColumn(spot, bb, mine));
+  if (afterLimp && spot.id === "sb_fold") cols.push(heroColumn(spot, bb, mine));
+  return cols;
+}
+
+function huColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+  const heroSb = spot.id === "hu_sb";
+  const sbSelected = heroSb ? chosen(spot, bb, mine) : spot.id === "hu_bb_limp" ? "Limp" : spot.id === "hu_bb_raise" ? "Raise 2" : `All-in ${bb}`;
+  const cols: Column[] = [
+    {
+      seat: "SB",
+      stack: bb - 0.5,
+      hero: heroSb,
+      actions: heroSb
+        ? heroButtons(spot, bb)
+        : [
+            { label: "Limp", pick: { spot: "hu_bb_limp" } },
+            { label: "Raise 2", pick: { spot: "hu_bb_raise" } },
+            { label: `All-in ${bb}`, pick: { spot: "hu_bb_jam" } },
+          ],
+      selected: sbSelected,
+    },
+  ];
+  if (!heroSb) cols.push(heroColumn(spot, bb, mine));
+  else if (mine === "call" || mine === "raise" || mine === "allin") {
+    cols.push({
+      seat: "BB",
+      stack: bb - 1,
+      actions: [
+        { label: "рейндж BB", pick: { spot: mine === "call" ? "hu_bb_limp" : mine === "raise" ? "hu_bb_raise" : "hu_bb_jam" } },
+      ],
+      selected: "",
+    });
+  }
+  return cols;
+}
+
+const BB_BTN: { label: string; spot: string; sb: { label: string; spot: string }[] }[] = [
   {
     label: "Fold",
-    children: [
+    spot: "bb_vs_sb_limp",
+    sb: [
       { label: "Limp", spot: "bb_vs_sb_limp" },
       { label: "Raise 2", spot: "bb_vs_sb_raise" },
       { label: "All-in", spot: "bb_vs_sb_jam" },
@@ -14,7 +194,8 @@ const TREE: Branch[] = [
   },
   {
     label: "Limp",
-    children: [
+    spot: "bb_vs_btn_limp",
+    sb: [
       { label: "Fold", spot: "bb_vs_btn_limp" },
       { label: "Call", spot: "bb_vs_limp_call" },
       { label: "Raise 4", spot: "bb_vs_limp_iso" },
@@ -23,7 +204,8 @@ const TREE: Branch[] = [
   },
   {
     label: "Raise 2",
-    children: [
+    spot: "bb_vs_btn_raise",
+    sb: [
       { label: "Fold", spot: "bb_vs_btn_raise" },
       { label: "Call", spot: "bb_squeeze" },
       { label: "All-in", spot: "bb_vs_reshove" },
@@ -31,90 +213,72 @@ const TREE: Branch[] = [
   },
   {
     label: "All-in",
-    children: [
+    spot: "bb_vs_btn_jam",
+    sb: [
       { label: "Fold", spot: "bb_vs_btn_jam" },
       { label: "Call", spot: "bb_vs_jam_call" },
     ],
   },
 ];
 
-export function BbLine({
-  spotId,
-  bb,
-  onSpot,
-}: {
-  spotId: string;
-  bb: number;
-  onSpot: (id: string) => void;
-}) {
-  const btn = TREE.find((branch) => branch.children.some((leaf) => leaf.spot === spotId)) ?? TREE[0]!;
-  const sb = btn.children.find((leaf) => leaf.spot === spotId) ?? btn.children[0]!;
-  return (
-    <div className="flex gap-1 overflow-x-auto">
-      <SeatColumn
-        seat="BTN"
-        stack={bb}
-        actions={TREE.map((branch) => (branch.label === "All-in" ? `All-in ${bb}` : branch.label))}
-        selected={btn.label === "All-in" ? `All-in ${bb}` : btn.label}
-        onPick={(label) => {
-          const plain = label.startsWith("All-in") ? "All-in" : label;
-          const next = TREE.find((branch) => branch.label === plain) ?? TREE[0]!;
-          onSpot(next.children[0]!.spot);
-        }}
-      />
-      <SeatColumn
-        seat="SB"
-        stack={Math.round((bb - 0.5) * 10) / 10}
-        actions={btn.children.map((leaf) => (leaf.label === "All-in" ? `All-in ${bb}` : leaf.label))}
-        selected={sb.label === "All-in" ? `All-in ${bb}` : sb.label}
-        onPick={(label) => {
-          const plain = label.startsWith("All-in") ? "All-in" : label;
-          const next = btn.children.find((leaf) => leaf.label === plain) ?? btn.children[0]!;
-          onSpot(next.spot);
-        }}
-      />
-      <SeatColumn seat="BB" stack={Math.round((bb - 1) * 10) / 10} hero actions={["ваш рейндж"]} selected="" onPick={() => {}} />
-    </div>
-  );
+function bbColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+  const branch = BB_BTN.find((item) => item.sb.some((leaf) => leaf.spot === spot.id)) ?? BB_BTN[2]!;
+  const leaf = branch.sb.find((item) => item.spot === spot.id) ?? branch.sb[0]!;
+  return [
+    {
+      seat: "BTN",
+      stack: bb,
+      actions: BB_BTN.map((item) => ({
+        label: item.label === "All-in" ? `All-in ${bb}` : item.label,
+        pick: { spot: item.sb[0]!.spot },
+      })),
+      selected: branch.label === "All-in" ? `All-in ${bb}` : branch.label,
+    },
+    {
+      seat: "SB",
+      stack: bb - 0.5,
+      actions: branch.sb.map((item) => ({
+        label: item.label === "All-in" ? `All-in ${bb}` : item.label,
+        pick: { spot: item.spot },
+      })),
+      selected: leaf.label === "All-in" ? `All-in ${bb}` : leaf.label,
+    },
+    heroColumn(spot, bb, mine),
+  ];
 }
 
-function SeatColumn({
-  seat,
-  stack,
-  actions,
-  selected,
-  hero,
-  onPick,
-}: {
-  seat: string;
-  stack: number;
-  actions: string[];
-  selected: string;
-  hero?: boolean;
-  onPick: (label: string) => void;
-}) {
-  return (
-    <div className={cn("w-[5.6rem] shrink-0 rounded-lg border p-1", hero ? "border-ok" : "border-border")}>
-      <div className="flex items-center justify-between px-1 text-[11px]">
-        <span className="font-medium">{seat}</span>
-        <span className="font-mono text-muted">{stack}</span>
-      </div>
-      <div className="mt-1 flex flex-col">
-        {actions.map((label) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => onPick(label)}
-            className={cn(
-              "rounded px-1 py-1 text-left text-xs",
-              label === selected ? "bg-fg text-bg" : "text-muted",
-              hero ? "cursor-default" : "",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function heroColumn(spot: SpotDef, bb: number, mine: MixAction | ""): Column {
+  return {
+    seat: spot.hero,
+    stack: spot.hero === "SB" ? bb - 0.5 : spot.hero === "BB" ? bb - 1 : bb,
+    hero: true,
+    actions: heroButtons(spot, bb),
+    selected: chosen(spot, bb, mine),
+  };
+}
+
+function heroButtons(spot: SpotDef, bb: number): { label: string; pick: Pick }[] {
+  return spot.actions.map((action) => ({
+    label: action === "allin" ? `All-in ${bb}` : spot.labels[action],
+    pick: { mine: action },
+  }));
+}
+
+function chosen(spot: SpotDef, bb: number, mine: MixAction | ""): string {
+  if (!mine) return "";
+  return mine === "allin" ? `All-in ${bb}` : spot.labels[mine] ?? "";
+}
+
+function heroLabel(spot: SpotDef, bb: number, mine: MixAction): string {
+  return chosen(spot, bb, mine);
+}
+
+function head(seat: string): string {
+  if (seat === "SB") return "bg-amber-800/80 text-amber-50";
+  if (seat === "BB") return "bg-orange-900/80 text-orange-50";
+  return "bg-zinc-700 text-zinc-50";
+}
+
+function trim(value: number): string {
+  return String(Math.round(value * 10) / 10);
 }
