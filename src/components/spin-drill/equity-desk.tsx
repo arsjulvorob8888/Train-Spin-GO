@@ -15,14 +15,60 @@ import {
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const RANKS = [...RANK_CHARS].reverse();
 const SLOTS = ["h0", "h1", "f0", "f1", "f2", "t", "r"] as const;
 type Slot = (typeof SLOTS)[number];
 
-export function EquityDesk({
+type HandApi = {
+  spot: SpotDef;
+  bb: number;
+  cards: Partial<Record<Slot, Card>>;
+  queue: Slot[];
+  potText: string;
+  setPotText: (value: string) => void;
+  callText: string;
+  setCallText: (value: string) => void;
+  hero: [Card, Card] | null;
+  board: Card[];
+  shown: {
+    verdict: string;
+    street: string;
+    klass: string;
+    made?: string | null;
+    draw?: string | null;
+    text: string;
+    equity: number;
+    action: string;
+    label: string;
+  } | null;
+  typedOdds: number | null;
+  pot: number | null;
+  toCall: number | null;
+  line: Line;
+  open: (slot: Slot) => void;
+  resetHand: () => void;
+  chooseLine: (streetId: StreetId, seat: Seat, action: LineAction) => void;
+  used: (card: Card) => boolean;
+  choose: (rank: number, suit: number) => void;
+  holdGuard: () => void;
+  guard: boolean;
+  setQueue: (queue: Slot[]) => void;
+  queueRef: MutableRefObject<Slot[]>;
+};
+
+const HandCtx = createContext<HandApi | null>(null);
+
+function useHand() {
+  const ctx = useContext(HandCtx);
+  if (!ctx) throw new Error("HandProvider");
+  return ctx;
+}
+
+export function HandProvider({
+  children,
   spot,
   range,
   bb,
@@ -30,6 +76,7 @@ export function EquityDesk({
   onHand,
   openCards = 0,
 }: {
+  children: ReactNode;
   spot: SpotDef;
   range: MixRange;
   bb: number;
@@ -118,6 +165,166 @@ export function EquityDesk({
     setPotText("");
     setCallText("");
   }
+
+  function open(slot: Slot) {
+    const prev = cardsRef.current;
+    if (prev[slot]) {
+      const next = { ...prev };
+      delete next[slot];
+      setCards(next);
+      cardsRef.current = next;
+      setQueue([]);
+      queueRef.current = [];
+      return;
+    }
+    const next = slot === "h0" || slot === "h1"
+      ? (["h0", "h1"] as const).filter((item) => !prev[item])
+      : slot === "f0" || slot === "f1" || slot === "f2"
+        ? (["f0", "f1", "f2"] as const).filter((item) => !prev[item])
+        : [slot];
+    queueRef.current = [...next];
+    setQueue([...next]);
+  }
+
+  function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
+    const turningOff = line[streetId][seat] === action;
+    const next = {
+      ...line,
+      [streetId]: { ...line[streetId] },
+    };
+    if (turningOff) delete next[streetId][seat];
+    else next[streetId][seat] = action;
+    setLine(next);
+    if (turningOff) return;
+    const order = seatsInHand(spot.id).filter((item) => item !== spot.hero);
+    let size: number | null = null;
+    for (const item of order) {
+      const picked = next[streetId][item];
+      if (!picked) continue;
+      const priced = callSize(picked, pot, bb);
+      if (priced != null && picked !== "check" && picked !== "fold") size = priced;
+      if (priced === 0 && (picked === "check" || picked === "fold")) size = size ?? 0;
+    }
+    if (size === 0) setCallText("");
+    else if (size != null) setCallText(trimNum(size));
+  }
+
+  const api: HandApi = {
+    spot,
+    bb,
+    cards,
+    queue,
+    potText,
+    setPotText,
+    callText,
+    setCallText,
+    hero,
+    board,
+    shown,
+    typedOdds,
+    pot,
+    toCall,
+    line,
+    open,
+    resetHand,
+    chooseLine,
+    used,
+    choose,
+    holdGuard,
+    guard,
+    setQueue,
+    queueRef,
+  };
+
+  return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
+}
+
+export function QuickLine() {
+  const { potText, setPotText, callText, setCallText, cards, open, queue, typedOdds } = useHand();
+  return (
+    <div className="flex shrink-0 flex-wrap items-end gap-2">
+      <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+        Банк
+        <input
+          inputMode="decimal"
+          value={potText}
+          placeholder="6"
+          aria-label="Банк, bb"
+          onChange={(event) => setPotText(event.target.value)}
+          className="mt-0.5 h-11 w-14 rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+        />
+      </label>
+      <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+        Ставка
+        <input
+          inputMode="decimal"
+          value={callText}
+          placeholder="4"
+          aria-label="Ставка, bb"
+          onChange={(event) => setCallText(event.target.value)}
+          className="mt-0.5 h-11 w-14 rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+        />
+      </label>
+      <span className="mb-2 w-10 font-mono text-sm font-semibold">{typedOdds != null ? `${Math.round(typedOdds * 100)}%` : ""}</span>
+      <SlotGroup title="Флоп" slots={["f0", "f1", "f2"]} cards={cards} queue={queue} open={open} />
+      <SlotGroup title="Тёрн" slots={["t"]} cards={cards} queue={queue} open={open} />
+      <SlotGroup title="Ривер" slots={["r"]} cards={cards} queue={queue} open={open} />
+    </div>
+  );
+}
+
+function SlotGroup({
+  title,
+  slots,
+  cards,
+  queue,
+  open,
+}: {
+  title: string;
+  slots: Slot[];
+  cards: Partial<Record<Slot, Card>>;
+  queue: Slot[];
+  open: (slot: Slot) => void;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">{title}</p>
+      <div className="mt-0.5 flex gap-1">
+        {slots.map((slot) => (
+          <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function EquityDesk() {
+  const {
+    spot,
+    bb,
+    cards,
+    queue,
+    potText,
+    setPotText,
+    callText,
+    setCallText,
+    hero,
+    board,
+    shown,
+    typedOdds,
+    pot,
+    toCall,
+    line,
+    open,
+    resetHand,
+    chooseLine,
+    used,
+    choose,
+    holdGuard,
+    guard,
+    setQueue,
+    queueRef,
+  } = useHand();
 
   return (
     <div className="relative rounded-xl border border-border bg-surface-2 p-3">
@@ -304,48 +511,6 @@ export function EquityDesk({
       ) : null}
     </div>
   );
-
-  function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
-    const turningOff = line[streetId][seat] === action;
-    const next = {
-      ...line,
-      [streetId]: { ...line[streetId] },
-    };
-    if (turningOff) delete next[streetId][seat];
-    else next[streetId][seat] = action;
-    setLine(next);
-    if (turningOff) return;
-    const order = seatsInHand(spot.id).filter((item) => item !== spot.hero);
-    let size: number | null = null;
-    for (const item of order) {
-      const picked = next[streetId][item];
-      if (!picked) continue;
-      const priced = callSize(picked, pot, bb);
-      if (priced != null && picked !== "check" && picked !== "fold") size = priced;
-      if (priced === 0 && (picked === "check" || picked === "fold")) size = size ?? 0;
-    }
-    if (size === 0) setCallText("");
-    else if (size != null) setCallText(trimNum(size));
-  }
-
-  function open(slot: Slot) {
-    if (cards[slot]) {
-      const next = { ...cards };
-      delete next[slot];
-      setCards(next);
-      cardsRef.current = next;
-      setQueue([]);
-      queueRef.current = [];
-      return;
-    }
-    const next = slot === "h0" || slot === "h1"
-      ? (["h0", "h1"] as const).filter((item) => !cards[item])
-      : slot === "f0" || slot === "f1" || slot === "f2"
-        ? (["f0", "f1", "f2"] as const).filter((item) => !cards[item])
-        : [slot];
-    queueRef.current = [...next];
-    setQueue([...next]);
-  }
 }
 
 function pickerTitle(slot: Slot): string {

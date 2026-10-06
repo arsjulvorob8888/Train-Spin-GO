@@ -3,7 +3,7 @@
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { BbLine } from "@/components/spin-drill/bb-line";
-import { EquityDesk } from "@/components/spin-drill/equity-desk";
+import { EquityDesk, HandProvider, QuickLine } from "@/components/spin-drill/equity-desk";
 import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
@@ -179,7 +179,12 @@ function SpotPills({
         ))}
         {extra}
       </div>
-      <GroupHint group={group} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <GroupHint group={group} />
+        </div>
+        {compact ? <QuickLine /> : null}
+      </div>
       {compact ? null : (
         <>
           <div className="flex flex-wrap gap-1.5">
@@ -546,6 +551,7 @@ export function SpinApp() {
         {tab === "table" && <HandSim />}
 
         {tab === "strategy" && (
+          <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} openCards={cardAsk}>
           <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
             <section className="rounded-2xl border border-border bg-surface p-4">
               <div className="mt-4">
@@ -623,9 +629,10 @@ export function SpinApp() {
               </div>
             </section>
             <aside className="sticky top-4 max-h-[calc(100vh-1.5rem)] space-y-4 overflow-auto rounded-2xl border border-border bg-surface p-4">
-              <EquityDesk spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} openCards={cardAsk} />
+              <EquityDesk />
             </aside>
           </div>
+          </HandProvider>
         )}
 
         {tab === "experiment" && <RangeExperiment />}
