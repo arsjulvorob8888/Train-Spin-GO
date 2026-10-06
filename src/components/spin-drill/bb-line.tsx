@@ -1,14 +1,16 @@
+import { useEffect, useState } from "react";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
 
 type Pick = { spot?: string; mine?: MixAction };
+type Blind = "" | "fold" | "call" | "3bet" | "allin";
 
 type Column = {
   seat: string;
   stack: number;
   hero?: boolean;
-  actions: { label: string; pick: Pick }[];
+  actions: { label: string; pick: Pick; blind?: { seat: "SB" | "BB"; act: Blind } }[];
   selected: string;
 };
 
@@ -25,7 +27,15 @@ export function ActionLine({
   onSpot: (id: string) => void;
   onMine: (action: MixAction) => void;
 }) {
-  const cols = columns(spot, bb, mine);
+  const [sbAct, setSbAct] = useState<Blind>("");
+  const [bbAct, setBbAct] = useState<Blind>("");
+  useEffect(() => {
+    if (spot.group !== "BTN") {
+      setSbAct("");
+      setBbAct("");
+    }
+  }, [spot.group]);
+  const cols = columns(spot, bb, mine, sbAct, bbAct);
   return (
     <div className="mt-3">
       <div className="flex gap-1 overflow-x-auto pb-1">
@@ -46,6 +56,24 @@ export function ActionLine({
                     key={action.label}
                     type="button"
                     onClick={() => {
+                      if (action.blind) {
+                        const nextSb = action.blind.seat === "SB" ? action.blind.act : sbAct;
+                        const nextBb = action.blind.seat === "BB" ? action.blind.act : bbAct;
+                        if (action.blind.seat === "SB") setSbAct(action.blind.act);
+                        else setBbAct(action.blind.act);
+                        const chart = blindChart(nextSb, nextBb);
+                        const facing = spot.id === "btn_vs_3bet" || spot.id === "btn_vs_jam";
+                        if (chart !== spot.id) {
+                          onSpot(chart);
+                          if (chart === "btn") onMine("raise");
+                          else if (facing && (mine === "fold" || mine === "call" || mine === "allin")) onMine(mine);
+                        }
+                        return;
+                      }
+                      if (action.pick.spot === "btn") {
+                        setSbAct("");
+                        setBbAct("");
+                      }
                       if (action.pick.spot && action.pick.spot !== spot.id) onSpot(action.pick.spot);
                       if (action.pick.mine) onMine(action.pick.mine);
                     }}
@@ -69,14 +97,28 @@ export function ActionLine({
   );
 }
 
-function columns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
-  if (spot.group === "BTN") return btnColumns(spot, bb, mine);
+function columns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind): Column[] {
+  if (spot.group === "BTN") return btnColumns(spot, bb, mine, sbAct, bbAct);
   if (spot.group === "SB") return sbColumns(spot, bb, mine);
   if (spot.group === "HU") return huColumns(spot, bb, mine);
   return bbColumns(spot, bb, mine);
 }
 
-function btnColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+function blindChart(sb: Blind, bb: Blind): string {
+  if (sb === "allin" || bb === "allin") return "btn_vs_jam";
+  if (sb === "3bet" || bb === "3bet") return "btn_vs_3bet";
+  return "btn";
+}
+
+function blindLabel(act: Blind, stack: number): string {
+  if (act === "fold") return "Fold";
+  if (act === "call") return "Call";
+  if (act === "3bet") return "3-bet";
+  if (act === "allin") return `All-in ${stack}`;
+  return "";
+}
+
+function btnColumns(spot: SpotDef, stack: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind): Column[] {
   const open = spot.id === "btn";
   const vs3 = spot.id === "btn_vs_3bet";
   const vsJam = spot.id === "btn_vs_jam";
@@ -85,29 +127,32 @@ function btnColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
   const cols: Column[] = [
     {
       seat: "BTN",
-      stack: bb,
-      hero: open,
+      stack,
+      hero: open && !vs3 && !vsJam,
       actions: [
         { label: "Fold", pick: { spot: "btn", mine: "fold" } },
         { label: "Raise 2", pick: { spot: "btn", mine: "raise" } },
-        { label: `All-in ${bb}`, pick: { spot: "btn", mine: "allin" } },
+        { label: `All-in ${stack}`, pick: { spot: "btn", mine: "allin" } },
       ],
-      selected: open ? chosen(spot, bb, mine) : "Raise 2",
+      selected: open ? chosen(spot, stack, mine) : "Raise 2",
     },
   ];
-  if (raised && !shoved) {
-    cols.push({
-      seat: "SB",
-      stack: bb - 0.5,
-      actions: [
-        { label: "Fold", pick: { spot: "btn", mine: "raise" } },
-        { label: "3-bet", pick: { spot: "btn_vs_3bet" } },
-        { label: `All-in ${bb}`, pick: { spot: "btn_vs_jam" } },
-      ],
-      selected: vs3 ? "3-bet" : vsJam ? `All-in ${bb}` : "",
-    });
-  }
-  if (vs3 || vsJam) cols.push(heroColumn(spot, bb, mine));
+  if (!raised || shoved) return cols;
+  const sbButtons: Blind[] = ["fold", "call", "3bet", "allin"];
+  const bbButtons: Blind[] = sbAct === "allin" ? ["fold", "call"] : sbAct === "3bet" ? ["fold", "call", "allin"] : ["fold", "call", "3bet", "allin"];
+  cols.push({
+    seat: "SB",
+    stack: stack - 0.5,
+    actions: sbButtons.map((act) => ({ label: blindLabel(act, stack), pick: {}, blind: { seat: "SB", act } })),
+    selected: blindLabel(sbAct, stack),
+  });
+  cols.push({
+    seat: "BB",
+    stack: stack - 1,
+    actions: bbButtons.map((act) => ({ label: blindLabel(act, stack), pick: {}, blind: { seat: "BB", act } })),
+    selected: blindLabel(bbAct, stack),
+  });
+  if (vs3 || vsJam) cols.push(heroColumn(spot, stack, mine));
   return cols;
 }
 
