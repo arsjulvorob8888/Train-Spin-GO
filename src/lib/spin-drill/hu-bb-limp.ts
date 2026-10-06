@@ -88,8 +88,8 @@ export function sizeCaption(size: string, bb: number): string {
 }
 
 export function sizeMark(size: string): string {
-  if (size === "ai") return "AI";
-  if (SIZE_HEX[size as BbSize] && size !== "x") return size;
+  if (size === "ai" || size === "x") return "";
+  if (SIZE_HEX[size as BbSize]) return size;
   return "";
 }
 
