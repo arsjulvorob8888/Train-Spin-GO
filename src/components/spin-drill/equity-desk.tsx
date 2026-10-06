@@ -57,6 +57,7 @@ type HandApi = {
   resetHand: () => void;
   chooseLine: (streetId: StreetId, seat: Seat, action: LineAction) => void;
   undoLine: (streetId: StreetId) => void;
+  deviation: string | null;
   used: (card: Card) => boolean;
   choose: (rank: number, suit: number) => void;
   holdGuard: () => void;
@@ -98,6 +99,7 @@ export function HandProvider({
   const [potText, setPotText] = useState("");
   const [callText, setCallText] = useState("");
   const [line, setLine] = useState<Line>(emptyLine);
+  const [deviation, setDeviation] = useState<string | null>(null);
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -170,6 +172,7 @@ export function HandProvider({
     setLine(emptyLine());
     setPotText("");
     setCallText("");
+    setDeviation(null);
   }
 
   function open(slot: Slot) {
@@ -213,6 +216,14 @@ export function HandProvider({
     if (open && open.street !== streetId) return;
     const status = streetStatus(order, line, streetId, jammed);
     if (status.closed || status.seat !== seat) return;
+    if (seat === spot.hero) {
+      const advice = suggested(shown?.verdict ?? "", status.facing);
+      setDeviation(
+        advice && action !== advice
+          ? `Солвер советует ${ACTION_NAME[advice]}. Вы выбрали ${ACTION_NAME[action]}. Так матожидание ниже линии чарта.`
+          : null,
+      );
+    }
     const next = { ...line, [streetId]: [...line[streetId], { seat, action }] };
     setLine(next);
     syncPrice(next);
@@ -222,6 +233,7 @@ export function HandProvider({
     if (!line[streetId].length) return;
     const next = { ...line, [streetId]: line[streetId].slice(0, -1) };
     setLine(next);
+    setDeviation(null);
     syncPrice(next);
   }
 
@@ -245,6 +257,7 @@ export function HandProvider({
     resetHand,
     chooseLine,
     undoLine,
+    deviation,
     used,
     choose,
     holdGuard,
@@ -336,6 +349,7 @@ export function EquityDesk() {
     resetHand,
     chooseLine,
     undoLine,
+    deviation,
     used,
     choose,
     holdGuard,
@@ -345,10 +359,10 @@ export function EquityDesk() {
   } = useHand();
 
   return (
-    <div className="relative rounded-xl border border-border bg-surface-2 p-3">
-      <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-3 border-b border-ok bg-surface-2 px-3 py-3">
+    <div className="rounded-xl border border-border bg-surface-2 p-3">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ok pb-3">
         {shown ? (
-          <div className="flex items-end justify-between gap-2">
+          <div className="flex items-end gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Действие</p>
               <p className="text-3xl font-semibold leading-none">{shown.verdict}</p>
@@ -363,99 +377,84 @@ export function EquityDesk() {
         ) : (
           <p className="text-sm text-muted">Действие появится здесь сразу после двух карт.</p>
         )}
-        <div className="mt-2 flex items-start gap-2">
-          <p className="min-w-0 flex-1 text-sm leading-snug text-muted">{shown ? shown.text : ""}</p>
-          <button
-            type="button"
-            aria-label="Новая раздача"
-            title="Новая раздача"
-            onClick={resetHand}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border text-fg"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.2-5.8" strokeLinecap="round" />
-              <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-            Банк, bb
-            <input
-              inputMode="decimal"
-              value={potText}
-              placeholder="6"
-              onChange={(event) => setPotText(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-            />
-          </label>
-          <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-            Докинуть, bb
-            <input
-              inputMode="decimal"
-              value={callText}
-              placeholder="4"
-              onChange={(event) => setCallText(event.target.value)}
-              className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-            />
-          </label>
-        </div>
-        <p className="mt-2 font-mono text-xs text-muted">
-          {typedOdds != null
-            ? `Pot odds: нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
-            : "Банк уже лежит со ставкой. Докинуть — ваша сумма."}
-        </p>
+        <button
+          type="button"
+          aria-label="Новая раздача"
+          title="Новая раздача"
+          onClick={resetHand}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border text-fg"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.2-5.8" strokeLinecap="round" />
+            <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
-      <p className="text-sm font-medium">Раздача по шагам</p>
-      <p className="mt-0.5 text-xs text-muted">Сверху вниз: стол, карты, оппоненты, банк. Рекомендация в конце.</p>
-
-      <Step n={1} title="Стол" done>
-        <p className="text-sm">
-          Вы: {spot.hero} · {bb}bb · {spot.vs}
-        </p>
-        <ul className="mt-1 space-y-0.5 text-xs text-muted">
-          {spot.steps.map((step) => (
-            <li key={step.label}>
-              {step.label}: {step.did}
-            </li>
-          ))}
-        </ul>
-      </Step>
-
-      <Step n={2} title="Ваши карты" done={Boolean(hero)}>
-        <div className="flex gap-2">
-          {(["h0", "h1"] as const).map((slot) => (
-            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} onClick={() => open(slot)} />
-          ))}
-        </div>
-      </Step>
-
-      <Step n={3} title="Флоп" done={board.length >= 3} locked={!hero}>
-        <div className="flex gap-1">
-          {(["f0", "f1", "f2"] as const).map((slot) => (
-            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
-          ))}
-        </div>
-        {board.length >= 3 ? (
-          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
-        ) : (
-          <p className="mt-1 text-xs text-muted">Три карты, затем действие каждого оппонента по очереди.</p>
-        )}
-      </Step>
-
-      <Step n={4} title="Тёрн" done={board.length >= 4} locked={board.length < 3}>
-        <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
-        {board.length >= 4 ? (
-          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
-        ) : null}
-      </Step>
-
-      <Step n={5} title="Ривер" done={board.length >= 5} locked={board.length < 4}>
-        <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
-        {board.length >= 5 ? (
-          <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
-        ) : null}
-      </Step>
+      <p className="mt-2 text-sm leading-snug text-muted">{shown ? shown.text : "Сначала карты, потом линия префлопа, потом борд. Совет пересчитывается после каждого хода."}</p>
+      <div className="mt-3 grid max-w-sm grid-cols-2 gap-2">
+        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+          Банк, bb
+          <input
+            inputMode="decimal"
+            value={potText}
+            placeholder="6"
+            onChange={(event) => setPotText(event.target.value)}
+            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+          />
+        </label>
+        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
+          Докинуть, bb
+          <input
+            inputMode="decimal"
+            value={callText}
+            placeholder="4"
+            onChange={(event) => setCallText(event.target.value)}
+            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
+          />
+        </label>
+      </div>
+      <p className="mt-2 font-mono text-xs text-muted">
+        {typedOdds != null
+          ? `Pot odds: нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
+          : "Банк уже лежит со ставкой. Докинуть — ваша сумма."}
+      </p>
+      {deviation ? <p className="mt-3 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">{deviation}</p> : null}
+      <div className="mt-3 grid items-start gap-2 md:grid-cols-2 lg:grid-cols-4">
+        <Step n={1} title="Ваши карты" done={Boolean(hero)}>
+          <div className="flex gap-2">
+            {(["h0", "h1"] as const).map((slot) => (
+              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} onClick={() => open(slot)} />
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {spot.hero} · {bb}bb · {spot.vs}
+          </p>
+        </Step>
+        <Step n={2} title="Флоп" done={board.length >= 3} locked={!hero}>
+          <div className="flex gap-1">
+            {(["f0", "f1", "f2"] as const).map((slot) => (
+              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+            ))}
+          </div>
+          {board.length >= 3 ? (
+            <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("flop", seat, action)} onUndo={() => undoLine("flop")} />
+          ) : (
+            <p className="mt-1 text-xs text-muted">Три карты, затем ход по очереди.</p>
+          )}
+        </Step>
+        <Step n={3} title="Тёрн" done={board.length >= 4} locked={board.length < 3}>
+          <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
+          {board.length >= 4 ? (
+            <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("turn", seat, action)} onUndo={() => undoLine("turn")} />
+          ) : null}
+        </Step>
+        <Step n={4} title="Ривер" done={board.length >= 5} locked={board.length < 4}>
+          <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
+          {board.length >= 5 ? (
+            <WizardLine spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={shown?.verdict ?? ""} onAction={(seat, action) => chooseLine("river", seat, action)} onUndo={() => undoLine("river")} />
+          ) : null}
+        </Step>
+      </div>
 
       {typeof document !== "undefined" && (queue.length > 0 || guard)
         ? createPortal(
@@ -566,7 +565,7 @@ function Step({
   children: ReactNode;
 }) {
   return (
-    <section className={cn("mt-3 border-t border-border pt-3", locked ? "pointer-events-none opacity-40" : "")}>
+    <section className={cn("rounded-lg border border-border p-2", locked ? "pointer-events-none opacity-40" : "")}>
       <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
         {n}. {title}
         {done ? " · готово" : ""}
@@ -703,6 +702,16 @@ function WizardLine({
     </div>
   );
 }
+
+const ACTION_NAME: Record<LineAction, string> = {
+  check: "чек",
+  bet33: "ставку 33%",
+  bet66: "ставку 66%",
+  fold: "фолд",
+  call: "колл",
+  raise: "рейз",
+  allin: "олл-ин",
+};
 
 function suggested(verdict: string, facing: boolean): LineAction | null {
   if (verdict === "Фолд") return "fold";

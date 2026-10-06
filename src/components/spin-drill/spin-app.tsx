@@ -150,6 +150,7 @@ function SpotPills({
   onGroup,
   onSpot,
   compact = false,
+  showQuick = true,
   extra,
 }: {
   group: SpotGroup;
@@ -157,6 +158,7 @@ function SpotPills({
   onGroup: (g: SpotGroup) => void;
   onSpot: (id: string) => void;
   compact?: boolean;
+  showQuick?: boolean;
   extra?: ReactNode;
 }) {
   const list = spotsIn(group);
@@ -183,7 +185,7 @@ function SpotPills({
         <div className="min-w-0 flex-1">
           <GroupHint group={group} />
         </div>
-        {compact ? <QuickLine /> : null}
+        {compact && showQuick ? <QuickLine /> : null}
       </div>
       {compact ? null : (
         <>
@@ -549,16 +551,16 @@ export function SpinApp() {
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-[1100px] flex-1 p-4 sm:p-5">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 p-4 sm:p-5">
         {tab === "table" && <HandSim />}
 
         {tab === "strategy" && (
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} openCards={cardAsk}>
-          <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
-            <section className="rounded-2xl border border-border bg-surface p-4">
+          <section className="rounded-2xl border border-border bg-surface p-4">
               <div className="mt-4">
                 <SpotPills
                   compact
+                  showQuick={false}
                   group={group}
                   spot={spot}
                   onGroup={changeGroup}
@@ -578,6 +580,12 @@ export function SpinApp() {
                 />
               </div>
               <ActionLine spot={spot} bb={bb} mine={mine} onSpot={changeSpot} onMine={setMine} />
+              {mine && selected && primary(mixOf(range, selected)) !== mine ? (
+                <p className="mt-2 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">
+                  Чарт {gridName(selected)}: {labels[primary(mixOf(range, selected))]}. Вы отметили {labels[mine]}. На префлопе верное действие — цвет клетки, не соседняя кнопка.
+                </p>
+              ) : null}
+              <EquityDesk />
               <div className="mt-3 flex items-stretch gap-3 select-none">
                 <div className="min-w-0 flex-1">
                   <MixGrid range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
@@ -607,10 +615,6 @@ export function SpinApp() {
                 <SpotExplain spot={spot} />
               </div>
             </section>
-            <aside className="sticky top-4 max-h-[calc(100vh-1.5rem)] space-y-4 overflow-auto rounded-2xl border border-border bg-surface p-4">
-              <EquityDesk />
-            </aside>
-          </div>
           </HandProvider>
         )}
 
