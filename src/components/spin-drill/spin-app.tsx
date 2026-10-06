@@ -40,6 +40,7 @@ import {
   type Store,
 } from "@/lib/spin-drill/stats";
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
+import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -273,7 +274,11 @@ export function SpinApp() {
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
-  const paint = useMemo(() => (spot.id === "hu_bb_limp" ? huBbLimpPaint(bb) : null), [spot.id, bb]);
+  const paint = useMemo(() => {
+    if (spot.id === "hu_bb_limp") return huBbLimpPaint(bb);
+    if (spot.id === "hu_bb_raise") return huBbRaisePaint(bb);
+    return null;
+  }, [spot.id, bb]);
   const labels = useMemo(() => labelsAt(spot, bb), [spot, bb]);
   const statId = bb === 15 ? spot.id : `${spot.id}@${bb}`;
   const st = spotStat(store, spot.id);
@@ -526,7 +531,9 @@ export function SpinApp() {
               <p className="mt-2 text-sm text-muted">
                 {spot.id === "hu_bb_limp"
                   ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."
-                  : stackNote(bb)}
+                  : spot.id === "hu_bb_raise"
+                    ? "BB против рейза SB до 2. Один цвет — действие с наибольшей долей. Цифра — размер 3-бета."
+                    : stackNote(bb)}
               </p>
               <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
                 <p className="font-mono text-lg font-semibold">{gridName(selected)}</p>

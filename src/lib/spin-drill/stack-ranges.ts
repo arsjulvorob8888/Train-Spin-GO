@@ -1,5 +1,6 @@
 import { huSbAt } from "./hu-sb-gto";
 import { huBbLimpRange } from "./hu-bb-limp";
+import { huBbRaiseRange } from "./hu-bb-raise";
 import { ALL, handAt } from "./legacy-ranges";
 import { emptyMix, mixOf, primary, type MixAction, type MixRange } from "./mix";
 
@@ -232,6 +233,7 @@ export function rangeAtStack(base: MixRange, spotId: string, bb: number): MixRan
     const sized = huBbLimpRange(depth);
     if (sized) return sized;
   }
+  if (spotId === "hu_bb_raise") return huBbRaiseRange(depth);
   if (depth === 15) return base;
   if (spotId === "btn") return openRange(base, depth, false);
   if (spotId === "sb_fold") return openRange(base, depth, true);

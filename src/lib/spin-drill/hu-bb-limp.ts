@@ -2,18 +2,52 @@ import { ALL } from "./legacy-ranges";
 import { emptyMix, type MixRange } from "./mix";
 
 /** One color per cell: the action with the biggest share on the GTOBase chart. */
-export type BbSize = "x" | "2" | "2.5" | "3" | "3.5" | "4" | "4.5" | "5" | "6" | "6.5" | "8" | "ai";
+export type BbSize =
+  | "f"
+  | "c"
+  | "x"
+  | "2"
+  | "2.5"
+  | "3"
+  | "3.5"
+  | "4"
+  | "4.25"
+  | "4.5"
+  | "5"
+  | "6"
+  | "6.5"
+  | "8"
+  | "ai";
 
-export const SIZE_ORDER: BbSize[] = ["x", "2", "2.5", "3", "3.5", "4", "4.5", "5", "6", "6.5", "8", "ai"];
+export const SIZE_ORDER: BbSize[] = [
+  "f",
+  "c",
+  "x",
+  "2",
+  "2.5",
+  "3",
+  "3.5",
+  "4",
+  "4.25",
+  "4.5",
+  "5",
+  "6",
+  "6.5",
+  "8",
+  "ai",
+];
 
-/** Check stays the app's call green. Raises step from amber to red. All-in is the dark red. */
+/** Fold is the app blue, call/check the app green. Raises step from amber to red. All-in is the dark red. */
 export const SIZE_HEX: Record<BbSize, string> = {
+  f: "#3d7cb8",
+  c: "#2f9e73",
   x: "#2f9e73",
   "2": "#ff9f1a",
   "2.5": "#ff7a1a",
   "3": "#f2552a",
   "3.5": "#e23b3b",
   "4": "#d12a4a",
+  "4.25": "#c41e52",
   "4.5": "#c01e58",
   "5": "#a81868",
   "6": "#8c1460",
@@ -80,15 +114,16 @@ export function huBbLimpRange(bb: number): MixRange {
 }
 
 export function sizeCaption(size: string, bb: number): string {
-  if (size === "x" || size === "call") return "Check";
+  if (size === "x") return "Check";
+  if (size === "c" || size === "call") return "Call";
+  if (size === "f" || size === "fold") return "Fold";
   if (size === "ai" || size === "allin") return `All-in ${bb}`;
-  if (size === "fold") return "Fold";
   if (size === "raise") return "Raise";
   return `Raise ${size}`;
 }
 
 export function sizeMark(size: string): string {
-  if (size === "ai" || size === "x") return "";
+  if (size === "ai" || size === "x" || size === "f" || size === "c") return "";
   if (SIZE_HEX[size as BbSize]) return size;
   return "";
 }

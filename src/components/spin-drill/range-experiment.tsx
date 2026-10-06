@@ -6,6 +6,7 @@ import { ALL, gridName, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
 import { paintHex, huBbLimpPaint, sizeCaption, sizeMark, SIZE_ORDER } from "@/lib/spin-drill/hu-bb-limp";
+import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { cellDistance, nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction } from "@/lib/spin-drill/mix";
@@ -605,7 +606,11 @@ function Sapper({
   onClear: () => void;
 }) {
   const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
-  const sizes = useMemo(() => (spot.id === "hu_bb_limp" ? huBbLimpPaint(bb) : null), [spot.id, bb]);
+  const sizes = useMemo(() => {
+    if (spot.id === "hu_bb_limp") return huBbLimpPaint(bb);
+    if (spot.id === "hu_bb_raise") return huBbRaisePaint(bb);
+    return null;
+  }, [spot.id, bb]);
   const shape = useMemo(() => buildShape(range, sizes), [range, sizes]);
   const actions = useMemo(() => {
     if (sizes) {
@@ -975,7 +980,11 @@ function Sapper({
   }
 
   const rewardShape = useMemo(
-    () => buildShape(rangeAtStack(spot.range, spot.id, rewardBb), spot.id === "hu_bb_limp" ? huBbLimpPaint(rewardBb) : null),
+    () =>
+      buildShape(
+        rangeAtStack(spot.range, spot.id, rewardBb),
+        spot.id === "hu_bb_limp" ? huBbLimpPaint(rewardBb) : spot.id === "hu_bb_raise" ? huBbRaisePaint(rewardBb) : null,
+      ),
     [spot, rewardBb],
   );
 
