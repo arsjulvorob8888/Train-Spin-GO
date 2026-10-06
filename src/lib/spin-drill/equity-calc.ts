@@ -241,9 +241,16 @@ function advice(opts: {
   }
   if (opts.street !== "Префлоп" && opts.phase === "done") {
     const hand = opts.made ?? "старшая карта";
+    const bare = hand === "старшая карта";
+    if (opts.street === "Ривер") {
+      return {
+        verdict: bare ? "Нет пары" : hand.charAt(0).toUpperCase() + hand.slice(1),
+        text: `Раздача закрыта. ${bare ? "Пары нет, осталась старшая карта." : `Комбинация: ${hand}.`} Эквити против диапазона было ${pct}%. Это итог, следующий ход уже не нужен.`,
+      };
+    }
     return {
       verdict: "Дальше",
-      text: `${opts.street} закрыт. Эквити ${pct}%, ${hand}${opts.draw ? `, ${opts.draw}` : ""}. Открой следующую карту или ход оппонента на ней.`,
+      text: `${opts.street} закрыт. Сейчас ${bare ? "пары нет, старшая карта" : hand}${opts.draw ? `, ${opts.draw}` : ""}. Эквити ${pct}%. Открой следующую карту.`,
     };
   }
   if (opts.street !== "Префлоп") {
@@ -492,7 +499,7 @@ export function consult(opts: {
       : null;
   const need = userPrice ?? (priced ? priced.toCall / (priced.pot + priced.toCall) : auto ? auto.toCall / (auto.pot + auto.toCall) : null);
   const facing = face ? (face.action === "allin" ? "allin" : "bet") : "none";
-  const draws = opts.board.length >= 3 ? analyzeDraws(opts.hero, opts.board) : null;
+  const draws = opts.board.length >= 3 && opts.board.length < 5 ? analyzeDraws(opts.hero, opts.board) : null;
   const drawBits = [
     draws?.flushDraw ? "флеш-дро" : "",
     draws?.oesd ? "двусторонний стрит-дро" : "",

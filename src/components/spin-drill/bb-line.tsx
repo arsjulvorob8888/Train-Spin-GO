@@ -43,12 +43,12 @@ export function ActionLine({
     }
   }, [spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct);
-  const { sizeText, setSizeText, shown } = useHand();
+  const { sizeText, setSizeText, shown, board } = useHand();
   const live = mine === "call" || mine === "raise" || mine === "allin";
   const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
   const chartSize = chartRaiseTo(spot.id, bb);
   const doneRight = cycleClosed(cols) && actionMatches(mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
-  const expected = wantedAction(selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
+  const expected = board.length >= 3 ? null : wantedAction(selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   return (
     <div className="mt-3">
@@ -130,12 +130,16 @@ export function ActionLine({
         ) : null}
       </div>
       <BoardLine openBoard={live} />
-      <p className={cn("mt-1 text-sm", expected ? "font-medium text-fg" : "text-xs text-muted")}>
-        {expected
-          ? `Солвер ждёт: ${expectedLabel}. Эта кнопка подсвечена в колонке «ваш ход».`
-          : mine
-            ? `Вы отметили ${heroLabel(spot, bb, mine)}. Выберите руку в рейндже — солвер скажет, верно ли это.`
-            : "Зелёная колонка — ваш ход. Сначала выберите руку в рейндже, солвер подсветит кнопку."}
+      <p className={cn("mt-1 text-sm", expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
+        {board.length >= 5
+          ? "На каждой улице подписано, чем рука стала. Галочка справа — раздача закрыта, это итог."
+          : board.length >= 3
+            ? "На улице крупно: комбинация или «нет пары · старшая карта»."
+            : expected
+              ? `Солвер ждёт: ${expectedLabel}. Эта кнопка подсвечена в колонке «ваш ход».`
+              : mine
+                ? `Вы отметили ${heroLabel(spot, bb, mine)}. Выберите руку в рейндже — солвер скажет, верно ли это.`
+                : "Зелёная колонка — ваш ход. Сначала выберите руку в рейндже, солвер подсветит кнопку."}
       </p>
     </div>
   );
