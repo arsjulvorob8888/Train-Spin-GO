@@ -44,6 +44,7 @@ import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 type Tab = "practice" | "strategy" | "table" | "experiment" | "hands" | "math" | "stats";
 
@@ -211,6 +212,68 @@ function SpotPills({
   );
 }
 
+function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void }) {
+  const [text, setText] = useState(String(bb));
+  const field = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    field.current?.focus();
+    field.current?.select();
+  }, []);
+
+  function commit(raw: string) {
+    const n = Number(raw.replace(",", "."));
+    if (!Number.isFinite(n)) return;
+    const next = Math.round(n * 2) / 2;
+    if (next < 1 || next > 30) return;
+    onPick(next);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-3 sm:items-center">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3">
+        <p className="text-sm font-medium">Стек, bb</p>
+        <p className="mt-1 text-xs text-muted">От 1 до 30. Можно нажать число или вписать своё.</p>
+        <form
+          className="mt-2 flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            commit(text);
+          }}
+        >
+          <input
+            ref={field}
+            inputMode="decimal"
+            aria-label="Свой размер стека"
+            value={text}
+            onChange={(event) => setText(event.target.value.replace(/[^\d.,]/g, "").slice(0, 4))}
+            className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-3 font-mono text-lg text-fg"
+          />
+          <button type="submit" className="h-11 rounded-md bg-fg px-4 text-sm font-semibold text-bg">
+            Дальше
+          </button>
+        </form>
+        <div className="mt-2 grid grid-cols-6 gap-1">
+          {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onPick(n)}
+              className={cn(
+                "h-9 rounded-md font-mono text-sm",
+                n === bb ? "bg-fg font-semibold text-bg" : n === 15 ? "bg-surface-2 font-semibold text-fg ring-1 ring-fg" : "bg-surface-2 text-muted",
+              )}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function StackType({ bb, onChange }: { bb: number; onChange: (bb: number) => void }) {
   const [text, setText] = useState(String(bb));
   const wait = useRef<number | null>(null);
@@ -375,6 +438,7 @@ export function SpinApp() {
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
   const [cardAsk, setCardAsk] = useState(0);
+  const [stackOpen, setStackOpen] = useState(false);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
@@ -476,8 +540,14 @@ export function SpinApp() {
     if (first) changeSpot(first.id);
     if (tab === "strategy") {
       setSelected("");
-      setCardAsk((n) => n + 1);
+      setStackOpen(true);
     }
+  }
+
+  function takeStack(next: number) {
+    setBb(next);
+    setStackOpen(false);
+    setCardAsk((n) => n + 1);
   }
 
   function answer(a: MixAction) {
@@ -635,6 +705,7 @@ export function SpinApp() {
                 />
               </div>
               <ActionLine spot={spot} bb={bb} mine={mine} range={range} selected={selected} onSpot={changeSpot} onMine={setMine} />
+              {stackOpen ? <StackPick bb={bb} onPick={takeStack} /> : null}
               <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
               <EquityDesk />
               <div className="mt-3 flex items-stretch gap-3 select-none">
