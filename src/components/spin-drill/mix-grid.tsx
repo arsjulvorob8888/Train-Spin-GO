@@ -41,6 +41,7 @@ export function MixGrid({
   onPick,
   paint,
   bb = 30,
+  compact = false,
 }: {
   range: MixRange;
   selected?: string | null;
@@ -48,6 +49,7 @@ export function MixGrid({
   onPick?: (h: string) => void;
   paint?: Record<string, BbSize> | null;
   bb?: number;
+  compact?: boolean;
 }) {
   const cells = [];
   for (let i = 0; i < 13; i++) {
@@ -86,11 +88,11 @@ export function MixGrid({
             ))}
           </div>
           {sized && sizeMark(sized) ? (
-            <span className="absolute top-0.5 left-0.5 z-10 font-mono text-[11px] font-bold leading-none text-fg [text-shadow:0_1px_2px_#000a] sm:text-sm">
+            <span className={cn("absolute top-0.5 left-0.5 z-10 font-mono font-bold leading-none text-fg [text-shadow:0_1px_2px_#000a]", compact ? "text-[8px]" : "text-[11px] sm:text-sm")}>
               {sizeMark(sized)}
             </span>
           ) : null}
-          <span className="relative z-10 flex h-full flex-col justify-end p-0.5 font-mono text-xs font-bold leading-none tracking-tighter text-fg [text-shadow:0_1px_2px_#0008] sm:text-sm">
+          <span className={cn("relative z-10 flex h-full flex-col justify-end p-0.5 font-mono font-bold leading-none tracking-tighter text-fg [text-shadow:0_1px_2px_#0008]", compact ? "text-[9px]" : "text-xs sm:text-sm")}>
             {gridName(h)}
             {acc != null && <span className="self-end text-[9px]">{acc}%</span>}
           </span>

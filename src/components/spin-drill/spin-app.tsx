@@ -706,14 +706,14 @@ export function SpinApp() {
               </div>
               <ActionLine spot={spot} bb={bb} mine={mine} range={range} selected={selected} onSpot={changeSpot} onMine={setMine} />
               {stackOpen ? <StackPick bb={bb} onPick={takeStack} /> : null}
-              <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
-              <EquityDesk />
-              <div className="mt-3 flex items-stretch gap-3 select-none">
+              <div className="mt-3 flex w-full max-w-[440px] items-stretch gap-2 select-none">
                 <div className="min-w-0 flex-1">
-                  <MixGrid range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
+                  <MixGrid compact range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
                 </div>
                 <StackRail bb={bb} onChange={setBb} />
               </div>
+              <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
+              <EquityDesk />
               <p className="mt-2 text-sm text-muted">
                 {spot.id === "hu_bb_limp"
                   ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."
