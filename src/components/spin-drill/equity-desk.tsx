@@ -133,12 +133,6 @@ export function HandProvider({
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
-  const cardOpened = useRef(0);
-  const seenCards = useRef(0);
-  if (openCards !== seenCards.current) {
-    seenCards.current = openCards;
-    if (openCards) cardOpened.current = Date.now();
-  }
   useEffect(() => {
     if (!openCards) return;
     const prev = cardsRef.current;
@@ -470,6 +464,10 @@ export function EquityDesk() {
     setQueue,
     queueRef,
   } = useHand();
+  const cardOpened = useRef(0);
+  const pickerWasOpen = useRef(false);
+  if (queue.length > 0 && !pickerWasOpen.current) cardOpened.current = Date.now();
+  pickerWasOpen.current = queue.length > 0;
 
   return (
     <div className="rounded-xl border border-border bg-surface-2 p-3">
