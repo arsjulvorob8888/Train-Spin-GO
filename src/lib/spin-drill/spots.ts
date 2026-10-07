@@ -599,12 +599,13 @@ export const SPOTS: SpotDef[] = [
 
 export const GROUPS: SpotGroup[] = ["BTN", "SB", "BB", "HU"];
 
-for (const spot of SPOTS) spot.range = solidRange(spot.range);
+for (const spot of SPOTS) spot.range = solidRange(spot.range, spot.actions);
 
-function solidRange(range: MixRange): MixRange {
+function solidRange(range: MixRange, actions: MixAction[]): MixRange {
   const out: MixRange = {};
   for (const hand of ALL) {
-    const action = primary(mixOf(range, hand));
+    let action = primary(mixOf(range, hand));
+    if (!actions.includes(action) && action === "fold" && actions.includes("call")) action = "call";
     const mix = emptyMix();
     mix[action] = 100;
     out[hand] = mix;

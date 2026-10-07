@@ -57,7 +57,7 @@ export function ActionLine({
     if (!hero || !selected || board.length > 0) return;
     const key = `${spot.group}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
     if (stamped.current === key) return;
-    const action = primary(mixOf(range, selected));
+    const action = playable(spot, primary(mixOf(range, selected)));
     if (!spot.actions.includes(action)) return;
     stamped.current = key;
     if (action !== mine) onMine(action);
@@ -77,8 +77,8 @@ export function ActionLine({
   const waiting = !won && !folded && !live && (mine === "call" || mine === "raise" || mine === "allin");
   const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
   const chartSize = chartRaiseTo(spot.id, bb);
-  const doneRight = cycleClosed(cols) && actionMatches(mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
-  const expected = board.length >= 3 ? null : wantedAction(selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
+  const doneRight = cycleClosed(cols) && actionMatches(spot, mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
+  const expected = board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   useEffect(() => {
     setResult(won ? "win" : folded ? "fold" : "");
@@ -290,21 +290,27 @@ function cycleClosed(cols: Column[]): boolean {
   return cols.every((col) => Boolean(col.selected) || col.actions.length <= 1);
 }
 
-function wantedAction(hand: string, range: MixRange, sizeText: string, verdict: string | null): MixAction | null {
+function wantedAction(spot: SpotDef, hand: string, range: MixRange, sizeText: string, verdict: string | null): MixAction | null {
   if (!hand) return null;
   if (sizeText.trim() && verdict) {
-    if (verdict === "Фолд" || verdict === "Fold") return "fold";
-    if (verdict === "Колл" || verdict === "Call" || verdict === "Чек") return "call";
-    if (verdict === "Рейз" || verdict === "Ставка") return "raise";
-    if (verdict === "Пуш") return "allin";
+    if (verdict === "Фолд" || verdict === "Fold") return playable(spot, "fold");
+    if (verdict === "Колл" || verdict === "Call" || verdict === "Чек" || verdict === "Check") return playable(spot, "call");
+    if (verdict === "Рейз" || verdict === "Ставка") return playable(spot, "raise");
+    if (verdict === "Пуш") return playable(spot, "allin");
     return null;
   }
-  return primary(mixOf(range, hand));
+  return playable(spot, primary(mixOf(range, hand)));
 }
 
-function actionMatches(mine: MixAction | "", hand: string, range: MixRange, sizeText: string, verdict: string | null): boolean {
+function playable(spot: SpotDef, action: MixAction): MixAction {
+  if (spot.actions.includes(action)) return action;
+  if (action === "fold" && spot.actions.includes("call")) return "call";
+  return action;
+}
+
+function actionMatches(spot: SpotDef, mine: MixAction | "", hand: string, range: MixRange, sizeText: string, verdict: string | null): boolean {
   if (!mine || !hand) return false;
-  return wantedAction(hand, range, sizeText, verdict) === mine;
+  return wantedAction(spot, hand, range, sizeText, verdict) === mine;
 }
 
 function columns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): Column[] {

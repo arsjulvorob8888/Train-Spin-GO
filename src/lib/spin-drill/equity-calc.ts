@@ -350,7 +350,7 @@ function advice(opts: {
   const why: Record<MixAction, string> = {
     allin: "Пуш забирает банк сразу, когда оппонент сбрасывает, и оставляет это эквити, когда коллирует.",
     raise: "Рейз меньше пуша: блайнды сбрасывают чаще, а рука ещё может играть флоп.",
-    call: "Колл оставляет банк. Чарт не хочет ставить сюда весь стек.",
+    call: opts.label === "Check" ? "Чек бесплатный: фолд здесь невозможен, флоп вы видите всё равно. Рука не для рейза." : "Колл оставляет банк. Чарт не хочет ставить сюда весь стек.",
     fold: "В рейндж входа эта рука не входит: её слишком часто доминируют.",
   };
   return {
@@ -396,7 +396,12 @@ export function consult(opts: {
 }): Consult {
   const klass = handClass(opts.hero[0], opts.hero[1]);
   const mix = mixOf(opts.range, klass);
-  const action = primary(mix);
+  const charted = findSpot(opts.spotId);
+  const action = charted.actions.includes(primary(mix))
+    ? primary(mix)
+    : primary(mix) === "fold" && charted.actions.includes("call")
+      ? "call"
+      : primary(mix);
   const used = new Set([...opts.hero, ...opts.board].map(keyOf));
   const heroSeat = opts.heroSeat ?? "BTN";
   const order = seatsInHand(opts.spotId, opts.out ?? []);
