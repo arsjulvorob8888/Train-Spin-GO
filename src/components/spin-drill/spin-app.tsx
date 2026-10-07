@@ -474,6 +474,10 @@ export function SpinApp() {
   function changeGroup(g: SpotGroup) {
     const first = spotsIn(g)[0];
     if (first) changeSpot(first.id);
+    if (tab === "strategy") {
+      setSelected("");
+      setCardAsk((n) => n + 1);
+    }
   }
 
   function answer(a: MixAction) {

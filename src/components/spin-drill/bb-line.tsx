@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
@@ -51,7 +51,17 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, setResult, handNonce, setOut } = useHand();
+  const { sizeText, setSizeText, shown, board, setResult, handNonce, setOut, hero } = useHand();
+  const stamped = useRef("");
+  useEffect(() => {
+    if (!hero || !selected || board.length > 0) return;
+    const key = `${spot.group}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
+    if (stamped.current === key) return;
+    const action = primary(mixOf(range, selected));
+    if (!spot.actions.includes(action)) return;
+    stamped.current = key;
+    if (action !== mine) onMine(action);
+  }, [hero, selected, spot.group, spot.hero, spot.actions, bb, range, board.length, mine, onMine]);
   useEffect(() => {
     setSbAct("");
     setBbAct("");
@@ -226,7 +236,9 @@ export function ActionLine({
           ? "Лента слева направо: карты, ходы, галочка улицы. Последняя галочка — раздача закрыта."
           : board.length >= 3
             ? "После галочки префлопа идут карты улицы и колонки ходов. Галочка — улица закрыта."
-            : expected
+            : mine && expected && mine === expected
+              ? `Ваш ход уже стоит: ${expectedLabel}. Дальше отмечайте только оппонентов.`
+              : expected
               ? `Солвер ждёт: ${expectedLabel}. Эта кнопка подсвечена в колонке «ваш ход».`
               : mine
                 ? `Вы отметили ${heroLabel(spot, bb, mine)}. Выберите руку в рейндже — солвер скажет, верно ли это.`
