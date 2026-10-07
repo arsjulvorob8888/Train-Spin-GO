@@ -65,6 +65,8 @@ type HandApi = {
   result: "" | "win" | "fold";
   setResult: (value: "" | "win" | "fold") => void;
   handNonce: number;
+  out: Seat[];
+  setOut: (seats: Seat[]) => void;
   used: (card: Card) => boolean;
   choose: (rank: number, suit: number) => void;
   holdGuard: () => void;
@@ -112,6 +114,22 @@ export function HandProvider({
   const [sizeText, setSizeText] = useState("");
   const [result, setResult] = useState<"" | "win" | "fold">("");
   const [handNonce, setHandNonce] = useState(0);
+  const [out, setOutState] = useState<Seat[]>([]);
+  const outKey = out.join(",");
+  function setOut(seats: Seat[]) {
+    const next = seats.join(",");
+    if (next === outKey) return;
+    const gone = new Set(seats);
+    setOutState(seats);
+    setLine((prev) => {
+      const strip = (acts: { seat: Seat; action: LineAction }[]) => acts.filter((act) => !gone.has(act.seat));
+      const flop = strip(prev.flop);
+      const turn = strip(prev.turn);
+      const river = strip(prev.river);
+      if (flop.length === prev.flop.length && turn.length === prev.turn.length && river.length === prev.river.length) return prev;
+      return { flop, turn, river };
+    });
+  }
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
@@ -183,9 +201,10 @@ export function HandProvider({
       line,
       heroSeat: spot.hero,
       raiseTo,
+      out,
     });
     return { ...once, label: labels[once.action] };
-  }, [hero, board, spot.id, bb, range, labels, pot, toCall, line, sizeText]);
+  }, [hero, board, spot.id, bb, range, labels, pot, toCall, line, sizeText, outKey]);
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
   function used(card: Card): boolean {
@@ -224,6 +243,7 @@ export function HandProvider({
     setSizeText("");
     setResult("");
     setHandNonce((n) => n + 1);
+    setOutState([]);
     onReset?.();
   }
 
@@ -248,7 +268,7 @@ export function HandProvider({
   }
 
   function syncPrice(next: Line) {
-    const order = seatsInHand(spot.id);
+    const order = seatsInHand(spot.id, out);
     const jammed = preflopAllin(spot.id);
     const face = heroFacing(next, spot.hero, board.length, order, jammed);
     if (!face) {
@@ -261,7 +281,7 @@ export function HandProvider({
   }
 
   function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
-    const order = seatsInHand(spot.id);
+    const order = seatsInHand(spot.id, out);
     const jammed = preflopAllin(spot.id);
     const depth = Math.max(board.length, streetId === "flop" ? 3 : streetId === "turn" ? 4 : 5);
     const open = openStreet(line, depth, order, jammed);
@@ -291,7 +311,7 @@ export function HandProvider({
       turn: streetId === "flop" ? [] : streetId === "turn" ? kept : line.turn,
       river: streetId === "river" ? kept : [],
     };
-    const order = seatsInHand(spot.id);
+    const order = seatsInHand(spot.id, out);
     const jammed = preflopAllin(spot.id);
     const status = streetStatus(order, prior, streetId, jammed);
     if (seat === spot.hero) {
@@ -342,6 +362,8 @@ export function HandProvider({
     result,
     setResult,
     handNonce,
+    out,
+    setOut,
     used,
     choose,
     holdGuard,
@@ -693,6 +715,7 @@ function StreetColumns({
   onAction,
   onRevise,
   onUndo,
+  out,
 }: {
   spotId: string;
   hero: Seat;
@@ -703,8 +726,9 @@ function StreetColumns({
   onAction: (seat: Seat, action: LineAction) => void;
   onRevise: (index: number, action: LineAction) => void;
   onUndo: () => void;
+  out: Seat[];
 }) {
-  const seats = seatsInHand(spotId);
+  const seats = seatsInHand(spotId, out);
   const jammed = preflopAllin(spotId);
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
@@ -796,14 +820,14 @@ function CycleMark({ label }: { label: string }) {
 }
 
 export function BoardLine({ openBoard }: { openBoard: boolean }) {
-  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine } = useHand();
+  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out } = useHand();
   if (!openBoard) return null;
-  const seats = seatsInHand(spot.id);
+  const seats = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
   const hole = hero ? [hero[0], hero[1]] : [];
   const flopClosed = board.length >= 3 && streetStatus(seats, line, "flop", jammed).closed;
   const turnClosed = board.length >= 4 && streetStatus(seats, line, "turn", jammed).closed;
-  const finished = handFinished(spot.id, line, board.length);
+  const finished = handFinished(spot.id, line, board.length, out);
   const hint = shown?.verdict ?? "";
   return (
     <>
@@ -817,7 +841,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
         <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
       </div>
       {board.length >= 3 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
       ) : null}
       {flopClosed ? <CycleMark label="флоп" /> : null}
       {flopClosed ? (
@@ -830,7 +854,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
         </div>
       ) : null}
       {board.length >= 4 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
       ) : null}
       {turnClosed ? <CycleMark label="тёрн" /> : null}
       {turnClosed ? (
@@ -843,7 +867,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
         </div>
       ) : null}
       {board.length >= 5 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
+        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
       ) : null}
       {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
     </>
@@ -887,9 +911,9 @@ function showdown(cards: Card[]): { label: string; bare: boolean } | null {
   return { label: names[category] ?? "Комбинация", bare: false };
 }
 
-function handFinished(spotId: string, line: Line, boardLength: number): boolean {
+function handFinished(spotId: string, line: Line, boardLength: number, out: Seat[]): boolean {
   if (boardLength < 3) return false;
-  const seats = seatsInHand(spotId);
+  const seats = seatsInHand(spotId, out);
   const jammed = preflopAllin(spotId);
   const streets: StreetId[] = ["flop"];
   if (boardLength >= 4) streets.push("turn");

@@ -51,13 +51,16 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, setResult, handNonce } = useHand();
+  const { sizeText, setSizeText, shown, board, setResult, handNonce, setOut } = useHand();
   useEffect(() => {
     setSbAct("");
     setBbAct("");
     setBtnAct("");
     setBack("");
   }, [handNonce]);
+  useEffect(() => {
+    setOut(preflopFolded(spot, sbAct, bbAct, btnAct));
+  }, [spot.id, spot.group, sbAct, bbAct, btnAct, setOut]);
   const won = tookPot(spot, mine, sbAct, bbAct, btnAct);
   const folded = mine === "fold" || back === "fold";
   const live = flopOpen(spot, mine, sbAct, bbAct, btnAct, back);
@@ -231,6 +234,21 @@ export function ActionLine({
       </p>
     </div>
   );
+}
+
+function preflopFolded(spot: SpotDef, sbAct: Blind, bbAct: Blind, btnAct: Blind): ("BTN" | "SB" | "BB")[] {
+  const out: ("BTN" | "SB" | "BB")[] = [];
+  if (spot.group === "BTN") {
+    if (sbAct === "fold") out.push("SB");
+    if (bbAct === "fold") out.push("BB");
+    return out;
+  }
+  if (spot.group === "SB") {
+    const open = sbOpener(spot.id);
+    if (open === "fold" || btnAct === "fold") out.push("BTN");
+    if (bbAct === "fold" && spot.id !== "sb_vs_bb_jam") out.push("BB");
+  }
+  return out;
 }
 
 function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): boolean {

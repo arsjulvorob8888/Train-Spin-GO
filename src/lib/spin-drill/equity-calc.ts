@@ -87,8 +87,28 @@ function expand(klass: string, used: Set<string>): [Card, Card][] {
   return out;
 }
 
-function villainCombos(spotId: string, bb: number, used: Set<string>): { combos: Combo[]; who: string; random: boolean } {
-  const spec = VILLAIN[spotId] ?? { spotId, actions: ["call", "raise", "allin"] as MixAction[], who: "случайная рука" };
+function villainSpec(spotId: string, live: Seat[], hero: Seat): Spec {
+  const base = VILLAIN[spotId] ?? { spotId, actions: ["call", "raise", "allin"] as MixAction[], who: "случайная рука" };
+  const left = live.filter((seat) => seat !== hero);
+  if (left.length !== 1) return base;
+  const only = left[0];
+  if (spotId === "btn" && only === "SB") {
+    return { spotId: "sb_raise", actions: ["call"], who: "SB, который заколлировал рейз. BB сбросил — дальше хедз-ап" };
+  }
+  if (spotId === "btn" && only === "BB") {
+    return { spotId: "bb_vs_btn_raise", actions: ["call"], who: "BB, который заколлировал рейз. SB сбросил — дальше хедз-ап" };
+  }
+  if ((spotId === "sb_raise" || spotId === "sb_limp") && only === "BTN") {
+    return { spotId: "btn", actions: spotId === "sb_limp" ? ["call"] : ["raise"], who: "BTN в хедз-апе. BB сбросил" };
+  }
+  if (spotId === "sb_push" && only === "BTN") {
+    return { spotId: "btn", actions: ["allin"], who: "BTN в олл-ине. BB сбросил — хедз-ап" };
+  }
+  return base;
+}
+
+function villainCombos(spotId: string, bb: number, used: Set<string>, live: Seat[], hero: Seat): { combos: Combo[]; who: string; random: boolean } {
+  const spec = villainSpec(spotId, live, hero);
   const spot = findSpot(spec.spotId);
   const range = rangeAtStack(spot.range, spot.id, bb);
   const combos: Combo[] = [];
@@ -371,15 +391,17 @@ export function consult(opts: {
   line?: Line;
   heroSeat?: Seat;
   raiseTo?: number | null;
+  out?: Seat[];
   iterations?: number;
 }): Consult {
   const klass = handClass(opts.hero[0], opts.hero[1]);
   const mix = mixOf(opts.range, klass);
   const action = primary(mix);
   const used = new Set([...opts.hero, ...opts.board].map(keyOf));
-  const villain = villainCombos(opts.spotId, opts.bb, used);
   const heroSeat = opts.heroSeat ?? "BTN";
-  const opponents = seatsInHand(opts.spotId).filter((seat) => seat !== heroSeat);
+  const order = seatsInHand(opts.spotId, opts.out ?? []);
+  const villain = villainCombos(opts.spotId, opts.bb, used, order, heroSeat);
+  const opponents = order.filter((seat) => seat !== heroSeat);
   const acted = opponents.filter((seat) =>
     opts.line ? (["flop", "turn", "river"] as const).some((street) => opts.line![street].some((act) => act.seat === seat)) : false,
   );
@@ -485,7 +507,6 @@ export function consult(opts: {
   const customOff = raiseTo != null && chartTo != null && Math.abs(raiseTo - chartTo) > 0.2;
   const customPrice = raiseTo != null ? priceFromRaise(opts.spotId, raiseTo) : null;
   const auto = opts.board.length < 3 ? (customOff && customPrice ? customPrice : spotPrice(opts.spotId, opts.bb)) : null;
-  const order = seatsInHand(opts.spotId);
   const jammed = preflopAllin(opts.spotId);
   const open = opts.line && opts.board.length >= 3 ? openStreet(opts.line, opts.board.length, order, jammed) : null;
   const face =

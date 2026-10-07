@@ -43,7 +43,13 @@ export function lastBySeat(acts: StreetLine): Partial<Record<Seat, LineAction>> 
 }
 
 /** Postflop acting order. Heads-up is BB then SB. Three-handed is SB, BB, BTN. */
-export function seatsInHand(spotId: string): Seat[] {
+export function seatsInHand(spotId: string, out: Seat[] = []): Seat[] {
+  const gone = new Set(out);
+  const seats = seatsForSpot(spotId);
+  return seats.filter((seat) => !gone.has(seat));
+}
+
+function seatsForSpot(spotId: string): Seat[] {
   if (
     spotId.startsWith("hu_") ||
     spotId === "sb_fold" ||
