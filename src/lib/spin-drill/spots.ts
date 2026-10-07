@@ -336,7 +336,7 @@ export const SPOTS: SpotDef[] = [
     story:
       "Трое за столом. Баттон лимпнул (уравнял 1bb без рейза), малый блайнд скинул. Вы в BB можете чекнуть бесплатно — оба увидите флоп — или поднять. Чек, рейз до 4bb или пуш. Рендж BB против лимпа баттона.",
     actions: CHECK_RAISE_ALLIN,
-    labels: L({ call: "Check", raise: "Raise 4", allin: "All-in 15" }),
+    labels: L({ call: "Check|FOLD", raise: "Raise 4", allin: "All-in 15" }),
     range: RANGE_BB_VS_BTN_LIMP,
   },
   {
@@ -356,7 +356,7 @@ export const SPOTS: SpotDef[] = [
     story:
       "Трое за столом. Баттон скинул, малый блайнд уравнял (complete до 1bb). Вы в большом блайнде против одного лимпера. Чек (флоп бесплатно), рейз до 4bb или пуш. Рендж — как играть BB, когда SB только доставил блайнд.",
     actions: CHECK_RAISE_ALLIN,
-    labels: L({ call: "Check", raise: "Raise 4", allin: "All-in 15" }),
+    labels: L({ call: "Check|FOLD", raise: "Raise 4", allin: "All-in 15" }),
     range: RANGE_BB_VS_SB_LIMP,
   },
   {
@@ -474,7 +474,7 @@ export const SPOTS: SpotDef[] = [
     story:
       "Heads-up, осталось двое. Малый блайнд лимпнул (уравнял 1bb). Вы в большом блайнде. Чек — оба видят флоп. Рейз пишется размером: 2, 2.5, 3, 4, 5 и дальше, либо пуш. На клетке один цвет — действие с самой большой долей.",
     actions: CHECK_RAISE_ALLIN,
-    labels: L({ call: "Check", raise: "Raise 4", allin: "All-in 15" }),
+    labels: L({ call: "Check|FOLD", raise: "Raise 4", allin: "All-in 15" }),
     range: RANGE_HU_BB_LIMP,
   },
   {
@@ -532,7 +532,7 @@ export const SPOTS: SpotDef[] = [
     story:
       "Баттон лимпнул, малый блайнд тоже вошёл коллом. В банке двое. Отдельного чарта на два лимпа нет: показан ближайший, BB против лимпа баттона. Изолейт здесь уже, чем против одного.",
     actions: CHECK_RAISE_ALLIN,
-    labels: L({ call: "Check", raise: "Raise 4", allin: "All-in 15" }),
+    labels: L({ call: "Check|FOLD", raise: "Raise 4", allin: "All-in 15" }),
     range: RANGE_BB_VS_BTN_LIMP,
   },
   {

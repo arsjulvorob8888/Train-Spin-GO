@@ -114,7 +114,7 @@ export function huBbLimpRange(bb: number): MixRange {
 }
 
 export function sizeCaption(size: string, bb: number): string {
-  if (size === "x") return "Check";
+  if (size === "x") return "Check|FOLD";
   if (size === "c" || size === "call") return "Call";
   if (size === "f" || size === "fold") return "Fold";
   if (size === "ai" || size === "allin") return `All-in ${bb}`;

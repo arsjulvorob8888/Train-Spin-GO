@@ -294,7 +294,7 @@ function wantedAction(spot: SpotDef, hand: string, range: MixRange, sizeText: st
   if (!hand) return null;
   if (sizeText.trim() && verdict) {
     if (verdict === "Фолд" || verdict === "Fold") return playable(spot, "fold");
-    if (verdict === "Колл" || verdict === "Call" || verdict === "Чек" || verdict === "Check") return playable(spot, "call");
+    if (verdict === "Колл" || verdict === "Call" || verdict === "Чек" || verdict === "Check" || verdict.startsWith("Check")) return playable(spot, "call");
     if (verdict === "Рейз" || verdict === "Ставка") return playable(spot, "raise");
     if (verdict === "Пуш") return playable(spot, "allin");
     return null;
@@ -540,7 +540,7 @@ function huColumns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind
         ]
       : [
           { label: "Fold", pick: {}, blind: { seat: "BB", act: "fold" } },
-          { label: vsLimp ? "Check" : "Call", pick: {}, blind: { seat: "BB", act: "call" } },
+          { label: vsLimp ? "Check|FOLD" : "Call", pick: {}, blind: { seat: "BB", act: "call" } },
           { label: "Raise", pick: {}, blind: { seat: "BB", act: "3bet" } },
           { label: `All-in ${bb}`, pick: {}, blind: { seat: "BB", act: "allin" } },
         ],
@@ -565,7 +565,7 @@ function huColumns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind
 
 function huBbSelected(act: Blind, stack: number, vsLimp: boolean): string {
   if (act === "fold") return "Fold";
-  if (act === "call") return vsLimp ? "Check" : "Call";
+  if (act === "call") return vsLimp ? "Check|FOLD" : "Call";
   if (act === "3bet") return "Raise";
   if (act === "allin") return `All-in ${stack}`;
   return "";
