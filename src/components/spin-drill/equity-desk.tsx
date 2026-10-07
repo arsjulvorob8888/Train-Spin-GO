@@ -741,7 +741,7 @@ function StreetColumns({
             className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.seat === hero ? "border-ok" : "border-border")}
           >
             <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", seatHead(col.seat))}>
-              <span className="font-medium">{col.seat === hero ? `${col.seat} · ваш ход` : col.seat}</span>
+              <span className="font-medium">{col.seat === hero ? "Вы · ваш ход" : col.seat}</span>
               <span className="font-mono">{seatStack(col.seat, bb)}</span>
             </div>
             <div className="mt-1 flex flex-col">
