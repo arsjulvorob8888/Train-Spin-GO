@@ -452,7 +452,6 @@ export function EquityDesk() {
     toCall,
     line,
     open,
-    resetHand,
     chooseLine,
     undoLine,
     deviation,
@@ -500,18 +499,6 @@ export function EquityDesk() {
         ) : (
           <p className="text-sm text-muted">Действие появится здесь сразу после двух карт.</p>
         )}
-        <button
-          type="button"
-          aria-label="Новая раздача"
-          title="Новая раздача"
-          onClick={resetHand}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-border text-fg"
-        >
-          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <path d="M21 12a9 9 0 1 1-2.2-5.8" strokeLinecap="round" />
-            <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
       </div>
       <p className="mt-2 text-sm leading-snug text-muted">
         {result === "win"
@@ -617,11 +604,6 @@ export function EquityDesk() {
             document.body,
           )
         : null}
-      {hero ? (
-        <button type="button" className="mt-2 h-8 text-xs text-muted" onClick={resetHand}>
-          Начать раздачу заново
-        </button>
-      ) : null}
     </div>
   );
 }

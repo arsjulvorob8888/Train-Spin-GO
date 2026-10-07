@@ -274,6 +274,24 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
   );
 }
 
+function NewHand() {
+  const { resetHand } = useHand();
+  return (
+    <button
+      type="button"
+      aria-label="Новая раздача"
+      title="Новая раздача"
+      onClick={resetHand}
+      className="ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-fg"
+    >
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-2.2-5.8" strokeLinecap="round" />
+        <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
 function StackType({ bb, onChange }: { bb: number; onChange: (bb: number) => void }) {
   const [text, setText] = useState(String(bb));
   const wait = useRef<number | null>(null);
@@ -693,10 +711,11 @@ export function SpinApp() {
                   extra={
                     <>
                       <StackType bb={bb} onChange={setBb} />
+                      <NewHand />
                       <button
                         type="button"
                         onClick={() => setCardAsk((n) => n + 1)}
-                        className="ml-auto h-11 rounded-full border border-fg bg-fg px-4 text-sm font-semibold text-bg"
+                        className="h-11 rounded-full border border-fg bg-fg px-4 text-sm font-semibold text-bg"
                       >
                         Карты
                       </button>
