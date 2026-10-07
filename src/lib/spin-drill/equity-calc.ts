@@ -93,16 +93,16 @@ function villainSpec(spotId: string, live: Seat[], hero: Seat): Spec {
   if (left.length !== 1) return base;
   const only = left[0];
   if (spotId === "btn" && only === "SB") {
-    return { spotId: "sb_raise", actions: ["call"], who: "SB, который заколлировал рейз. BB сбросил — дальше хедз-ап" };
+    return { spotId: "sb_raise", actions: ["call"], who: "SB, который заколлировал рейз. BB сбросил, остались двое. Рендж всё ещё 3-max, не хедз-ап" };
   }
   if (spotId === "btn" && only === "BB") {
-    return { spotId: "bb_vs_btn_raise", actions: ["call"], who: "BB, который заколлировал рейз. SB сбросил — дальше хедз-ап" };
+    return { spotId: "bb_vs_btn_raise", actions: ["call"], who: "BB, который заколлировал рейз. SB сбросил, остались двое. Рендж всё ещё 3-max, не хедз-ап" };
   }
   if ((spotId === "sb_raise" || spotId === "sb_limp") && only === "BTN") {
-    return { spotId: "btn", actions: spotId === "sb_limp" ? ["call"] : ["raise"], who: "BTN в хедз-апе. BB сбросил" };
+    return { spotId: "btn", actions: spotId === "sb_limp" ? ["call"] : ["raise"], who: "BTN остался один против вас. BB сбросил. Рендж 3-max, не хедз-ап" };
   }
   if (spotId === "sb_push" && only === "BTN") {
-    return { spotId: "btn", actions: ["allin"], who: "BTN в олл-ине. BB сбросил — хедз-ап" };
+    return { spotId: "btn", actions: ["allin"], who: "BTN в олл-ине. BB сбросил, остались двое. Рендж 3-max, не хедз-ап" };
   }
   return base;
 }
