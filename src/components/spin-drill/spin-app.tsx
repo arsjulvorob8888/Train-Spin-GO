@@ -233,7 +233,7 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-3 sm:items-center">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3">
         <p className="text-sm font-medium">Стек, bb</p>
-        <p className="mt-1 text-xs text-muted">От 1 до 30. Можно нажать число или вписать своё.</p>
+        <p className="mt-1 text-xs text-muted">От 1 до 30. После выбора сразу откроются карты.</p>
         <form
           className="mt-2 flex gap-2"
           onSubmit={(event) => {
@@ -547,7 +547,7 @@ export function SpinApp() {
   function takeStack(next: number) {
     setBb(next);
     setStackOpen(false);
-    setCardAsk((n) => n + 1);
+    window.setTimeout(() => setCardAsk((n) => n + 1), 0);
   }
 
   function answer(a: MixAction) {

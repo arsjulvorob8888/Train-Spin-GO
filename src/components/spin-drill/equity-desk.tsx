@@ -133,6 +133,12 @@ export function HandProvider({
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
 
+  const cardOpened = useRef(0);
+  const seenCards = useRef(0);
+  if (openCards !== seenCards.current) {
+    seenCards.current = openCards;
+    if (openCards) cardOpened.current = Date.now();
+  }
   useEffect(() => {
     if (!openCards) return;
     const prev = cardsRef.current;
@@ -557,6 +563,7 @@ export function EquityDesk() {
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                if (Date.now() - cardOpened.current < 500) return;
                 if (queue.length > 0) {
                   queueRef.current = [];
                   setQueue([]);
