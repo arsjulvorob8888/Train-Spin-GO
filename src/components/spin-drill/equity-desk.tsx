@@ -916,10 +916,13 @@ function isSummary(verdict: string, street: string): boolean {
 }
 
 function suggested(verdict: string, facing: boolean): LineAction | null {
-  if (verdict === "Фолд") return "fold";
-  if (verdict === "Колл") return "call";
-  if (verdict === "Рейз") return "raise";
-  if (verdict === "Чек") return "check";
-  if (verdict === "Ставка" || verdict === "Пуш") return facing ? "allin" : "bet66";
+  const name = verdict.toLowerCase();
+  if (name === "fold" || name === "фолд") return "fold";
+  if (name === "call" || name === "колл") return "call";
+  if (name === "check" || name === "чек") return "check";
+  if (name.startsWith("raise 2")) return "bet33";
+  if (name.startsWith("raise 4") || name === "ставка") return facing ? "raise" : "bet66";
+  if (name === "raise" || name === "рейз") return facing ? "raise" : "bet66";
+  if (name.startsWith("all-in") || name === "пуш") return "allin";
   return null;
 }

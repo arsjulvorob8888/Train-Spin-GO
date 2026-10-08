@@ -246,7 +246,7 @@ function advice(opts: {
     const need = Math.round(opts.need * 100);
     const allin = opts.customTo >= opts.bb - 0.15;
     const pricedIn = opts.equity + 0.01 >= opts.need;
-    const verdict = pricedIn && !allin && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55 ? "Рейз" : pricedIn ? "Колл" : "Фолд";
+    const verdict = allin ? `All-in ${opts.bb}` : pricedIn && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55 ? "Raise" : pricedIn ? "Call" : "Fold";
     return {
       verdict,
       text: `Оппонент поставил до ${opts.customTo}bb, это не размер чарта. Нужно ${need}% на колл, у руки ${pct}%. ${verdict}. Чарт на стандартный размер говорил: ${opts.label}.`,
@@ -283,56 +283,63 @@ function advice(opts: {
       const need = opts.need == null ? null : Math.round(opts.need * 100);
       if (opts.facing !== "allin" && opts.need != null && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55) {
         return {
-          verdict: "Рейз",
+          verdict: "Raise",
           text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} Нужно ${need}% на колл, у руки ${pct}%. Рейз вэлью.`,
         };
       }
       if (opts.need != null && opts.equity + 0.01 >= opts.need) {
         return {
-          verdict: "Колл",
+          verdict: "Call",
           text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} Нужно ${need}% на колл, у руки ${pct}%. Колл. Чек уже невозможен.`,
         };
       }
       return {
-        verdict: "Фолд",
+        verdict: "Fold",
         text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} ${need == null ? "" : `Нужно ${need}% на колл, у руки ${pct}%. `}Фолд: в ответ на ставку чек невозможен.`,
       };
     }
     const dropped = `Префлоп-чарт этой руки (${opts.label}) здесь не действие: борд уже открыт.`;
     if (opts.need == null) {
-      const strong = (opts.made != null && opts.made !== "старшая карта" && opts.made !== "пара") || opts.equity >= 0.62;
-      if (strong) {
+      const monster = opts.made != null && opts.made !== "старшая карта" && opts.made !== "пара";
+      const strong = monster || opts.equity >= 0.62;
+      if (monster && opts.equity >= 0.7) {
         return {
-          verdict: "Ставка",
-          text: `${opts.street}: ${hand}${extra}. Эквити ${pct}% против диапазона, который дошёл до борда. Ставь вэлью. ${dropped}`,
+          verdict: "All-in",
+          text: `${opts.street}: ${hand}${extra}. Эквити ${pct}% против диапазона, который дошёл до борда. Стек короткий, вэлью — олл-ин. ${dropped}`,
         };
       }
-      if (opts.draw || opts.equity >= 0.38) {
+      if (strong) {
         return {
-          verdict: "Чек",
-          text: `${opts.street}: ${hand}${extra}. Эквити ${pct}%. Без ставки оппонента чаще чек. ${dropped}`,
+          verdict: "Raise 4",
+          text: `${opts.street}: ${hand}${extra}. Эквити ${pct}% против диапазона, который дошёл до борда. Вэлью — Raise 4. ${dropped}`,
+        };
+      }
+      if (opts.equity >= 0.5) {
+        return {
+          verdict: "Raise 2",
+          text: `${opts.street}: ${hand}${extra}. Эквити ${pct}%. Тонкое вэлью — Raise 2, не крупный рейз. ${dropped}`,
         };
       }
       return {
-        verdict: "Чек",
-        text: `${opts.street}: ${hand}${extra}. Эквити ${pct}%. Чек, блефовать без аутов нечем. ${dropped}`,
+        verdict: "Check",
+        text: `${opts.street}: ${hand}${extra}. Эквити ${pct}%. ${opts.draw ? "Дро есть, но без ставки оппонента чаще чек." : "Чек, ставить нечего."} ${dropped}`,
       };
     }
     const need = Math.round(opts.need * 100);
     if (opts.equity >= opts.need + 0.18 && opts.equity >= 0.55) {
       return {
-        verdict: "Рейз",
-        text: `${opts.street}: ${hand}${extra}. Нужно ${need}% на колл, у руки ${pct}%. Рейз вэлью. ${dropped}`,
+        verdict: "Raise 4",
+        text: `${opts.street}: ${hand}${extra}. Нужно ${need}% на колл, у руки ${pct}%. Вэлью — Raise 4. ${dropped}`,
       };
     }
     if (opts.equity + 0.01 >= opts.need) {
       return {
-        verdict: "Колл",
+        verdict: "Call",
         text: `${opts.street}: ${hand}${extra}. Нужно ${need}% на колл, у руки ${pct}%. Колл по шансам банка. ${dropped}`,
       };
     }
     return {
-      verdict: "Фолд",
+      verdict: "Fold",
       text: `${opts.street}: ${hand}${extra}. Нужно ${need}% на колл, у руки ${pct}%. Фолд: эквити не оплачивает ставку. ${dropped}`,
     };
   }

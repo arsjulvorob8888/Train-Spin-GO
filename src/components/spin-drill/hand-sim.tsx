@@ -395,10 +395,14 @@ function verdictAction(verdict: string, order: Seat[], acts: Partial<Record<Seat
     const action = acts[seat];
     return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
   });
-  if (verdict === "Фолд") return "fold";
-  if (verdict === "Чек") return "check";
-  if (verdict === "Колл") return "call";
-  if (verdict === "Рейз") return "raise";
+  const name = verdict.toLowerCase();
+  if (name === "fold" || name === "фолд") return "fold";
+  if (name === "check" || name === "чек") return "check";
+  if (name === "call" || name === "колл") return "call";
+  if (name.startsWith("raise 2")) return "bet33";
+  if (name.startsWith("raise 4") || name === "ставка") return against ? "raise" : "bet66";
+  if (name === "raise" || name === "рейз") return against ? "raise" : "bet66";
+  if (name.startsWith("all-in") || name === "пуш") return "allin";
   return against ? "raise" : "bet66";
 }
 

@@ -293,10 +293,11 @@ function cycleClosed(cols: Column[]): boolean {
 function wantedAction(spot: SpotDef, hand: string, range: MixRange, sizeText: string, verdict: string | null): MixAction | null {
   if (!hand) return null;
   if (sizeText.trim() && verdict) {
-    if (verdict === "Фолд" || verdict === "Fold") return playable(spot, "fold");
-    if (verdict === "Колл" || verdict === "Call" || verdict === "Чек" || verdict === "Check" || verdict.startsWith("Check")) return playable(spot, "call");
-    if (verdict === "Рейз" || verdict === "Ставка") return playable(spot, "raise");
-    if (verdict === "Пуш") return playable(spot, "allin");
+    const name = verdict.toLowerCase();
+    if (name === "fold" || name === "фолд") return playable(spot, "fold");
+    if (name === "call" || name === "колл" || name === "check" || name === "чек" || name.startsWith("check")) return playable(spot, "call");
+    if (name.startsWith("raise") || name === "рейз" || name === "ставка") return playable(spot, "raise");
+    if (name.startsWith("all-in") || name === "пуш") return playable(spot, "allin");
     return null;
   }
   return playable(spot, primary(mixOf(range, hand)));

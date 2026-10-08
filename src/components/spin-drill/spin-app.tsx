@@ -391,10 +391,11 @@ function PreflopNote({
 }
 
 function verdictMix(verdict: string): MixAction | null {
-  if (verdict === "Фолд" || verdict === "Fold") return "fold";
-  if (verdict === "Колл" || verdict === "Call" || verdict === "Чек") return "call";
-  if (verdict === "Рейз" || verdict === "Ставка") return "raise";
-  if (verdict === "Пуш") return "allin";
+  const name = verdict.toLowerCase();
+  if (name === "fold" || name === "фолд") return "fold";
+  if (name === "call" || name === "колл" || name === "check" || name === "чек" || name.startsWith("check")) return "call";
+  if (name.startsWith("raise") || name === "рейз" || name === "ставка") return "raise";
+  if (name.startsWith("all-in") || name === "пуш") return "allin";
   return null;
 }
 
