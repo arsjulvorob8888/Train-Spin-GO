@@ -39,6 +39,14 @@ function Formula({ children }: { children: string }) {
   return <p className="rounded-xl bg-surface-2 px-3 py-3 text-center font-mono text-sm text-fg sm:text-base">{children}</p>;
 }
 
+const DECK = [
+  ["Конкретная карта, например A♠", "1/52", "1,92%"],
+  ["Любой туз", "4/52", "7,69%"],
+  ["Любая семёрка, или любой один ранг", "4/52", "7,69%"],
+  ["Любая черва", "13/52", "25%"],
+  ["Любая карта, кроме одной конкретной", "51/52", "98,08%"],
+];
+
 const DRAWS = [
   ["OESD, два конца", "8", "~32%", "~16%"],
   ["Гатшот, одна дырка", "4", "~16%", "~8%"],
@@ -95,6 +103,18 @@ const CHECKS: { prompt: string; options: string[]; answer: number; why: string }
     options: ["25%", "33%", "50%", "67%"],
     answer: 1,
     why: "Ставка / (банк + ставка). Полбанка — это 50 в банк 100, то есть 50/150 ≈ 33%.",
+  },
+  {
+    prompt: "С верха полной колоды сдаётся одна карта. Какой шанс, что это именно A♠?",
+    options: ["1,92%", "7,69%", "25%", "50%"],
+    answer: 0,
+    why: "В колоде 52 карты, нужная одна. 1/52 ≈ 1,92%. Любой туз — это уже 4 карты, около 7,69%.",
+  },
+  {
+    prompt: "Какой шанс, что следующая карта — любая черва?",
+    options: ["7,69%", "13/52 = 25%", "50%", "1,92%"],
+    answer: 1,
+    why: "Червей 13 из 52. Это ровно четверть. Одна конкретная черва — около 2%, вся масть — 25%.",
   },
 ];
 
@@ -178,6 +198,41 @@ const STEPS: { id: string; short: string; title: string; body: ReactNode }[] = [
         <p className="text-sm leading-relaxed text-muted">
           В Spin 3-max на 15bb после рейза 2bb и колла в банке около 4.5bb, за спиной ~13bb. SPR около 3.
           Это не кэш на три улицы: чаще одно решение — колл цены, пуш или фолд.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "deck",
+    short: "Колода",
+    title: "Пять вероятностей, с которых всё начинается",
+    body: (
+      <div className="space-y-3">
+        <p className="text-sm leading-relaxed text-muted">
+          Пока карты не открыты, колода полная: 52. Одна конкретная карта — редкость. Целый ранг — уже заметно. Целая масть — четверть.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="font-mono text-xs text-subtle">
+              <tr>
+                <th className="py-1.5 pr-3 font-medium">Событие</th>
+                <th className="py-1.5 pr-3 font-medium">Дробь</th>
+                <th className="py-1.5 font-medium">Шанс</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DECK.map((row) => (
+                <tr key={row[0]} className="border-t border-border">
+                  <td className="py-2 pr-3">{row[0]}</td>
+                  <td className="py-2 pr-3 font-mono">{row[1]}</td>
+                  <td className="py-2 font-mono">{row[2]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-sm leading-relaxed text-muted">
+          Любой туз и любая семёрка — одно и то же число: 4 карты из 52. Поэтому один аут на следующей карте — около 2%, а четыре аута гатшота — около 8%.
         </p>
       </div>
     ),
