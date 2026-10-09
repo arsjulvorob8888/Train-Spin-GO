@@ -84,8 +84,8 @@ export function ActionLine({
     setResult(won ? "win" : folded ? "fold" : "");
   }, [won, folded, setResult]);
   return (
-    <div className="mt-3">
-      <div className="flex items-start gap-1 overflow-x-auto pb-1">
+    <div className="mt-3 space-y-2">
+      <div className="flex flex-wrap items-start gap-1">
         <Hole />
         {spot.group === "HU" ? (
           <div className="w-[6.8rem] shrink-0 rounded-lg border border-ok p-1">
@@ -222,13 +222,12 @@ export function ActionLine({
             <span className="text-sm font-semibold text-fg">Раздача закрыта</span>
             <span className="text-[10px] leading-tight">Вы сбросили</span>
           </div>
-        ) : live ? (
-          <BoardLine openBoard />
-        ) : waiting ? (
+        ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
       </div>
-      <p className={cn("mt-1 text-sm", expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
+      {live ? <BoardLine openBoard /> : null}
+      <p className={cn("text-sm", expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."
           : folded
@@ -236,9 +235,9 @@ export function ActionLine({
             : waiting
               ? "Отметьте действия оппонентов. Карты флопа появятся, только если раздача идёт дальше."
             : board.length >= 5
-          ? "Лента слева направо: карты, ходы, галочка улицы. Последняя галочка — раздача закрыта."
+          ? "Каждая улица на своей строке. Последняя галочка — раздача закрыта."
           : board.length >= 3
-            ? "После галочки префлопа идут карты улицы и колонки ходов. Галочка — улица закрыта."
+            ? "Флоп, тёрн и ривер идут строками вниз. Прокрутка вбок не нужна."
             : mine && expected && mine === expected
               ? `Ваш ход уже стоит: ${expectedLabel}. Дальше отмечайте только оппонентов.`
               : expected

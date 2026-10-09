@@ -816,6 +816,11 @@ function CycleMark({ label }: { label: string }) {
 
 export function BoardLine({ openBoard }: { openBoard: boolean }) {
   const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out } = useHand();
+  const latest = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!openBoard) return;
+    latest.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [openBoard, board.length, line.flop.length, line.turn.length, line.river.length]);
   if (!openBoard) return null;
   const seats = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
@@ -825,47 +830,53 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
   const finished = handFinished(spot.id, line, board.length, out);
   const hint = shown?.verdict ?? "";
   return (
-    <>
-      <div className={cn("shrink-0 rounded-lg border border-border p-1", !hero ? "pointer-events-none opacity-40" : "")}>
-        <p className="px-1 text-[11px] font-medium">Флоп</p>
-        <div className="mt-1 flex gap-1">
-          {(["f0", "f1", "f2"] as const).map((slot) => (
-            <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
-          ))}
+    <div className="flex flex-col gap-2">
+      <div ref={board.length < 4 ? latest : undefined} className={cn("flex flex-wrap items-start gap-1", !hero ? "pointer-events-none opacity-40" : "")}>
+        <div className="shrink-0 rounded-lg border border-border p-1">
+          <p className="px-1 text-[11px] font-medium">Флоп</p>
+          <div className="mt-1 flex gap-1">
+            {(["f0", "f1", "f2"] as const).map((slot) => (
+              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+            ))}
+          </div>
+          <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
         </div>
-        <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
+        {board.length >= 3 ? (
+          <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
+        ) : null}
+        {flopClosed ? <CycleMark label="флоп" /> : null}
       </div>
-      {board.length >= 3 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
-      ) : null}
-      {flopClosed ? <CycleMark label="флоп" /> : null}
       {flopClosed ? (
-        <div className="shrink-0 rounded-lg border border-border p-1">
-          <p className="px-1 text-[11px] font-medium">Тёрн</p>
-          <div className="mt-1">
-            <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
+        <div ref={board.length < 5 ? latest : undefined} className="flex flex-wrap items-start gap-1">
+          <div className="shrink-0 rounded-lg border border-border p-1">
+            <p className="px-1 text-[11px] font-medium">Тёрн</p>
+            <div className="mt-1">
+              <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
+            </div>
+            <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
           </div>
-          <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
+          {board.length >= 4 ? (
+            <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
+          ) : null}
+          {turnClosed ? <CycleMark label="тёрн" /> : null}
         </div>
       ) : null}
-      {board.length >= 4 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
-      ) : null}
-      {turnClosed ? <CycleMark label="тёрн" /> : null}
       {turnClosed ? (
-        <div className="shrink-0 rounded-lg border border-border p-1">
-          <p className="px-1 text-[11px] font-medium">Ривер</p>
-          <div className="mt-1">
-            <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
+        <div ref={latest} className="flex flex-wrap items-start gap-1">
+          <div className="shrink-0 rounded-lg border border-border p-1">
+            <p className="px-1 text-[11px] font-medium">Ривер</p>
+            <div className="mt-1">
+              <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
+            </div>
+            <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
           </div>
-          <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
+          {board.length >= 5 ? (
+            <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
+          ) : null}
+          {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
         </div>
       ) : null}
-      {board.length >= 5 ? (
-        <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
-      ) : null}
-      {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
-    </>
+    </div>
   );
 }
 
