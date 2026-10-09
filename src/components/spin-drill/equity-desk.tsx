@@ -873,10 +873,31 @@ function CycleMark({ label }: { label: string }) {
 export function BoardLine({ openBoard }: { openBoard: boolean }) {
   const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out } = useHand();
   const latest = useRef<HTMLDivElement>(null);
+  const heard = useRef(0);
+  const holeNow = hero ? [hero[0], hero[1]] : [];
+  const flopHand = showdown(board.length >= 3 ? [...holeNow, ...board.slice(0, 3)] : []);
+  const turnHand = showdown(board.length >= 4 ? [...holeNow, ...board.slice(0, 4)] : []);
+  const riverHand = showdown(board.length >= 5 ? [...holeNow, ...board.slice(0, 5)] : []);
+  const madeRank = (hand: { category: number; bare: boolean } | null) => (hand && !hand.bare ? hand.category : 0);
+  const flopRank = madeRank(flopHand);
+  const turnRank = madeRank(turnHand);
+  const riverRank = madeRank(riverHand);
+  const bestRank = Math.max(flopRank, turnRank, riverRank);
+  const fxRiver = riverRank > 0 && riverRank >= turnRank && riverRank >= flopRank;
+  const fxTurn = !fxRiver && turnRank > 0 && turnRank >= flopRank;
+  const fxFlop = !fxRiver && !fxTurn && flopRank > 0;
   useEffect(() => {
     if (!openBoard) return;
     latest.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [openBoard, board.length, line.flop.length, line.turn.length, line.river.length]);
+  useEffect(() => {
+    if (!openBoard || !hero || bestRank <= heard.current) {
+      heard.current = bestRank;
+      return;
+    }
+    playHandSting(bestRank);
+    heard.current = bestRank;
+  }, [openBoard, hero, bestRank]);
   if (!openBoard) return null;
   const seats = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
@@ -898,7 +919,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
               <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} cue={askFlop} small onClick={() => open(slot)} />
             ))}
           </div>
-          <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
+          <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} fx={fxFlop} />
         </div>
         {board.length >= 3 ? (
           <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
@@ -913,7 +934,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
               <CardSlot card={cards.t ?? null} active={queue[0] === "t"} cue={askTurn} small onClick={() => open("t")} />
             </div>
             {askTurn ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
-            <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
+            <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} fx={fxTurn} />
           </div>
           {board.length >= 4 ? (
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
@@ -929,7 +950,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
               <CardSlot card={cards.r ?? null} active={queue[0] === "r"} cue={askRiver} small onClick={() => open("r")} />
             </div>
             {askRiver ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
-            <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
+            <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} fx={fxRiver} />
           </div>
           {board.length >= 5 ? (
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
@@ -941,11 +962,13 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
   );
 }
 
-function Holding({ cards }: { cards: Card[] }) {
+function Holding({ cards, fx }: { cards: Card[]; fx?: boolean }) {
   const made = showdown(cards);
   if (!made) return null;
+  const rare = made.category >= 4;
   return (
-    <p className={cn("mt-1 rounded px-1.5 py-1 text-xs font-semibold leading-tight", made.bare ? "bg-zinc-700 text-zinc-50" : "bg-ok text-bg")}>
+    <p className={cn("relative mt-1 overflow-hidden rounded px-1.5 py-1 text-xs font-semibold leading-tight", made.bare ? "bg-zinc-700 text-zinc-50" : rare ? "bg-bluff text-bg" : "bg-ok text-bg", fx && !made.bare ? (rare ? "hand-rare" : "hand-hit") : "")}>
+      {fx && !made.bare ? <span className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent" /> : null}
       {made.label}
     </p>
   );
@@ -964,18 +987,18 @@ function DoneMark({ label }: { label: string }) {
   );
 }
 
-function showdown(cards: Card[]): { label: string; bare: boolean } | null {
+function showdown(cards: Card[]): { label: string; bare: boolean; category: number } | null {
   if (cards.length < 5 || cards.some((card) => !card)) return null;
   const hand = evaluateBest(cards);
   const { category, values } = unpack(hand.score);
   const rank = RANK_CHARS[values[0] ?? 0] ?? "";
   const second = RANK_CHARS[values[1] ?? 0] ?? "";
-  if (category <= 0) return { label: `Нет пары · старшая ${rank}`, bare: true };
-  if (category === 1) return { label: `Пара ${rank}`, bare: false };
-  if (category === 2) return { label: `Две пары ${rank} и ${second}`, bare: false };
-  if (category === 3) return { label: `Сет ${rank}`, bare: false };
+  if (category <= 0) return { label: `Нет пары · старшая ${rank}`, bare: true, category: 0 };
+  if (category === 1) return { label: `Пара ${rank}`, bare: false, category };
+  if (category === 2) return { label: `Две пары ${rank} и ${second}`, bare: false, category };
+  if (category === 3) return { label: `Сет ${rank}`, bare: false, category };
   const names = ["", "", "", "", "Стрит", "Флеш", "Фулл-хаус", "Каре", "Стрит-флеш"];
-  return { label: names[category] ?? "Комбинация", bare: false };
+  return { label: names[category] ?? "Комбинация", bare: false, category };
 }
 
 function handFinished(spotId: string, line: Line, boardLength: number, out: Seat[]): boolean {
@@ -1070,6 +1093,31 @@ function playBluffSting() {
   });
 }
 playBluffSting.ctx = null as AudioContext | null;
+
+function playHandSting(category: number) {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = playBluffSting.ctx ?? new Ctx();
+  playBluffSting.ctx = ctx;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  const notes =
+    category >= 8 ? [523, 659, 784, 1046, 1318] : category >= 6 ? [494, 659, 784, 1046] : category >= 4 ? [440, 554, 659, 880] : category >= 3 ? [392, 494, 587] : category >= 2 ? [349, 440, 523] : [330, 415];
+  notes.forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = category >= 4 ? "triangle" : "sine";
+    osc.frequency.value = freq;
+    const start = now + index * 0.08;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(category >= 4 ? 0.09 : 0.06, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + (category >= 4 ? 0.28 : 0.18));
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.32);
+  });
+}
 
 function BluffNotice({
   bluff,
