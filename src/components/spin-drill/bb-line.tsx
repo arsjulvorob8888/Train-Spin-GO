@@ -75,7 +75,8 @@ export function ActionLine({
   const folded = mine === "fold" || back === "fold";
   const live = flopOpen(spot, mine, sbAct, bbAct, btnAct, back);
   const waiting = !won && !folded && !live && (mine === "call" || mine === "raise" || mine === "allin");
-  const sized = cols.some((col) => /All-in|Raise|3-bet|Limp/i.test(col.selected));
+  const sizeAt = cols.reduce((at, col, index) => (!col.hero && /raise|3-bet/i.test(col.selected) ? index : at), -1);
+  const sized = sizeAt >= 0;
   const chartSize = chartRaiseTo(spot.id, bb);
   const doneRight = cycleClosed(cols) && actionMatches(spot, mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
   const expected = board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
@@ -122,8 +123,8 @@ export function ActionLine({
           </div>
         ) : null}
         {cols.map((col, index) => (
+          <div key={`${col.seat}-${index}`} className="contents">
           <div
-            key={`${col.seat}-${index}`}
             className={cn(
               "w-[6.4rem] shrink-0 rounded-lg border p-1",
               col.hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : "border-border",
@@ -180,43 +181,44 @@ export function ActionLine({
                       on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                     )}
                   >
-                    {sizeLabel(action.label, on, sizeText)}
+                    {sizeLabel(action.label, on && index === sizeAt, sizeText)}
                     {wanted && !on ? " · солвер" : ""}
                   </button>
                 );
               })}
             </div>
           </div>
-        ))}
-        {sized ? (
-          <div className="w-[11.5rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
-            <span className="block px-1 font-medium">Размер рейза, bb</span>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {[2, 2.5, 3, 4, 6, 8].map((size) => {
-                const on = Number(sizeText.replace(",", ".")) === size;
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => setSizeText(String(size))}
-                    className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}
-                  >
-                    {size}
-                  </button>
-                );
-              })}
+          {index === sizeAt ? (
+            <div className="w-[11.5rem] shrink-0 rounded-lg border border-ok/60 bg-ok/5 p-1 text-[11px]">
+              <span className="block px-1 font-medium">Рейз {col.title ?? col.seat}, bb</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {[2, 2.5, 3, 4, 6, 8].map((size) => {
+                  const on = Number(sizeText.replace(",", ".")) === size;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setSizeText(String(size))}
+                      className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}
+                    >
+                      {size}
+                    </button>
+                  );
+                })}
+              </div>
+              <input
+                inputMode="decimal"
+                value={sizeText}
+                placeholder={chartSize != null ? String(chartSize) : "2"}
+                aria-label={`Размер рейза ${col.seat}, bb`}
+                onChange={(event) => setSizeText(event.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
+              />
+              <span className="mt-1 block px-1 leading-tight text-muted">Это рейз {col.seat}. Меняет цену колла и его диапазон.</span>
             </div>
-            <input
-              inputMode="decimal"
-              value={sizeText}
-              placeholder={chartSize != null ? String(chartSize) : "2"}
-              aria-label="Свой размер рейза в больших блайндах"
-              onChange={(event) => setSizeText(event.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
-            />
-            <span className="mt-1 block px-1 leading-tight text-muted">2, 4 или 6 меняют цену колла и сужают диапазон. Пусто — размер чарта.</span>
+          ) : null}
           </div>
-        ) : null}
+        ))}
         {doneRight ? (
           <div className="grid w-14 shrink-0 place-items-center self-center text-ok" title="Цикл закрыт, действие верное">
             <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
