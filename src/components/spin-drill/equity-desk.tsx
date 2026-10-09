@@ -1,5 +1,5 @@
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
-import { evaluateBest, unpack } from "@/lib/poker/evaluate";
+import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
 import {
@@ -797,7 +797,7 @@ function StreetColumns({
                 {menu.map((item) => {
                   const on = col.selected === item.id;
                   const wanted = col.live && col.seat === hero && (suggest === item.id || (item.id === "bet33" && (suggest === "bet66" || suggest === "betpot")));
-                  const bluffWanted = wanted && hint.toLowerCase().includes("блеф");
+                  const bluffWanted = wanted && hint.toLowerCase().startsWith("ставь");
                   return (
                     <button
                       key={item.id}
@@ -812,8 +812,8 @@ function StreetColumns({
                         on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                       )}
                     >
-                      {streetActionLabel(item.id, index === sizeAt, callText)}
-                      {bluffWanted && !on ? " · БЛЕФ" : wanted && !on ? " · солвер" : ""}
+                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, callText)}
+                      {bluffWanted ? "" : wanted && !on ? " · солвер" : ""}
                     </button>
                   );
                 })}
@@ -903,6 +903,10 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
   const fxRiver = riverRank > 0 && riverRank >= turnRank && riverRank >= flopRank;
   const fxTurn = !fxRiver && turnRank > 0 && turnRank >= flopRank;
   const fxFlop = !fxRiver && !fxTurn && flopRank > 0;
+  const flopDraw = drawTags(holeNow, board.slice(0, 3));
+  const turnDraw = board.length >= 4 ? drawTags(holeNow, board.slice(0, 4)) : [];
+  const drawKey = board.length >= 5 ? "" : (board.length >= 4 ? turnDraw : flopDraw).join("·");
+  const heardDraw = useRef("");
   useEffect(() => {
     if (!openBoard) return;
     latest.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -915,6 +919,14 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
     playHandSting(bestRank);
     heard.current = bestRank;
   }, [openBoard, hero, bestRank]);
+  useEffect(() => {
+    if (!openBoard || !hero || !drawKey || drawKey === heardDraw.current) {
+      if (!drawKey) heardDraw.current = "";
+      return;
+    }
+    playDrawSting(/флеш-дро|стрит-дро|гатшот/i.test(drawKey));
+    heardDraw.current = drawKey;
+  }, [openBoard, hero, drawKey]);
   if (!openBoard) return null;
   const seats = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
@@ -937,6 +949,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
             ))}
           </div>
           <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} fx={fxFlop} />
+          <DrawMark tags={flopDraw} fx={board.length === 3 && flopDraw.length > 0} />
         </div>
         {board.length >= 3 ? (
           <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
@@ -952,6 +965,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
             </div>
             {askTurn ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
             <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} fx={fxTurn} />
+            <DrawMark tags={turnDraw} fx={board.length === 4 && turnDraw.length > 0} />
           </div>
           {board.length >= 4 ? (
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
@@ -989,6 +1003,33 @@ function Holding({ cards, fx }: { cards: Card[]; fx?: boolean }) {
       {made.label}
     </p>
   );
+}
+
+function DrawMark({ tags, fx }: { tags: string[]; fx: boolean }) {
+  if (!tags.length) return null;
+  return (
+    <p className={cn("draw-badge relative mt-1 overflow-hidden rounded px-1.5 py-1 text-xs font-semibold leading-tight text-white", fx && "hand-draw")}>
+      {fx ? <span className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent" /> : null}
+      {tags.join(" · ")}
+    </p>
+  );
+}
+
+function drawTags(hero: Card[], board: Card[]): string[] {
+  if (hero.length < 2 || board.length < 3 || board.length >= 5) return [];
+  const info = analyzeDraws(hero, board);
+  const tags: string[] = [];
+  if (info.flushDraw) tags.push("Флеш-дро");
+  if (info.oesd) tags.push("Стрит-дро");
+  else if (info.gutshot) tags.push("Гатшот");
+  if (!info.flushDraw && board.length === 3) {
+    const suits = [0, 0, 0, 0];
+    for (const card of [...hero, ...board]) suits[card.suit] += 1;
+    if (suits.some((count) => count === 3)) tags.push("Флеш с двух карт");
+  }
+  if (info.overcards === 2) tags.push("Две оверкарты");
+  else if (info.overcards === 1) tags.push("Оверкарта");
+  return tags;
 }
 
 function DoneMark({ label }: { label: string }) {
@@ -1040,7 +1081,7 @@ function suggested(verdict: string, facing: boolean): LineAction | null {
   if (name === "fold" || name === "фолд") return "fold";
   if (name === "call" || name === "колл") return "call";
   if (name === "check" || name === "чек") return "check";
-  if (name.includes("блеф") || name.startsWith("raise 2")) return "bet33";
+  if (name.includes("блеф") || name.startsWith("ставь") || name.startsWith("raise 2")) return "bet33";
   if (name.startsWith("raise 6")) return facing ? "raise" : "betpot";
   if (name.startsWith("raise 4") || name === "ставка") return facing ? "raise" : "bet66";
   if (name === "raise" || name === "рейз") return facing ? "raise" : "bet66";
@@ -1133,6 +1174,30 @@ function playHandSting(category: number) {
     gain.connect(ctx.destination);
     osc.start(start);
     osc.stop(start + 0.32);
+  });
+}
+
+function playDrawSting(strong: boolean) {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = playBluffSting.ctx ?? new Ctx();
+  playBluffSting.ctx = ctx;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  const notes = strong ? [494, 659, 880] : [440, 554];
+  notes.forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const start = now + index * 0.07;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(strong ? 0.07 : 0.045, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.24);
   });
 }
 

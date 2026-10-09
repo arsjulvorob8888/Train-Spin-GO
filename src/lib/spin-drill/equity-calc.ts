@@ -352,7 +352,7 @@ function advice(opts: {
       if (semiBluff(opts.draw, opts.made, opts.equity)) {
         return {
           verdict: "Блеф · Raise 2",
-          text: `БЛЕФ, не вэлью. ${opts.street}: готовой руки нет, ${opts.draw}. Эквити ${pct}%. Солвер ставит маленький Raise 2, потому что дро само по себе добирает банк, а часть рук оппонента ещё и сбросит. Крупный блеф и блеф без дро здесь запрещены. ${dropped}`,
+          text: `БЛЕФ, не вэлью. ${opts.street}: готовой руки нет, ${opts.draw}. Эквити ${pct}%. Размер ставки уже посчитан: около трети банка, цифра в действии. Крупнее и без дро не блефуйте. ${dropped}`,
         };
       }
       return {
@@ -554,17 +554,19 @@ function bluffCue(opts: {
       ],
     };
   }
+  const stakeLabel = `Ставь ${trimSize(price.bet)}bb`;
   return {
     ...card,
     on: true,
     title: "Блефуй",
-    action: "Raise 2",
+    action: stakeLabel,
     reasons: [
+      `Действие одно: ${stakeLabel}. Это около трети банка ${trimSize(price.pot)}bb.`,
       `Готовой руки нет. Дро: ${opts.draw}. Эквити ${pct}%.`,
       foldPct === 0
-        ? `Ставка ${trimSize(price.bet)}bb уже плюсовая, даже если заколлируют всегда. Нужный фолд 0%, каждый сброс сверху только добавляет.`
-        : `${stake} С этим дро фолд реалистичен, а колл ещё оставляет вам ${pct}% банка.`,
-      "Крупнее, без дро и на ривере этот блеф не ставь.",
+        ? "Даже если заколлируют всегда, ставка не в минусе. Сбросы только добавляют."
+        : `Нужен фолд хотя бы ${foldPct}%. С этим дро это реалистично.`,
+      "Другой размер, ривер и ставка без дро — не это действие.",
     ],
   };
 }
@@ -770,6 +772,15 @@ export function consult(opts: {
       facing === "allin" ||
       (customOff && raiseTo != null && raiseTo >= opts.bb - 0.15),
   });
+  const bluff = bluffCue({
+    street,
+    phase,
+    facing,
+    draw: drawBits.length ? drawBits.join(", ") : null,
+    made,
+    equity,
+    pot: opts.pot != null && opts.pot > 0 ? opts.pot : !face && auto ? auto.pot : priced ? Math.max(1, priced.pot - priced.toCall) : null,
+  });
 
   return {
     klass,
@@ -783,17 +794,9 @@ export function consult(opts: {
     made,
     draw: drawBits.length ? drawBits.join(", ") : null,
     street,
-    verdict: said.verdict,
+    verdict: bluff.on ? bluff.action : said.verdict,
     random: villain.random,
-    bluff: bluffCue({
-      street,
-      phase,
-      facing,
-      draw: drawBits.length ? drawBits.join(", ") : null,
-      made,
-      equity,
-      pot: opts.pot != null && opts.pot > 0 ? opts.pot : !face && auto ? auto.pot : priced ? Math.max(1, priced.pot - priced.toCall) : null,
-    }),
+    bluff,
     text: said.text,
   };
 }
