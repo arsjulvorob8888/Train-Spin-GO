@@ -286,7 +286,7 @@ function NewHand() {
       aria-label="Новая раздача"
       title="Новая раздача"
       onClick={resetHand}
-      className="ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-fg"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-fg"
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <path d="M21 12a9 9 0 1 1-2.2-5.8" strokeLinecap="round" />
@@ -756,8 +756,8 @@ export function SpinApp() {
                   extra={
                     <>
                       <StackType bb={bb} onChange={setBb} />
-                      <PotFields />
                       <NewHand />
+                      <PotFields />
                       <button
                         type="button"
                         onClick={() => setCardAsk((n) => n + 1)}
