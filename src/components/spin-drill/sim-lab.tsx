@@ -215,7 +215,7 @@ export function SimLab() {
           ) : null}
         </div>
         <p className="mt-3 text-sm text-muted">Сначала прогоните как есть. Потом поменяйте один рейндж, блеф или тип игрока и прогоните снова: разница с прошлым результатом появится под цифрами.</p>
-        {totals ? <Report totals={totals} previous={before} /> : null}
+        {totals ? <Report totals={totals} previous={before} strategy={strategy} /> : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-4">
@@ -269,44 +269,47 @@ function Slider({ label, min, max, value, onChange }: { label: string; min: numb
   );
 }
 
-function Report({ totals, previous }: { totals: SimTotals; previous: SimTotals | null }) {
+function Report({ totals, previous, strategy }: { totals: SimTotals; previous: SimTotals | null; strategy: SimStrategy }) {
   const n = Math.max(1, totals.games);
   const roi = (totals.profit / n) * 100;
   const mean = totals.profit / n;
   const variance = Math.max(0, totals.sumSq / n - mean * mean);
   const se = Math.sqrt(variance / n);
+  const ci = 1.96 * se * 100;
+  const field = fieldRoi();
+  const versus = roi - field;
+  const first = totals.wins / n;
+  const second = totals.second / n;
+  const third = totals.third / n;
   const points = totals.curve;
-  const low = Math.min(...points, 0);
-  const high = Math.max(...points, 0);
   const peak = Math.max(...points);
   const floor = Math.min(...points);
-  const span = high - low || 1;
-  const line = points
-    .map((value, index) => {
-      const x = (index / Math.max(1, points.length - 1)) * 600;
-      const y = 150 - ((value - low) / span) * 140;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const zero = 150 - ((0 - low) / span) * 140;
+  const common = [2, 3].map((mult) => {
+    const got = totals.byMult[mult];
+    return { mult, games: got?.games ?? 0, roi: got?.games ? (got.profit / got.games) * 100 : 0 };
+  });
+  const lines = readResult({ strategy, roi, versus, ci, field, first, second, third, games: totals.games, common, previous });
   return (
     <div className="mt-4 space-y-3">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Stat label="ROI" value={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%`} />
-        <Stat label="Против поля" value={`${roi - fieldRoi() >= 0 ? "+" : ""}${(roi - fieldRoi()).toFixed(1)}%`} />
-        <Stat label="Профит, бай-ины" value={`${totals.profit >= 0 ? "+" : ""}${totals.profit.toFixed(1)}`} />
-        <Stat label="1 / 2 / 3 место" value={`${pct(totals.wins, n)} / ${pct(totals.second, n)} / ${pct(totals.third, n)}`} />
-        <Stat label="95% коридор ROI" value={`±${(1.96 * se * 100).toFixed(1)}%`} />
-        <Stat label="Лучшая точка" value={`${peak.toFixed(1)} би`} />
-        <Stat label="Просадка" value={`${floor.toFixed(1)} би`} />
-        <Stat label="Игр" value={String(totals.games)} />
-        <Stat label="Среднее за игру" value={`${mean >= 0 ? "+" : ""}${mean.toFixed(3)} би`} />
+        <Stat label="ROI" value={`${signed(roi)}%`} hint="Доход на каждый бай-ин. Сюда уже входит рейк." tone={roi >= field ? "ok" : "bad"} />
+        <Stat label="Против поля" value={`${signed(versus)}%`} hint={`Ноль — это уровень рейка, около ${field.toFixed(1)}%. Плюс значит, что стратегия обыгрывает поле.`} tone={versus > ci ? "ok" : versus < -ci ? "bad" : "flat"} />
+        <Stat label="Профит, бай-ины" value={`${signed(totals.profit)}`} hint="Сумма за весь прогон. Одна удачная x100 двигает её сильнее, чем сто обычных игр." />
+        <Stat label="1 / 2 / 3 место" value={`${pct(totals.wins, n)} / ${pct(totals.second, n)} / ${pct(totals.third, n)}`} hint="У равных игроков около 33 / 33 / 33. Сдвиг показывает, вылетаете вы рано или не добираете победы." />
+        <Stat label="95% коридор" value={`±${ci.toFixed(1)}%`} hint="Если «против поля» внутри этой вилки, разница ещё может быть случайностью." tone={ci > 8 ? "bad" : "flat"} />
+        <Stat label="Лучшая точка" value={`${signed(peak)} би`} hint="Самый высокий банкролл на дистанции. Показывает удачный отрезок, не силу стратегии." />
+        <Stat label="Просадка" value={`${floor.toFixed(1)} би`} hint="Насколько банк уходил в минус. Такой запас бай-инов нужен, чтобы досидеть этот отрезок." tone={floor < -20 ? "bad" : "flat"} />
+        <Stat label="Среднее за игру" value={`${signed(mean)} би`} hint="То же, что ROI, но в бай-инах. Минус 0.07 — это просто рейк, не ошибка чарта." />
       </div>
-      {previous && previous.games > 0 ? <Delta current={roi - fieldRoi()} past={(previous.profit / previous.games) * 100 - fieldRoi()} /> : null}
-      <svg viewBox="0 0 600 160" className="h-40 w-full rounded-xl bg-surface-2">
-        <line x1="0" x2="600" y1={zero} y2={zero} stroke="currentColor" strokeOpacity="0.25" />
-        <polyline fill="none" stroke="currentColor" strokeWidth="2" points={line} />
-      </svg>
+      <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm leading-relaxed">
+        <p className="font-medium">Что это значит</p>
+        <ul className="mt-2 space-y-2 text-muted">
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+      <BankrollChart points={points} games={totals.games} />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="font-mono text-xs text-subtle">
@@ -324,6 +327,7 @@ function Report({ totals, previous }: { totals: SimTotals; previous: SimTotals |
               const got = totals.byMult[row.mult];
               const chance = (row.weight / 100000000) * 100;
               const local = got && got.games ? (got.profit / got.games) * 100 : 0;
+              const rare = row.mult >= 50;
               return (
                 <tr key={row.mult} className="border-t border-border">
                   <td className="py-1.5 pr-3 font-mono">x{row.mult}</td>
@@ -331,24 +335,136 @@ function Report({ totals, previous }: { totals: SimTotals; previous: SimTotals |
                   <td className="py-1.5 pr-3 font-mono">{row.stack / 20}bb</td>
                   <td className="py-1.5 pr-3 font-mono">{row.places.filter((place) => place > 0).map((place) => `${place}x`).join(" / ") || "—"}</td>
                   <td className="py-1.5 pr-3 font-mono">{got?.games ?? 0}</td>
-                  <td className="py-1.5 font-mono">{got?.games ? `${local >= 0 ? "+" : ""}${local.toFixed(0)}%` : "—"}</td>
+                  <td className={cn("py-1.5 font-mono", got?.games ? (local >= field ? "text-ok" : "text-bad") : "", rare && "text-subtle")}>
+                    {got?.games ? `${signed(local)}%` : "—"}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        <p className="mt-2 text-xs text-muted">Смотрите x2 и x3: это больше 90% игр, стек 15bb, платит только первое место. x50 и выше серые не потому, что плохие, а потому что на коротком прогоне их почти нет.</p>
       </div>
     </div>
   );
 }
 
-function Delta({ current, past }: { current: number; past: number }) {
-  const diff = current - past;
+function readResult(opts: {
+  strategy: SimStrategy;
+  roi: number;
+  versus: number;
+  ci: number;
+  field: number;
+  first: number;
+  second: number;
+  third: number;
+  games: number;
+  common: { mult: number; games: number; roi: number }[];
+  previous: SimTotals | null;
+}): string[] {
+  const { strategy, versus, ci, field, first, second, third, games, common, previous } = opts;
+  const lines: string[] = [];
+  lines.push(
+    `«${strategy.name}» за ${games} игр даёт ROI ${signed(opts.roi)}%. Рейк забирает около ${Math.abs(field).toFixed(1)}%, поэтому навык — это ${signed(versus)}% против поля.`,
+  );
+  if (Math.abs(versus) <= ci) {
+    lines.push(`Разница меньше коридора ±${ci.toFixed(1)}%. По этому прогону стратегия не отличима от поля. Не меняйте рейндж, пока не прогоните 5000 игр.`);
+  } else if (versus > 0) {
+    lines.push(`Плюс больше коридора ±${ci.toFixed(1)}%. Сохраните версию и повторите на 5000 играх. Если плюс останется, правка рабочая.`);
+  } else {
+    lines.push(`Минус больше коридора ±${ci.toFixed(1)}%. Стратегия сдаёт сверх рейка. Сначала уберите лишние коллы, и только потом пробуйте блеф.`);
+  }
+  if (Math.abs(first - 1 / 3) < 0.035 && Math.abs(second - third) < 0.06) {
+    lines.push("Места близки к 33 / 33 / 33. Чарт сам по себе не отдаёт крупного преимущества. Плюс появляется, когда вы подстраиваетесь под тип стола, а не когда ломаете весь рейндж.");
+  } else if (third > first + 0.08 && third > second + 0.05) {
+    lines.push("Третьих мест заметно больше вторых: вы вылетаете первым. На BB против рейза и против олл-ина замените пограничный Call на Fold и прогоните снова.");
+  } else if (first < 0.3 && second > first) {
+    lines.push("Первых мест мало, вторых много. Вы доживаете, но не забираете турнир. С баттона можно открывать шире. Блеф добавляйте только против нитов.");
+  } else if (first > 0.37) {
+    lines.push("Первых мест больше трети. Стратегия чаще забирает банк. Проверьте, не держится ли это на одном джекпоте: сравните ROI у x2 и x3.");
+  }
+  const named = common.filter((row) => row.games > 0).map((row) => `x${row.mult} ${signed(row.roi)}% (${row.games})`);
+  if (named.length) {
+    lines.push(`Основные структуры: ${named.join(", ")}. Если здесь минус, а общий ROI спасает редкий множитель, стратегию это не улучшает.`);
+  }
+  if (strategy.mirror) {
+    lines.push("Оппоненты копируют ваш чарт. Так проверяют сам чарт: «против поля» должно быть около нуля. Чтобы оценить одну правку, выключите этот переключатель.");
+  } else if (!strategy.potOdds) {
+    lines.push("Постфлоп солвера выключен, остался только префлоп-чарт. Включите «Постфлоп как солвер» и сравните «против поля»: разница и есть цена линий Check, Raise 2, Raise 4 и All-in.");
+  } else if (!strategy.bluff && strategy.style === "nit") {
+    lines.push("Стол нитовый, блеф выключен. Включите блеф на 15–20% и прогоните снова: нит сбрасывает стилы чаще чарта.");
+  } else if (strategy.bluff && strategy.style !== "nit") {
+    lines.push("Блеф включён не против нита. Если «против поля» не выросло, выключите его: регуляр и агрессивный игрок коллируют стилы.");
+  } else if (strategy.style === "lag" && strategy.edge < 0.04) {
+    lines.push("Против агрессивных поднимите поправку колла до 4–8%. Вы перестанете оплачивать ставки, которые они делают шире чарта.");
+  } else if (strategy.edge > 0.08) {
+    lines.push("Поправка колла уже очень строгая. Если первых мест стало меньше, верните её ближе к нулю: вы фолдите руки, которые чарт хотел коллировать.");
+  } else {
+    lines.push("Следующий шаг: выберите тип стола, поменяйте только один переключатель и сравните «против поля» с этим прогоном. Одну клетку рейнджа меняйте так же, по одной.");
+  }
+  if (previous && previous.games > 0) {
+    const past = (previous.profit / previous.games) * 100 - field;
+    const diff = versus - past;
+    lines.push(
+      `Прошлый прогон был ${signed(past)}% против поля. Сейчас ${signed(diff)} п.п. ${diff > 0.5 ? "Эта правка лучше." : diff < -0.5 ? "Эта правка хуже, верните прошлую версию." : "Сдвиг внутри шума."}`,
+    );
+  }
+  return lines;
+}
+
+function BankrollChart({ points, games }: { points: number[]; games: number }) {
+  const width = 640;
+  const height = 228;
+  const left = 58;
+  const right = 16;
+  const top = 22;
+  const bottom = 36;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const low = Math.min(...points, 0);
+  const high = Math.max(...points, 0);
+  const span = high - low || 1;
+  const yOf = (value: number) => top + (1 - (value - low) / span) * plotH;
+  const xOf = (index: number) => left + (index / Math.max(1, points.length - 1)) * plotW;
+  const line = points.map((value, index) => `${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`).join(" ");
+  const last = points[points.length - 1] ?? 0;
+  const color = last >= 0 ? "#3dba7c" : "#e25555";
+  const area = `${left.toFixed(1)},${yOf(0).toFixed(1)} ${line} ${(left + plotW).toFixed(1)},${yOf(0).toFixed(1)}`;
+  const yTicks = [...new Set([high, 0, low])];
+  const xTicks = [0, Math.round(games / 2), games];
   return (
-    <p className="text-sm text-muted">
-      Против поля сейчас {signed(current)}%. Прошлый прогон {signed(past)}%. Разница {signed(diff)} п.п.
-      {diff > 0.5 ? " Эта правка лучше предыдущей." : diff < -0.5 ? " Эта правка хуже предыдущей." : " Разница внутри шума, нужен более длинный прогон."}
-    </p>
+    <figure>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-60 w-full rounded-xl bg-surface-2 text-fg" role="img" aria-label="График банкролла">
+        <text x={left} y={14} fill="currentColor" fontSize="11" opacity="0.72">
+          Банкролл, бай-ины
+        </text>
+        {yTicks.map((tick) => (
+          <g key={tick}>
+            <line x1={left} x2={left + plotW} y1={yOf(tick)} y2={yOf(tick)} stroke="currentColor" strokeOpacity={tick === 0 ? 0.5 : 0.14} />
+            <text x={left - 8} y={yOf(tick) + 4} textAnchor="end" fill="currentColor" fontSize="11" opacity="0.78">
+              {tick.toFixed(0)}
+            </text>
+          </g>
+        ))}
+        <polygon points={area} fill={color} opacity="0.14" />
+        <polyline fill="none" stroke={color} strokeWidth="2.25" points={line} />
+        <circle cx={xOf(points.length - 1)} cy={yOf(last)} r="3.5" fill={color} />
+        {xTicks.map((tick) => {
+          const index = points.length <= 1 ? 0 : Math.round((tick / Math.max(1, games)) * (points.length - 1));
+          return (
+            <text key={tick} x={xOf(index)} y={height - 8} textAnchor={tick === 0 ? "start" : tick === games ? "end" : "middle"} fill="currentColor" fontSize="11" opacity="0.78">
+              {tick}
+            </text>
+          );
+        })}
+        <text x={left + plotW} y={height - 22} textAnchor="end" fill="currentColor" fontSize="11" opacity="0.55">
+          игры
+        </text>
+      </svg>
+      <figcaption className="mt-2 text-xs leading-relaxed text-muted">
+        Ось Y — банкролл в бай-инах, ось X — сколько турниров уже сыграно. Горизонтальная линия на нуле — старт. Линия ниже нуля значит, что бай-ины ещё не отбиты. Точка справа — итог прогона, {signed(last)} би.
+      </figcaption>
+    </figure>
   );
 }
 
@@ -356,11 +472,12 @@ function signed(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint, tone = "flat" }: { label: string; value: string; hint: string; tone?: "ok" | "bad" | "flat" }) {
   return (
     <div className="rounded-xl bg-surface-2 p-3">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 font-mono text-lg">{value}</p>
+      <p className={cn("mt-1 font-mono text-lg", tone === "ok" && "text-ok", tone === "bad" && "text-bad")}>{value}</p>
+      <p className="mt-1 text-xs leading-snug text-subtle">{hint}</p>
     </div>
   );
 }
