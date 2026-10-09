@@ -27,6 +27,7 @@ export function ActionLine({
   selected,
   onSpot,
   onMine,
+  onAdvance,
 }: {
   spot: SpotDef;
   bb: number;
@@ -35,6 +36,7 @@ export function ActionLine({
   selected: string;
   onSpot: (id: string) => void;
   onMine: (action: MixAction) => void;
+  onAdvance: () => void;
 }) {
   const [sbAct, setSbAct] = useState<Blind>("");
   const [bbAct, setBbAct] = useState<Blind>("");
@@ -52,7 +54,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -89,6 +91,10 @@ export function ActionLine({
   const askTurn = flopDone && board.length < 4;
   const askRiver = turnDone && board.length < 5;
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
+  function goNext() {
+    resetHand();
+    onAdvance();
+  }
   useEffect(() => {
     if (!sized && board.length < 3) setSizeText("");
   }, [sized, board.length, spot.id, setSizeText]);
@@ -227,7 +233,7 @@ export function ActionLine({
           ) : null}
           </div>
         ))}
-        {doneRight ? (
+        {doneRight && !won && !folded ? (
           <div className="grid w-14 shrink-0 place-items-center self-center text-ok" title="Цикл закрыт, действие верное">
             <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
@@ -237,24 +243,28 @@ export function ActionLine({
           </div>
         ) : null}
         {won ? (
-          <div className="grid w-28 shrink-0 place-items-center self-center text-center text-ok">
+          <button type="button" onClick={goNext} className="grid w-28 shrink-0 place-items-center self-center text-center text-ok" title="Следующая позиция">
             <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
               <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="text-sm font-semibold">Вы выиграли</span>
-            <span className="text-[10px] leading-tight text-fg">Все сбросили. Флопа нет.</span>
-          </div>
+            <span className="text-[10px] leading-tight text-fg">Нажмите — следующая позиция</span>
+          </button>
         ) : folded ? (
-          <div className="grid w-28 shrink-0 place-items-center self-center text-center text-muted">
+          <button type="button" onClick={goNext} className="grid w-28 shrink-0 place-items-center self-center text-center text-ok" title="Следующая позиция">
+            <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
             <span className="text-sm font-semibold text-fg">Раздача закрыта</span>
-            <span className="text-[10px] leading-tight">Вы сбросили</span>
-          </div>
+            <span className="text-[10px] leading-tight">Нажмите — следующая позиция</span>
+          </button>
         ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
       </div>
-      {live ? <BoardLine openBoard /> : null}
+      {live ? <BoardLine openBoard onAdvance={goNext} /> : null}
       <p className={cn("text-sm", askFlop || askTurn || askRiver ? "font-medium text-ok" : expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."

@@ -769,7 +769,25 @@ export function SpinApp() {
                   }
                 />
               </div>
-              <ActionLine spot={spot} bb={bb} mine={mine} range={range} selected={selected} onSpot={changeSpot} onMine={setMine} />
+              <ActionLine
+                spot={spot}
+                bb={bb}
+                mine={mine}
+                range={range}
+                selected={selected}
+                onSpot={changeSpot}
+                onMine={setMine}
+                onAdvance={() => {
+                  const next = GROUPS[(GROUPS.indexOf(group) + 1) % GROUPS.length]!;
+                  const first = spotsIn(next)[0];
+                  if (!first) return;
+                  setGroup(next);
+                  setSpotId(first.id);
+                  setMine("");
+                  setSelected("");
+                  setStackOpen(false);
+                }}
+              />
               {stackOpen ? <StackPick bb={bb} onPick={takeStack} /> : null}
               <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
                 <div className="flex w-full max-w-[440px] items-stretch gap-2 select-none">

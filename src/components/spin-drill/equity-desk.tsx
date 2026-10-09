@@ -887,7 +887,7 @@ function CycleMark({ label }: { label: string }) {
   );
 }
 
-export function BoardLine({ openBoard }: { openBoard: boolean }) {
+export function BoardLine({ openBoard, onAdvance }: { openBoard: boolean; onAdvance?: () => void }) {
   const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out } = useHand();
   const latest = useRef<HTMLDivElement>(null);
   const heard = useRef(0);
@@ -986,7 +986,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
           {board.length >= 5 ? (
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
           ) : null}
-          {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} /> : null}
+          {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
         </div>
       ) : null}
     </div>
@@ -1032,16 +1032,17 @@ function drawTags(hero: Card[], board: Card[]): string[] {
   return tags;
 }
 
-function DoneMark({ label }: { label: string }) {
+function DoneMark({ label, onAdvance }: { label: string; onAdvance?: () => void }) {
   return (
-    <div className="grid w-24 shrink-0 place-items-center self-center text-center text-ok" title="Раздача закрыта">
+    <button type="button" onClick={onAdvance} className="grid w-24 shrink-0 place-items-center self-center text-center text-ok" title="Следующая позиция">
       <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
         <circle cx="12" cy="12" r="9" />
         <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span className="text-[11px] font-semibold leading-tight">Раздача закрыта</span>
       <span className="mt-0.5 text-[11px] font-medium leading-tight text-fg">{label}</span>
-    </div>
+      <span className="text-[10px] leading-tight text-fg">Нажмите — дальше</span>
+    </button>
   );
 }
 
