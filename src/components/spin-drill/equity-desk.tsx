@@ -22,7 +22,7 @@ import {
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const RANKS = [...RANK_CHARS].reverse();
@@ -749,7 +749,7 @@ function StreetColumns({
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
   const { pot, potText, setPotText, callText, setCallText } = useHand();
-  const title = (action: LineAction, seat: Seat) => actionTitle(action, pot, seatStack(seat, bb));
+  const raiseSized = (action: LineAction | null) => action === "bet33" || action === "bet66" || action === "betpot" || action === "raise";
   const cols: { seat: Seat; selected: LineAction | null; live: boolean }[] = acts.map((act) => ({
     seat: act.seat,
     selected: act.action,
@@ -757,89 +757,105 @@ function StreetColumns({
   }));
   if (!status.closed && status.seat) cols.push({ seat: status.seat, selected: null, live: true });
   const suggest = status.seat === hero ? suggested(hint, status.facing) : null;
-  const opponentLive = !status.closed && status.seat != null && status.seat !== hero;
+  const sizeAt = cols.reduce((at, col, index) => (col.seat !== hero && raiseSized(col.selected) ? index : at), -1);
   return (
     <>
       {cols.map((col, index) => {
         const prior: Line = { ...line, [only]: acts.slice(0, index) };
         const faced = col.live ? status.facing : streetStatus(seats, prior, only, jammed).facing;
-        const menu = faced ? FACING_ACTIONS : OPEN_ACTIONS;
+        const menu = (faced ? FACING_ACTIONS : OPEN_ACTIONS).filter((item) => item.id !== "bet66" && item.id !== "betpot");
         return (
-          <div
-            key={`${col.seat}-${index}`}
-            className={cn(
-              "w-[6.4rem] shrink-0 rounded-lg border p-1",
-              col.seat === hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : "border-border",
-            )}
-          >
-            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.seat === hero ? "bg-ok text-bg" : seatHead(col.seat))}>
-              <span className="font-medium">{col.seat === hero ? "Вы · ваш ход" : col.seat}</span>
-              <span className="font-mono">{seatStack(col.seat, bb)}</span>
+          <Fragment key={`${col.seat}-${index}`}>
+            <div
+              className={cn(
+                "w-[6.4rem] shrink-0 rounded-lg border p-1",
+                col.seat === hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : "border-border",
+              )}
+            >
+              <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.seat === hero ? "bg-ok text-bg" : seatHead(col.seat))}>
+                <span className="font-medium">{col.seat === hero ? "Вы · ваш ход" : col.seat}</span>
+                <span className="font-mono">{seatStack(col.seat, bb)}</span>
+              </div>
+              <div className="mt-1 flex flex-col">
+                {menu.map((item) => {
+                  const on = col.selected === item.id;
+                  const wanted = col.live && col.seat === hero && (suggest === item.id || (item.id === "bet33" && (suggest === "bet66" || suggest === "betpot")));
+                  const bluffWanted = wanted && hint.toLowerCase().includes("блеф");
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        if (on) return;
+                        if (col.live) onAction(col.seat, item.id);
+                        else onRevise(index, item.id);
+                      }}
+                      className={cn(
+                        "rounded px-1 py-1 text-left text-xs",
+                        on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
+                      )}
+                    >
+                      {streetActionLabel(item.id, index === sizeAt, callText)}
+                      {bluffWanted && !on ? " · БЛЕФ" : wanted && !on ? " · солвер" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+              {index === cols.length - 1 && acts.length > 0 ? (
+                <button type="button" onClick={onUndo} className="mt-1 w-full rounded px-1 py-0.5 text-left text-[11px] text-muted">
+                  назад
+                </button>
+              ) : null}
             </div>
-            <div className="mt-1 flex flex-col">
-              {menu.map((item) => {
-                const on = col.selected === item.id;
-                const wanted = col.live && col.seat === hero && suggest === item.id;
-                const bluffWanted = wanted && hint.toLowerCase().includes("блеф");
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      if (on) return;
-                      if (col.live) onAction(col.seat, item.id);
-                      else onRevise(index, item.id);
-                    }}
-                    className={cn(
-                      "rounded px-1 py-1 text-left text-xs",
-                      on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
-                    )}
-                  >
-                    {title(item.id, col.seat)}
-                    {bluffWanted && !on ? " · БЛЕФ" : wanted && !on ? " · солвер" : ""}
-                  </button>
-                );
-              })}
-            </div>
-            {index === cols.length - 1 && acts.length > 0 ? (
-              <button type="button" onClick={onUndo} className="mt-1 w-full rounded px-1 py-0.5 text-left text-[11px] text-muted">
-                назад
-              </button>
+            {index === sizeAt ? (
+              <div className="w-[11.5rem] shrink-0 rounded-lg border border-ok/60 bg-ok/5 p-1 text-[11px]">
+                <span className="block px-1 font-medium">Рейз {col.seat}, bb</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {[2, 2.5, 3, 4, 6, 8].map((size) => {
+                    const on = Number(callText.replace(",", ".")) === size;
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => {
+                          setCallText(String(size));
+                          if (!potText.trim() && pot != null && pot > 0) setPotText(String(pot));
+                        }}
+                        className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  inputMode="decimal"
+                  value={callText}
+                  placeholder="2"
+                  aria-label={`Размер рейза ${col.seat}, bb`}
+                  onChange={(event) => setCallText(event.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
+                />
+                <span className="mt-1 block px-1 leading-tight text-muted">Это рейз {col.seat}. Меняет цену колла и его диапазон.</span>
+              </div>
             ) : null}
-          </div>
+          </Fragment>
         );
       })}
-      {opponentLive ? (
-        <div className="w-[8.4rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
-          <span className="block px-1 font-medium">Его рейз, bb</span>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {[2, 4, 6].map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => {
-                  setCallText(String(size));
-                  if (!potText.trim()) setPotText("5.5");
-                }}
-                className={cn("h-7 rounded px-1.5 font-mono text-[11px]", Number(callText) === size ? "bg-fg text-bg" : "bg-surface-2 text-muted")}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-          <input
-            inputMode="decimal"
-            value={callText}
-            placeholder="2"
-            aria-label="Размер ставки оппонента в больших блайндах"
-            onChange={(event) => setCallText(event.target.value)}
-            className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
-          />
-          <span className="mt-1 block px-1 leading-tight text-muted">4 и 6 меняют шансы банка.</span>
-        </div>
-      ) : null}
     </>
   );
+}
+
+function streetActionLabel(action: LineAction, ownsSize: boolean, callText: string): string {
+  if (action === "check") return "Check";
+  if (action === "fold") return "Fold";
+  if (action === "call") return "Call";
+  if (action === "allin") return "All-in";
+  if (!ownsSize || !callText.trim()) return "Raise";
+  const size = Number(callText.replace(",", "."));
+  if (!Number.isFinite(size) || size <= 0) return "Raise";
+  const text = Number.isInteger(size) ? String(size) : String(Math.round(size * 10) / 10);
+  return `Raise ${text}`;
 }
 
 function CycleMark({ label }: { label: string }) {
