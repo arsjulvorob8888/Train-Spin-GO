@@ -286,7 +286,9 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
   const floor = Math.min(...points);
   const common = [2, 3].map((mult) => {
     const got = totals.byMult[mult];
-    return { mult, games: got?.games ?? 0, roi: got?.games ? (got.profit / got.games) * 100 : 0 };
+    const fair = (mult / 3 - 1) * 100;
+    const roi = got?.games ? (got.profit / got.games) * 100 : 0;
+    return { mult, games: got?.games ?? 0, roi, fair };
   });
   const lines = readResult({ strategy, roi, versus, ci, field, first, second, third, games: totals.games, common, previous });
   return (
@@ -319,7 +321,8 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
               <th className="py-1 pr-3">Стек</th>
               <th className="py-1 pr-3">Призы</th>
               <th className="py-1 pr-3">Игр</th>
-              <th className="py-1">ROI</th>
+              <th className="py-1 pr-3">Норма</th>
+              <th className="py-1">Ваш ROI</th>
             </tr>
           </thead>
           <tbody>
@@ -327,7 +330,9 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
               const got = totals.byMult[row.mult];
               const chance = (row.weight / 100000000) * 100;
               const local = got && got.games ? (got.profit / got.games) * 100 : 0;
+              const fair = (row.mult / 3 - 1) * 100;
               const rare = row.mult >= 50;
+              const ahead = local >= fair;
               return (
                 <tr key={row.mult} className="border-t border-border">
                   <td className="py-1.5 pr-3 font-mono">x{row.mult}</td>
@@ -335,7 +340,8 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
                   <td className="py-1.5 pr-3 font-mono">{row.stack / 20}bb</td>
                   <td className="py-1.5 pr-3 font-mono">{row.places.filter((place) => place > 0).map((place) => `${place}x`).join(" / ") || "—"}</td>
                   <td className="py-1.5 pr-3 font-mono">{got?.games ?? 0}</td>
-                  <td className={cn("py-1.5 font-mono", got?.games ? (local >= field ? "text-ok" : "text-bad") : "", rare && "text-subtle")}>
+                  <td className="py-1.5 pr-3 font-mono text-subtle">{signed(fair)}%</td>
+                  <td className={cn("py-1.5 font-mono", got?.games ? (ahead ? "text-ok" : "text-bad") : "", rare && !got?.games && "text-subtle")}>
                     {got?.games ? `${signed(local)}%` : "—"}
                   </td>
                 </tr>
@@ -343,7 +349,7 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
             })}
           </tbody>
         </table>
-        <p className="mt-2 text-xs text-muted">Смотрите x2 и x3: это больше 90% игр, стек 15bb, платит только первое место. x50 и выше серые не потому, что плохие, а потому что на коротком прогоне их почти нет.</p>
+        <p className="mt-2 text-xs text-muted">Норма — результат равного игрока на этом множителе. На x2 она около −33%: приз всего 2 бай-ина, а бай-ин платят трое. Зелёный ROI выше этой нормы, красный — ниже. x50 и выше на коротком прогоне почти не выпадают, по ним стратегию не судят.</p>
       </div>
     </div>
   );
@@ -359,7 +365,7 @@ function readResult(opts: {
   second: number;
   third: number;
   games: number;
-  common: { mult: number; games: number; roi: number }[];
+  common: { mult: number; games: number; roi: number; fair: number }[];
   previous: SimTotals | null;
 }): string[] {
   const { strategy, versus, ci, field, first, second, third, games, common, previous } = opts;
@@ -383,9 +389,11 @@ function readResult(opts: {
   } else if (first > 0.37) {
     lines.push("Первых мест больше трети. Стратегия чаще забирает банк. Проверьте, не держится ли это на одном джекпоте: сравните ROI у x2 и x3.");
   }
-  const named = common.filter((row) => row.games > 0).map((row) => `x${row.mult} ${signed(row.roi)}% (${row.games})`);
+  const named = common
+    .filter((row) => row.games > 0)
+    .map((row) => `x${row.mult}: ваш ${signed(row.roi)}% при норме ${signed(row.fair)}%`);
   if (named.length) {
-    lines.push(`Основные структуры: ${named.join(", ")}. Если здесь минус, а общий ROI спасает редкий множитель, стратегию это не улучшает.`);
+    lines.push(`Почти все игры — x2 и x3, стек 15bb, платит только победитель. ${named.join(". ")}. Сравнивайте свой ROI с нормой, не с нулём: на x2 ноль недостижим.`);
   }
   if (strategy.mirror) {
     lines.push("Оппоненты копируют ваш чарт. Так проверяют сам чарт: «против поля» должно быть около нуля. Чтобы оценить одну правку, выключите этот переключатель.");
