@@ -44,7 +44,7 @@ export function lastBySeat(acts: StreetLine): Partial<Record<Seat, LineAction>> 
   return out;
 }
 
-/** Postflop acting order. Heads-up is BB then SB. Three-handed is SB, BB, BTN. */
+/** Postflop order. Real heads-up: the button is the SB and acts last. In 3-max the button acts last; if he folded, the SB is first. */
 export function seatsInHand(spotId: string, out: Seat[] = []): Seat[] {
   const gone = new Set(out);
   const seats = seatsForSpot(spotId);
@@ -52,14 +52,14 @@ export function seatsInHand(spotId: string, out: Seat[] = []): Seat[] {
 }
 
 function seatsForSpot(spotId: string): Seat[] {
+  if (spotId.startsWith("hu_")) return ["BB", "SB"];
   if (
-    spotId.startsWith("hu_") ||
     spotId === "sb_fold" ||
     spotId.startsWith("bb_vs_sb") ||
     spotId === "sb_iso" ||
     spotId === "sb_vs_bb_jam"
   ) {
-    return ["BB", "SB"];
+    return ["SB", "BB"];
   }
   if (spotId.startsWith("bb_vs_btn")) return ["BB", "BTN"];
   return ["SB", "BB", "BTN"];

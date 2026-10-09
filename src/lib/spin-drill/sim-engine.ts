@@ -448,7 +448,7 @@ function postflopOrder(live: Player[]): Player[] {
   if (!active.some((player) => player.seat === "BTN")) {
     const bb = active.find((player) => player.seat === "BB");
     const sb = active.find((player) => player.seat === "SB");
-    return [bb, sb].filter((player): player is Player => Boolean(player));
+    return [sb, bb].filter((player): player is Player => Boolean(player));
   }
   const order: Player[] = [];
   for (const seat of ["SB", "BB", "BTN"] as Seat[]) {

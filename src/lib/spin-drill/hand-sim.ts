@@ -47,7 +47,7 @@ export function liveSeats(stack: number, history: Act[]): Seat[] {
 }
 
 export function postOrder(seats: Seat[]): Seat[] {
-  if (seats.length === 2 && seats.includes("BB") && seats.includes("SB") && !seats.includes("BTN")) return ["BB", "SB"];
+  if (seats.length === 2 && seats.includes("BB") && seats.includes("SB") && !seats.includes("BTN")) return ["SB", "BB"];
   if (seats.length === 2 && seats.includes("BB") && seats.includes("BTN")) return ["BB", "BTN"];
   if (seats.length === 2 && seats.includes("SB") && seats.includes("BTN")) return ["SB", "BTN"];
   return (["SB", "BB", "BTN"] as const).filter((seat) => seats.includes(seat));
