@@ -770,15 +770,19 @@ export function SpinApp() {
               </div>
               <ActionLine spot={spot} bb={bb} mine={mine} range={range} selected={selected} onSpot={changeSpot} onMine={setMine} />
               {stackOpen ? <StackPick bb={bb} onPick={takeStack} /> : null}
-              <div className="mt-3 flex w-full max-w-[440px] items-stretch gap-2 select-none">
-                <div className="min-w-0 flex-1">
-                  <MixGrid compact range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
+              <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
+                <div className="flex w-full max-w-[440px] items-stretch gap-2 select-none">
+                  <div className="min-w-0 flex-1">
+                    <MixGrid compact range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
+                  </div>
+                  <StackRail bb={bb} onChange={setBb} />
                 </div>
-                <StackRail bb={bb} onChange={setBb} />
+                <div className="min-w-0 lg:sticky lg:top-3">
+                  <EquityDesk />
+                  <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
+                </div>
               </div>
-              <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
               <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">{spotTip(spot.id)}</p>
-              <EquityDesk />
               {live?.name === MICRO_NAME ? (
                 <p className="mt-2 text-sm text-muted">Постфлоп без блефа: воздух чек, пара и сильнее — ставка, если пот-оддс не велят сбрасывать.</p>
               ) : null}

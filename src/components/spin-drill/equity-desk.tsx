@@ -483,13 +483,16 @@ export function EquityDesk() {
             <p className="mt-1 text-xs text-muted">Префлоп закрыт. Карт дальше нет.</p>
           </div>
         ) : shown ? (
-          <div className="flex items-end gap-4">
+          <div className="flex w-full flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
-                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff ? "Солвер: это блеф" : "Солвер ждёт"}
+                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff ? "Солвер: это блеф" : "Решение солвера"}
               </p>
-              <p className={cn("text-3xl font-semibold leading-none", shown.bluff ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
+              <p className={cn("text-4xl font-semibold leading-none sm:text-5xl", shown.bluff ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
                 {shown.verdict}
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                {shown.label === shown.verdict ? "Совпадает с чартом" : `Чарт на этот размер: ${shown.label}`}
               </p>
               <p className="mt-1 text-xs text-muted">
                 {shown.street} · {shown.klass}
@@ -497,10 +500,20 @@ export function EquityDesk() {
                 {shown.draw ? ` · ${shown.draw}` : ""}
               </p>
             </div>
-            <p className="font-mono text-4xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
+            <div className="text-right">
+              <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Эквити</p>
+              <p className="font-mono text-5xl font-semibold leading-none">{Math.round(shown.equity * 100)}%</p>
+              {shown.need != null && shown.need > 0 ? (
+                <p className={cn("mt-1 font-mono text-sm", shown.equity + 0.01 >= shown.need ? "text-ok" : "text-bad")}>
+                  нужно {Math.round(shown.need * 100)}%
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-muted">колл не требуется</p>
+              )}
+            </div>
           </div>
         ) : (
-          <p className="text-sm text-muted">Действие появится здесь сразу после двух карт.</p>
+          <p className="text-sm text-muted">Отметьте карты слева. Решение, эквити и пот-оддс появятся в этом блоке, рядом с рейнджем.</p>
         )}
       </div>
       <p className="mt-2 text-sm leading-snug text-muted">
