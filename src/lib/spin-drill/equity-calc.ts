@@ -230,7 +230,16 @@ export type Consult = {
   street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
   verdict: string;
   random: boolean;
-  bluff: { title: string; action: string; reasons: string[] } | null;
+  bluff: {
+    on: boolean;
+    title: string;
+    action: string;
+    reasons: string[];
+    equity: number;
+    foldNeed: number | null;
+    bet: number | null;
+    pot: number | null;
+  } | null;
 };
 
 function likelyHands(combos: Combo[], byWeight: boolean): { hand: string; pct: number }[] {
@@ -432,6 +441,16 @@ function semiBluff(draw: string | null, made: string | null, equity: number): bo
   return strong && air && equity >= 0.28 && equity < 0.5;
 }
 
+function priceBluff(pot: number | null, equity: number): { pot: number; bet: number; foldNeed: number } {
+  const bank = pot != null && pot > 0 ? Math.round(pot * 10) / 10 : 5.5;
+  const bet = Math.max(1, Math.round((bank / 3) * 2) / 2);
+  const called = equity * (bank + 2 * bet);
+  const needChips = bet - called;
+  const span = bank + bet - called;
+  const foldNeed = needChips <= 0 ? 0 : span <= 0 ? 1 : Math.min(1, needChips / span);
+  return { pot: bank, bet, foldNeed };
+}
+
 function bluffCue(opts: {
   street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
   phase: "act" | "wait" | "done";
@@ -439,19 +458,113 @@ function bluffCue(opts: {
   draw: string | null;
   made: string | null;
   equity: number;
-}): { title: string; action: string; reasons: string[] } | null {
-  if (opts.phase !== "act" || opts.facing !== "none") return null;
-  if (opts.street !== "Флоп" && opts.street !== "Тёрн") return null;
-  if (!semiBluff(opts.draw, opts.made, opts.equity)) return null;
+  pot: number | null;
+}): {
+  on: boolean;
+  title: string;
+  action: string;
+  reasons: string[];
+  equity: number;
+  foldNeed: number | null;
+  bet: number | null;
+  pot: number | null;
+} {
   const pct = Math.round(opts.equity * 100);
+  const price = priceBluff(opts.pot, opts.equity);
+  const foldPct = Math.round(price.foldNeed * 100);
+  const strong = Boolean(opts.draw && (opts.draw.includes("флеш-дро") || opts.draw.includes("двусторонний")));
+  const air = !opts.made || opts.made === "старшая карта";
+  const card = {
+    equity: opts.equity,
+    foldNeed: price.foldNeed,
+    bet: price.bet,
+    pot: price.pot,
+  };
+  const stake = `Ставка ${trimSize(price.bet)}bb в банк ${trimSize(price.pot)}bb просит фолд хотя бы ${foldPct}%.`;
+  if (opts.phase !== "act") {
+    return { ...card, on: false, title: "Не ваш ход", action: "Ждать", reasons: ["Блеф считается только на вашем действии. Сначала отметьте ход оппонента."] };
+  }
+  if (opts.street === "Префлоп") {
+    return {
+      ...card,
+      on: false,
+      title: "Не блеф",
+      action: "Чарт",
+      reasons: [
+        "На префлопе отдельного блефа нет. Открытие и пуш уже заложены в чарт, это не ставка воздухом.",
+        `Эквити на вскрытии ${pct}%. ${stake} Префлоп по этой формуле не играем.`,
+      ],
+    };
+  }
+  if (opts.facing !== "none") {
+    return {
+      ...card,
+      on: false,
+      title: "Не блеф",
+      action: "Колл или фолд",
+      reasons: [
+        opts.facing === "allin" ? "В вас олл-ин. Блеф-рейз невозможен." : "В вас уже поставили. Блеф-рейз без готовой руки на $0.25 и $1 в минусе.",
+        `Эквити ${pct}% сравнивайте с ценой колла, не с тем, сбросит ли оппонент.`,
+      ],
+    };
+  }
+  if (opts.street === "Ривер") {
+    return {
+      ...card,
+      on: false,
+      title: "Не блеф",
+      action: "Чек",
+      reasons: [
+        "Ривер: дро банк больше не добирает. Ставка без руки — чистый блеф.",
+        `${stake} На этих лимитах ривер без руки коллируют чаще, чем нужно.`,
+      ],
+    };
+  }
+  if (!air) {
+    return {
+      ...card,
+      on: false,
+      title: "Это не блеф",
+      action: "Вэлью или чек",
+      reasons: [`Есть ${opts.made}. Если ставите, это рука, не воздух.`, `Эквити ${pct}%. Блефом такая ставка не называется.`],
+    };
+  }
+  if (!strong) {
+    return {
+      ...card,
+      on: false,
+      title: "Не блеф",
+      action: "Чек",
+      reasons: [
+        opts.draw ? `Дро слабое: ${opts.draw}. Для блефа нужен флеш-дро или двусторонний стрит.` : `Дро нет. Эквити ${pct}% — это воздух.`,
+        `${stake} Без сильного дро этот процент на микролимитах не закладываем.`,
+      ],
+    };
+  }
+  if (opts.equity < 0.28 || opts.equity >= 0.5) {
+    return {
+      ...card,
+      on: false,
+      title: "Не блеф",
+      action: opts.equity >= 0.5 ? "Вэлью" : "Чек",
+      reasons: [
+        opts.equity >= 0.5
+          ? `Эквити ${pct}% — рука уже впереди диапазона. Это ставка на вскрытие, не блеф.`
+          : `Дро есть (${opts.draw}), но эквити ${pct}% ниже 28%. ${stake} Чек.`,
+      ],
+    };
+  }
   return {
-    title: "Оптимальный блеф",
+    ...card,
+    on: true,
+    title: "Блефуй",
     action: "Raise 2",
     reasons: [
-      "Готовой руки нет. Ставка не для вскрытия — это и есть блеф.",
-      `Дро: ${opts.draw}. Если оппонент колл, у вас ещё ${pct}% на банк, ставка не сгорает целиком.`,
-      "В вас никто не ставил, размер ваш. Маленький Raise 2 плюсовой, если сбросит примерно четверть их рук.",
-      "Олл-ин, ривер и ставка без дро здесь минус: на $0.25 и $1 так не блефуем.",
+      `Готовой руки нет. Дро: ${opts.draw}. Эквити ${pct}%.`,
+      foldPct === 0
+        ? `Ставка ${trimSize(price.bet)}bb уже плюсовая, даже если заколлируют всегда. Нужный фолд 0%, каждый сброс сверху только добавляет.`
+        : `${stake} С этим дро фолд реалистичен, а колл ещё оставляет вам ${pct}% банка.`,
+      "Крупнее, без дро и на ривере этот блеф не ставь.",
     ],
   };
 }
@@ -672,7 +785,15 @@ export function consult(opts: {
     street,
     verdict: said.verdict,
     random: villain.random,
-    bluff: bluffCue({ street, phase, facing, draw: drawBits.length ? drawBits.join(", ") : null, made, equity }),
+    bluff: bluffCue({
+      street,
+      phase,
+      facing,
+      draw: drawBits.length ? drawBits.join(", ") : null,
+      made,
+      equity,
+      pot: opts.pot != null && opts.pot > 0 ? opts.pot : !face && auto ? auto.pot : priced ? Math.max(1, priced.pot - priced.toCall) : null,
+    }),
     text: said.text,
   };
 }

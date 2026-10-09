@@ -55,7 +55,16 @@ type HandApi = {
     need: number | null;
     action: string;
     label: string;
-    bluff: { title: string; action: string; reasons: string[] } | null;
+    bluff: {
+      on: boolean;
+      title: string;
+      action: string;
+      reasons: string[];
+      equity: number;
+      foldNeed: number | null;
+      bet: number | null;
+      pot: number | null;
+    } | null;
   } | null;
   typedOdds: number | null;
   pot: number | null;
@@ -511,9 +520,9 @@ export function EquityDesk() {
           <div className="flex w-full flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
-                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff ? "Солвер: это блеф" : "Решение солвера"}
+                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff?.on ? "Солвер: это блеф" : "Решение солвера"}
               </p>
-              <p className={cn("text-4xl font-semibold leading-none sm:text-5xl", shown.bluff ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
+              <p className={cn("text-4xl font-semibold leading-none sm:text-5xl", shown.bluff?.on ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
                 {shown.verdict}
               </p>
               <p className="mt-2 text-sm text-muted">
@@ -1038,32 +1047,50 @@ function playBluffSting() {
 }
 playBluffSting.ctx = null as AudioContext | null;
 
-function BluffNotice({ bluff }: { bluff: { title: string; action: string; reasons: string[] } | null }) {
+function BluffNotice({
+  bluff,
+}: {
+  bluff: {
+    on: boolean;
+    title: string;
+    action: string;
+    reasons: string[];
+    equity: number;
+    foldNeed: number | null;
+    bet: number | null;
+    pot: number | null;
+  } | null;
+}) {
   const saw = journalSummary(readJournal()).saw;
-  const sticky = Boolean(bluff) && saw.station >= 3 && saw.station >= saw.nit && saw.station >= saw.lag;
-  const show = Boolean(bluff) && !sticky;
+  const sticky = Boolean(bluff?.on) && saw.station >= 3 && saw.station >= saw.nit && saw.station >= saw.lag;
+  const on = Boolean(bluff?.on) && !sticky;
   useEffect(() => {
-    if (!show) return;
+    if (!on) return;
     playBluffSting();
-  }, [show, bluff?.title, bluff?.action]);
+  }, [on, bluff?.title, bluff?.action]);
   if (!bluff) return null;
-  if (sticky) {
-    return (
-      <div className="mt-3 rounded-xl border border-bad bg-bad/10 px-3 py-3">
-        <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Блеф отменён</p>
-        <p className="mt-1 text-lg font-medium">Дро есть, блеф не бери</p>
-        <p className="mt-1 text-sm text-muted">Солвер видит блеф по дро, но журнал говорит, что стол коллит всё. Такая ставка ему платит. Здесь чек.</p>
-      </div>
-    );
-  }
+  const fold = bluff.foldNeed == null ? null : Math.round(bluff.foldNeed * 100);
+  const eq = Math.round(bluff.equity * 100);
+  const reasons = sticky
+    ? [`Журнал: стол коллирует всё. Нужные ${fold ?? 0}% фолда вы здесь не получите.`, "Дро есть, но ставка без руки этому оппоненту платит. Чек."]
+    : bluff.reasons;
   return (
-    <div className="bluff-card relative mt-3 overflow-hidden rounded-xl border-2 border-bluff bg-bluff/15 px-3 py-3">
-      <div className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-      <p className="text-[10px] font-medium tracking-[0.2em] text-bluff uppercase">Это блеф · не вэлью</p>
-      <p className="mt-1 text-2xl font-semibold text-bluff">{bluff.title}</p>
-      <p className="mt-1 text-sm font-medium">Солвер: {bluff.action}</p>
-      <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-fg">
-        {bluff.reasons.map((reason) => (
+    <div className={cn("relative mt-3 overflow-hidden rounded-xl border px-3 py-3", on ? "bluff-card border-2 border-bluff bg-bluff/15" : "border-border bg-bg")}>
+      {on ? <div className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent" /> : null}
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className={cn("text-[10px] font-medium tracking-[0.2em] uppercase", on ? "text-bluff" : "text-subtle")}>{on ? "Блеф берём" : "Блеф не берём"}</p>
+          <p className={cn("mt-1 text-2xl font-semibold", on ? "text-bluff" : "")}>{sticky ? "Не блефуй" : bluff.title}</p>
+          <p className="mt-1 text-sm">{on ? `Действие: ${bluff.action}` : `Вместо блефа: ${sticky ? "Чек" : bluff.action}`}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">Нужен фолд</p>
+          <p className={cn("font-mono text-4xl font-semibold leading-none", on ? "text-bluff" : "")}>{fold == null ? "—" : `${fold}%`}</p>
+          <p className="mt-1 font-mono text-xs text-muted">эквити {eq}%</p>
+        </div>
+      </div>
+      <ul className="mt-3 list-disc space-y-1 pl-4 text-sm">
+        {reasons.map((reason) => (
           <li key={reason}>{reason}</li>
         ))}
       </ul>
