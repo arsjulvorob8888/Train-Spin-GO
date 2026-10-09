@@ -48,6 +48,10 @@ type HandApi = {
     draw?: string | null;
     text: string;
     equity: number;
+    win: number;
+    tie: number;
+    who: string;
+    likely: { hand: string; pct: number }[];
     need: number | null;
     action: string;
     label: string;
@@ -526,6 +530,7 @@ export function EquityDesk() {
               : "Сначала карты, потом линия префлопа, потом борд. Совет пересчитывается после каждого хода."}
       </p>
       {shown && result !== "win" && result !== "fold" ? <OddsBar need={shown.need} equity={shown.equity} street={shown.street} /> : null}
+      {shown && result !== "win" && result !== "fold" ? <EquityLesson shown={shown} pot={pot} toCall={toCall} /> : null}
       {shown && result !== "win" && result !== "fold" ? <BluffNotice bluff={shown.bluff} /> : null}
       <div className="mt-3 grid max-w-sm grid-cols-2 gap-2">
         <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
@@ -1068,6 +1073,85 @@ function BluffNotice({ bluff }: { bluff: { title: string; action: string; reason
           <li key={reason}>{reason}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function EquityLesson({
+  shown,
+  pot,
+  toCall,
+}: {
+  shown: {
+    equity: number;
+    win: number;
+    tie: number;
+    who: string;
+    likely: { hand: string; pct: number }[];
+    need: number | null;
+    verdict: string;
+    street: string;
+  };
+  pot: number | null;
+  toCall: number | null;
+}) {
+  const eq = shown.equity;
+  const win = Math.round(shown.win * 100);
+  const tie = Math.round(shown.tie * 100);
+  const eqPct = Math.round(eq * 100);
+  const priced = shown.need != null && shown.need > 0;
+  const need = priced ? Math.round(shown.need! * 100) : null;
+  const ev = priced && pot != null && toCall != null && toCall > 0 ? eq * (pot + toCall) - toCall : null;
+  const shoving = /all-in|пуш|блеф|raise/i.test(shown.verdict);
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-border bg-bg px-3 py-3 text-sm">
+      <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Как считалось</p>
+      <p>
+        Эквити — ваша доля банка на вскрытии против диапазона «{shown.who}». Это не шанс, что оппонент сбросит.
+      </p>
+      <p className="font-mono text-xs leading-relaxed text-fg">
+        EQ = (победы + ничьи / 2) / все пробы
+        <br />
+        {win}% побед + {tie}% ничьих / 2 = {eqPct}%
+      </p>
+      <p className="text-muted">
+        {shown.street === "Префлоп"
+          ? "В каждой пробе солвер добирает флоп, тёрн и ривер из оставшейся колоды. Цифра уже включает все будущие карты, а не только то, что на руках сейчас."
+          : "Незакрытые карты борда в каждой пробе добираются из колоды. Дро уже сидит в этой цифре, отдельно ауты прибавлять не нужно."}
+      </p>
+      {shown.likely.length > 0 ? (
+        <p className="text-muted">
+          Чаще всего у оппонента: {shown.likely.slice(0, 4).map((hand) => `${hand.hand} ${hand.pct}%`).join(" · ")}.
+        </p>
+      ) : null}
+      {priced && need != null ? (
+        <>
+          <p>Пот-оддс — минимальное эквити, при котором колл не теряет фишки.</p>
+          <p className="font-mono text-xs leading-relaxed text-fg">
+            нужно = докинуть / (банк + докинуть) = {need}%
+            <br />
+            EV колла = EQ × (банк + докинуть) − докинуть
+            {ev != null ? ` = ${ev >= 0 ? "+" : ""}${ev.toFixed(2)} bb` : ""}
+          </p>
+          <p className="text-muted">
+            {eq + 0.01 >= shown.need!
+              ? `Рука ${eqPct}% выше цены ${need}%. Колл по фишкам плюсовой.`
+              : `Рука ${eqPct}% ниже цены ${need}%. Колл сжигает фишки, даже если рука выглядит сильной.`}
+          </p>
+        </>
+      ) : shoving ? (
+        <>
+          <p>Пуш и рейз — не колл. Кроме доли банка на вскрытии есть фолд-эквити: то, что забираете, когда оппонент сбрасывает.</p>
+          <p className="font-mono text-xs leading-relaxed text-fg">
+            EV = F × банк сейчас + (1 − F) × (EQ × банк после колла − риск)
+          </p>
+          <p className="text-muted">
+            F — как часто сбрасывают. В одну руку это не измерить, чарт уже это заложил. Поэтому {shown.verdict} при эквити {eqPct}% может быть верным: {eqPct}% — только ветка, где вас заколлировали.
+          </p>
+        </>
+      ) : (
+        <p className="text-muted">Ставки нет, формула колла не включается. Эквити показывает, насколько рука впереди диапазона, если дойдёте до вскрытия.</p>
+      )}
     </div>
   );
 }
