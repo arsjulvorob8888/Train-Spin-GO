@@ -709,6 +709,17 @@ function seatHead(seat: string): string {
 
 export function Hole() {
   const { cards, queue, open } = useHand();
+  const a = cards.h0;
+  const b = cards.h1;
+  const pair = Boolean(a && b && a.rank === b.rank);
+  const face = a ? (RANK_CHARS[a.rank] === "T" ? "10" : RANK_CHARS[a.rank]) : "";
+  const label = pair ? `Пара ${face}` : "";
+  const heard = useRef("");
+  useEffect(() => {
+    if (!label || heard.current === label) return;
+    heard.current = label;
+    playHandSting(1);
+  }, [label]);
   return (
     <div className="w-[5.6rem] shrink-0 rounded-lg border border-border p-1">
       <p className="px-1 text-[11px] font-medium">Вы</p>
@@ -717,6 +728,12 @@ export function Hole() {
           <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
         ))}
       </div>
+      {label ? (
+        <p key={label} className="hand-hit relative mt-1 overflow-hidden rounded bg-ok px-1.5 py-1 text-xs font-semibold leading-tight text-bg">
+          <span className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+          {label}
+        </p>
+      ) : null}
     </div>
   );
 }
