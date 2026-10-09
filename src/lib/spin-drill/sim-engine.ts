@@ -74,6 +74,8 @@ export type SimTotals = {
   maxDown: number;
   curve: number[];
   byMult: Record<number, { games: number; profit: number; wins: number }>;
+  /** Hero chip change on the hand, tagged by the first preflop spot he faced. */
+  spots: Record<string, { hands: number; chips: number }>;
 };
 
 /** Break-even ROI of three equal players. Prize pool averages 2.79 buy-ins, so the field is about −7%. */
@@ -94,7 +96,7 @@ export function thinCurve(curve: number[], points = 81): number[] {
 export function emptyTotals(): SimTotals {
   const byMult: SimTotals["byMult"] = {};
   for (const row of PRIZES) byMult[row.mult] = { games: 0, profit: 0, wins: 0 };
-  return { games: 0, profit: 0, wins: 0, second: 0, third: 0, sumSq: 0, maxUp: 0, maxDown: 0, curve: [0], byMult };
+  return { games: 0, profit: 0, wins: 0, second: 0, third: 0, sumSq: 0, maxUp: 0, maxDown: 0, curve: [0], byMult, spots: {} };
 }
 
 export function addTotals(into: SimTotals, part: SimTotals) {
@@ -119,6 +121,13 @@ export function addTotals(into: SimTotals, part: SimTotals) {
     dst.games += src.games;
     dst.profit += src.profit;
     dst.wins += src.wins;
+  }
+  if (!into.spots) into.spots = {};
+  for (const [id, src] of Object.entries(part.spots ?? {})) {
+    const dst = into.spots[id] ?? { hands: 0, chips: 0 };
+    dst.hands += src.hands;
+    dst.chips += src.chips;
+    into.spots[id] = dst;
   }
 }
 
@@ -149,6 +158,12 @@ export function playBatch(strategy: SimStrategy, games: number, seed: number): S
       bucket.profit += result.profit;
       if (result.place === 0) bucket.wins += 1;
     }
+    for (const [id, src] of Object.entries(result.spots)) {
+      const dst = totals.spots[id] ?? { hands: 0, chips: 0 };
+      dst.hands += src.hands;
+      dst.chips += src.chips;
+      totals.spots[id] = dst;
+    }
   }
   totals.maxUp = peak;
   totals.maxDown = floor;
@@ -172,7 +187,7 @@ type Player = {
   cards: Card[];
 };
 
-function playTournament(strategy: SimStrategy, rng: Rng): { profit: number; place: number; mult: number } {
+function playTournament(strategy: SimStrategy, rng: Rng): { profit: number; place: number; mult: number; spots: Record<string, { hands: number; chips: number }> } {
   const wheel = spin(rng);
   const stack = strategy.fixedStack ? Math.max(160, Math.round(strategy.stackBb) * 20) : wheel.stack;
   const players: Player[] = [0, 1, 2].map((id) => ({
@@ -190,9 +205,16 @@ function playTournament(strategy: SimStrategy, rng: Rng): { profit: number; plac
   let level = 0;
   let button = Math.floor(rng() * 3);
   const busted: number[] = [];
+  const spots: Record<string, { hands: number; chips: number }> = {};
   while (players.filter((p) => p.stack > 0).length > 1 && hands < 220) {
     const before = players.map((player) => player.stack);
-    playHand(strategy, players, button, blindsAt(level), rng);
+    const mark = playHand(strategy, players, button, blindsAt(level), rng);
+    if (mark.spot) {
+      const row = spots[mark.spot] ?? { hands: 0, chips: 0 };
+      row.hands += 1;
+      row.chips += mark.chips;
+      spots[mark.spot] = row;
+    }
     button = nextButton(players, button);
     const fresh = rank(players.filter((player) => player.stack <= 0 && !busted.includes(player.id)), (player) => before[player.id] ?? 0, rng);
     for (const player of fresh) busted.push(player.id);
@@ -205,7 +227,7 @@ function playTournament(strategy: SimStrategy, rng: Rng): { profit: number; plac
   const prize = wheel.places[heroPlace] ?? 0;
   const left = players.reduce((sum, player) => sum + player.stack, 0);
   if (left !== stack * 3) throw new Error(`chip leak ${left} != ${stack * 3}`);
-  return { profit: prize - 1, place: heroPlace, mult: wheel.mult };
+  return { profit: prize - 1, place: heroPlace, mult: wheel.mult, spots };
 }
 
 function rank(list: Player[], chips: (player: Player) => number, rng: Rng): Player[] {
@@ -241,9 +263,16 @@ function spin(rng: Rng): PrizeRow {
   return PRIZES[0]!;
 }
 
-function playHand(strategy: SimStrategy, players: Player[], button: number, blind: Blind, rng: Rng) {
+function playHand(strategy: SimStrategy, players: Player[], button: number, blind: Blind, rng: Rng): { spot: string; chips: number } {
+  const hero = players.find((player) => player.hero);
+  const before = hero?.stack ?? 0;
+  let heroSpot = "";
+  const finish = () => {
+    const after = players.find((player) => player.hero)?.stack ?? before;
+    return { spot: heroSpot, chips: after - before };
+  };
   const live = players.filter((player) => player.stack > 0);
-  if (live.length < 2) return;
+  if (live.length < 2) return { spot: "", chips: 0 };
   seatThem(live, button);
   const board = deal(live, rng);
   for (const player of live) {
@@ -263,6 +292,7 @@ function playHand(strategy: SimStrategy, players: Player[], button: number, blin
       if (!player.in || player.stack <= 0) continue;
       const maxPut = Math.max(...live.filter((p) => p.in).map((p) => p.put));
       if (player.put >= maxPut && acted.some((a) => a.seat === player.seat)) continue;
+      if (player.hero && !heroSpot) heroSpot = spotId(live.length === 2 ? 2 : 3, player.seat, acted);
       const action = choose(strategy, player, live, acted, blind, rng);
       acted.push({ seat: player.seat, act: action });
       moved = true;
@@ -286,10 +316,11 @@ function playHand(strategy: SimStrategy, players: Player[], button: number, blin
   if (still.length <= 1) {
     if (still[0]) still[0].stack += live.reduce((sum, player) => sum + player.put, 0);
     for (const player of live) player.put = 0;
-    return;
+    return finish();
   }
   if (still.filter((player) => player.stack > 0).length >= 2) playBoard(strategy, live, board, blind.bb, rng);
   award(live, board);
+  return finish();
 }
 
 function raiseTo(player: Player, live: Player[], acted: { act: Open }[], bb: number): number {

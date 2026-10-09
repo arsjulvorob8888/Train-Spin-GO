@@ -15,12 +15,19 @@ import {
   type SimStrategy,
   type StyleId,
 } from "@/lib/spin-drill/sim-strategy";
+import { publishLive } from "@/lib/spin-drill/live-strategy";
 import { cn } from "@/lib/utils";
 import { useMemo, useRef, useState } from "react";
 
 const ACTIONS: MixAction[] = ["fold", "call", "raise", "allin"];
 const CLOUD_RUNS = 100;
 const CLOUD_GAMES = 5000;
+
+const STEPS: { title: string; text: string; patch: Partial<SimStrategy> }[] = [
+  { title: "1. База", text: "Чарт и постфлоп солвера, без блефа. С этим сравнивают любой другой шаг.", patch: { style: "off", bluff: false, edge: 0, potOdds: true, mirror: false, fixedStack: false, adaptStack: true } },
+  { title: "2. Против нита", text: "Только блеф 18%. Ничего больше не менять, потом смотреть облако.", patch: { style: "nit", bluff: true, bluffFreq: 0.18, edge: 0, potOdds: true, mirror: false } },
+  { title: "3. Против агрессивного", text: "Блеф выключен, коллы строже на 6%.", patch: { style: "lag", bluff: false, edge: 0.06, potOdds: true, mirror: false } },
+];
 
 type CloudMessage =
   | { pong: true }
@@ -34,6 +41,7 @@ type CloudMessage =
       maxUp: number;
       maxDown: number;
       byMult: SimTotals["byMult"];
+      spots: SimTotals["spots"];
       curve: number[];
     };
 
@@ -251,6 +259,7 @@ export function SimLab() {
           part.maxUp = data.maxUp;
           part.maxDown = data.maxDown;
           part.byMult = data.byMult;
+          part.spots = data.spots ?? {};
           part.curve = [0];
           finished += 1;
           take(data.curve, part);
@@ -294,6 +303,9 @@ export function SimLab() {
               }}
             />
           </label>
+          <button type="button" className="h-11 rounded-md bg-fg px-3 text-sm font-medium text-bg" onClick={() => publishLive(strategy)}>
+            В Стратегию
+          </button>
           <button type="button" className="h-11 rounded-md border border-border px-3 text-sm" onClick={saveVersion}>
             Сохранить версию
           </button>
@@ -340,6 +352,19 @@ export function SimLab() {
         <Slider label={`Поправка колла: ${(strategy.edge * 100).toFixed(0)}%`} min={-5} max={15} value={Math.round(strategy.edge * 100)} onChange={(value) => patch({ edge: value / 100 })} />
         <Slider label={`Частота блефа: ${Math.round(strategy.bluffFreq * 100)}%`} min={0} max={40} value={Math.round(strategy.bluffFreq * 100)} onChange={(value) => patch({ bluffFreq: value / 100 })} />
         <Slider label={`Стек эксперимента: ${strategy.stackBb.toFixed(0)}bb`} min={8} max={50} value={strategy.stackBb} onChange={(value) => patch({ stackBb: value, fixedStack: true })} />
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h3 className="font-medium">Как улучшать</h3>
+        <p className="mt-1 text-sm text-muted">Один шаг за раз, как в солверах: поставили настройку, прогнали облако, сравнили медиану с прошлым прогоном. Если жирная линия поднялась и слабые линии тоже выше нуля — шаг рабочий.</p>
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          {STEPS.map((step) => (
+            <button key={step.title} type="button" className="rounded-xl bg-surface-2 p-3 text-left" onClick={() => patch(step.patch)}>
+              <span className="font-medium">{step.title}</span>
+              <span className="mt-1 block text-sm text-muted">{step.text}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-4">
@@ -468,6 +493,13 @@ function Report({ totals, previous, strategy, cloud }: { totals: SimTotals; prev
         </ul>
       </div>
       <BankrollChart points={points} games={totals.games} cloud={cloud} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="max-w-xl text-sm text-muted">Стратегия доказана, только если в облаке даже слабые линии выше нуля. Тогда кнопка уносит эти рейнджи в раздел Стратегия, и солвер подсказывает их за столом.</p>
+        <button type="button" className="h-11 rounded-md bg-fg px-3 text-sm font-medium text-bg" onClick={() => publishLive(strategy)}>
+          Загрузить в Стратегию
+        </button>
+      </div>
+      <SpotBars spots={totals.spots} previous={previous?.spots} />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="font-mono text-xs text-subtle">
@@ -574,6 +606,54 @@ function readResult(opts: {
     );
   }
   return lines;
+}
+
+function SpotBars({ spots, previous }: { spots: SimTotals["spots"] | undefined; previous?: SimTotals["spots"] }) {
+  const titles = Object.fromEntries(spotChoices().map((spot) => [spot.id, spot.title]));
+  const rows = Object.entries(spots ?? {})
+    .filter(([, row]) => row.hands >= 15)
+    .map(([id, row]) => {
+      const was = previous?.[id];
+      const now = row.chips / row.hands;
+      const before = was && was.hands ? was.chips / was.hands : null;
+      return { id, title: titles[id] ?? id, hands: row.hands, chips: row.chips, now, before };
+    })
+    .sort((a, b) => a.chips - b.chips)
+    .slice(0, 8);
+  if (!rows.length) return null;
+  const max = Math.max(...rows.map((row) => Math.abs(row.chips)), 1);
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <p className="font-medium">Фишки по спотам</p>
+      <p className="mt-1 text-xs text-muted">Результат руки записан на первый спот. Красный столбец — банк в среднем таял. Колл олл-ина часто красный просто из-за размера банка, это ещё не ошибка. Ошибку видно, если после одной правки число к прошлому прогону выросло.</p>
+      <div className="mt-3 space-y-2">
+        {rows.map((row) => {
+          const width = (Math.abs(row.chips) / max) * 50;
+          const moved = row.before == null ? "" : ` · к прошлому ${row.now - row.before >= 0 ? "+" : ""}${(row.now - row.before).toFixed(1)}`;
+          return (
+            <div key={row.id} className="grid grid-cols-[minmax(0,140px)_1fr_88px] items-center gap-2 text-xs">
+              <span className="truncate text-muted" title={`${row.hands} рук`}>{row.title}</span>
+              <span className="relative h-3 rounded bg-surface-2">
+                <span className="absolute top-0 h-3 w-px bg-fg/30" style={{ left: "50%" }} />
+                <span
+                  className="absolute top-0 h-3 rounded"
+                  style={{
+                    width: `${width}%`,
+                    left: row.chips < 0 ? `${50 - width}%` : "50%",
+                    background: row.chips < 0 ? "#e25555" : "#3dba7c",
+                  }}
+                />
+              </span>
+              <span className={cn("text-right font-mono", row.chips < 0 ? "text-bad" : "text-ok")}>
+                {row.chips > 0 ? "+" : ""}{Math.round(row.chips)}
+                <span className="text-subtle">{moved}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function CloudChart({ paths, games, done }: { paths: number[][]; games: number; done: number }) {

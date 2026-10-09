@@ -42,6 +42,7 @@ import {
 } from "@/lib/spin-drill/stats";
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
+import { clearLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -457,13 +458,15 @@ export function SpinApp() {
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
+  const [live, setLive] = useState<LiveStrategy | null>(null);
   const [cardAsk, setCardAsk] = useState(0);
   const [stackOpen, setStackOpen] = useState(false);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
-  const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
+  const range = useMemo(() => rangeAtStack(live?.ranges[spot.id] ?? spot.range, spot.id, live?.adaptStack === false ? 15 : bb), [spot, bb, live]);
   const paint = useMemo(() => {
+    if (live?.ranges[spot.id]) return null;
     if (spot.id === "hu_bb_limp") return huBbLimpPaint(bb);
     if (spot.id === "hu_bb_raise") return huBbRaisePaint(bb);
     return null;
@@ -482,6 +485,13 @@ export function SpinApp() {
   useEffect(() => {
     setStore(loadStore());
     setHideRange(localStorage.getItem("spin-hide-range") === "1");
+    setLive(readLive());
+    const sync = (event: Event) => {
+      setLive(readLive());
+      if ((event as CustomEvent<{ open?: boolean }>).detail?.open) setTab("strategy");
+    };
+    window.addEventListener("spin-live", sync);
+    return () => window.removeEventListener("spin-live", sync);
   }, []);
 
   function deal(nextRange = range, nextId = statId, nextStore = store, avoid?: string) {
@@ -547,7 +557,7 @@ export function SpinApp() {
     setLocked(false);
     setLastGrade(null);
     setQuiz(null);
-    const nextRange = rangeAtStack(s.range, s.id, bb);
+    const nextRange = rangeAtStack(live?.ranges[s.id] ?? s.range, s.id, live?.adaptStack === false ? 15 : bb);
     const nextId = bb === 15 ? s.id : `${s.id}@${bb}`;
     const picked = pickHand(nextRange, nextId, store, includeFolds);
     setReview(picked.review);
@@ -705,6 +715,14 @@ export function SpinApp() {
         {tab === "strategy" && (
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
+              {live ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+                  <p>Играете загруженную стратегию «{live.name}». Солвер и тренировка отвечают по её рейнджам.</p>
+                  <button type="button" className="h-9 rounded-md border border-border px-3 text-xs" onClick={() => { clearLive(); setLive(null); }}>
+                    Вернуть чарт солвера
+                  </button>
+                </div>
+              ) : null}
               <div className="mt-4">
                 <SpotPills
                   compact
@@ -1006,11 +1024,11 @@ export function SpinApp() {
                   Сбросить спот
                 </button>
               </div>
-              <MixGrid range={spot.range} selected={selected} stats={st} onPick={setSelected} />
+              <MixGrid range={range} selected={selected} stats={st} onPick={setSelected} />
             </section>
             <aside className="rounded-2xl border border-border bg-surface p-4">
               <p className="font-mono text-lg font-semibold">{selected}</p>
-              <MixBars range={spot.range} hand={selected} labels={spot.labels} />
+              <MixBars range={range} hand={selected} labels={spot.labels} />
               <p className="mt-3 text-sm text-muted">
                 {st.hands[selected] ? `${st.hands[selected]!.correct}/${st.hands[selected]!.total}` : "Ещё не тренировали"}
               </p>

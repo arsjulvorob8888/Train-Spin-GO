@@ -20,6 +20,7 @@ self.onmessage = (event: MessageEvent<Job>) => {
     maxUp: totals.maxUp,
     maxDown: totals.maxDown,
     byMult: totals.byMult,
+    spots: totals.spots,
     curve: thinCurve(totals.curve, 81),
   });
 };
