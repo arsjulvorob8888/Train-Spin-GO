@@ -3,7 +3,7 @@
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { ActionLine } from "@/components/spin-drill/bb-line";
-import { EquityDesk, HandProvider, QuickLine, useHand } from "@/components/spin-drill/equity-desk";
+import { EquityDesk, HandProvider, PotFields, QuickLine, useHand } from "@/components/spin-drill/equity-desk";
 import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
@@ -756,6 +756,7 @@ export function SpinApp() {
                   extra={
                     <>
                       <StackType bb={bb} onChange={setBb} />
+                      <PotFields />
                       <NewHand />
                       <button
                         type="button"

@@ -382,6 +382,27 @@ export function HandProvider({
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
 }
 
+export function PotFields() {
+  const { potText, setPotText, callText, setCallText, shown } = useHand();
+  const live = shown != null && shown.need != null && shown.need > 0;
+  const box = cn(
+    "mt-0.5 h-11 w-[4.5rem] rounded-md border bg-surface px-2 font-mono text-base text-fg normal-case",
+    live ? "border-ok ring-2 ring-ok/70" : "border-border",
+  );
+  return (
+    <div className={cn("ml-auto flex items-end gap-1.5 rounded-xl px-1", live ? "bg-ok/10" : "")} title={live ? "Эти числа меняют решение солвера" : "Банк и сумма колла"}>
+      <label className={cn("block text-[10px] font-medium tracking-wide uppercase", live ? "text-ok" : "text-subtle")}>
+        Банк
+        <input inputMode="decimal" value={potText} placeholder="6" aria-label="Банк, bb" onChange={(event) => setPotText(event.target.value)} className={box} />
+      </label>
+      <label className={cn("block text-[10px] font-medium tracking-wide uppercase", live ? "text-ok" : "text-subtle")}>
+        Докинуть
+        <input inputMode="decimal" value={callText} placeholder="4" aria-label="Докинуть, bb" onChange={(event) => setCallText(event.target.value)} className={box} />
+      </label>
+    </div>
+  );
+}
+
 export function QuickLine() {
   const { potText, setPotText, callText, setCallText, cards, open, queue, typedOdds } = useHand();
   return (
@@ -532,33 +553,6 @@ export function EquityDesk() {
       {shown && result !== "win" && result !== "fold" ? <OddsBar need={shown.need} equity={shown.equity} street={shown.street} /> : null}
       {shown && result !== "win" && result !== "fold" ? <EquityLesson shown={shown} pot={pot} toCall={toCall} /> : null}
       {shown && result !== "win" && result !== "fold" ? <BluffNotice bluff={shown.bluff} /> : null}
-      <div className="mt-3 grid max-w-sm grid-cols-2 gap-2">
-        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-          Банк, bb · обязательно
-          <input
-            inputMode="decimal"
-            value={potText}
-            placeholder="6"
-            onChange={(event) => setPotText(event.target.value)}
-            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-          />
-        </label>
-        <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-          Докинуть, bb · обязательно
-          <input
-            inputMode="decimal"
-            value={callText}
-            placeholder="4"
-            onChange={(event) => setCallText(event.target.value)}
-            className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-2 font-mono text-base text-fg normal-case"
-          />
-        </label>
-      </div>
-      <p className="mt-2 font-mono text-xs text-muted">
-        {typedOdds != null
-          ? `Pot odds: нужно ${Math.round(typedOdds * 100)}%  ·  ${trimNum(toCall!)} / (${trimNum(pot!)} + ${trimNum(toCall!)})`
-          : "Банк уже лежит со ставкой. Докинуть — ваша сумма."}
-      </p>
       {deviation ? <p className="mt-3 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">{deviation}</p> : null}
 
       {typeof document !== "undefined" && (queue.length > 0 || guard)
