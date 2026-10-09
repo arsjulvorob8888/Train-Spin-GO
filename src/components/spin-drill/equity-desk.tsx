@@ -667,14 +667,17 @@ function CardSlot({
   card,
   active,
   small,
+  cue,
   onClick,
 }: {
   card: Card | null;
   active: boolean;
   small?: boolean;
+  cue?: boolean;
   onClick: () => void;
 }) {
   const red = card ? isRedSuit(card.suit) : false;
+  const ask = Boolean(cue && !card);
   return (
     <button
       type="button"
@@ -682,8 +685,8 @@ function CardSlot({
       className={cn(
         "rounded-md border bg-card-face font-mono font-semibold",
         small ? "h-11 w-8 text-xs" : "h-16 w-12 text-sm",
-        active ? "border-fg" : "border-transparent",
-        card ? (red ? "text-suit-red" : "text-card-ink") : "text-subtle",
+        ask ? "next-step border-ok" : active ? "border-fg" : "border-transparent",
+        card ? (red ? "text-suit-red" : "text-card-ink") : ask ? "text-ok" : "text-subtle",
       )}
     >
       {card ? (
@@ -866,14 +869,17 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
   const turnClosed = board.length >= 4 && streetStatus(seats, line, "turn", jammed).closed;
   const finished = handFinished(spot.id, line, board.length, out);
   const hint = shown?.verdict ?? "";
+  const askFlop = board.length < 3;
+  const askTurn = flopClosed && board.length < 4;
+  const askRiver = turnClosed && board.length < 5;
   return (
     <div className="flex flex-col gap-2">
       <div ref={board.length < 4 ? latest : undefined} className={cn("flex flex-wrap items-start gap-1", !hero ? "pointer-events-none opacity-40" : "")}>
-        <div className="shrink-0 rounded-lg border border-border p-1">
-          <p className="px-1 text-[11px] font-medium">Флоп</p>
+        <div className={cn("shrink-0 rounded-lg border p-1", askFlop ? "next-step border-ok bg-ok/10" : "border-border")}>
+          <p className={cn("px-1 text-[11px] font-medium", askFlop ? "text-ok" : "")}>{askFlop ? "Дальше · флоп" : "Флоп"}</p>
           <div className="mt-1 flex gap-1">
             {(["f0", "f1", "f2"] as const).map((slot) => (
-              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+              <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} cue={askFlop} small onClick={() => open(slot)} />
             ))}
           </div>
           <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} />
@@ -885,10 +891,10 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
       </div>
       {flopClosed ? (
         <div ref={board.length < 5 ? latest : undefined} className="flex flex-wrap items-start gap-1">
-          <div className="shrink-0 rounded-lg border border-border p-1">
-            <p className="px-1 text-[11px] font-medium">Тёрн</p>
+          <div className={cn("shrink-0 rounded-lg border p-1", askTurn ? "next-step border-ok bg-ok/10" : "border-border")}>
+            <p className={cn("px-1 text-[11px] font-medium", askTurn ? "text-ok" : "")}>{askTurn ? "Дальше · тёрн" : "Тёрн"}</p>
             <div className="mt-1">
-              <CardSlot card={cards.t ?? null} active={queue[0] === "t"} small onClick={() => open("t")} />
+              <CardSlot card={cards.t ?? null} active={queue[0] === "t"} cue={askTurn} small onClick={() => open("t")} />
             </div>
             <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
           </div>
@@ -900,10 +906,10 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
       ) : null}
       {turnClosed ? (
         <div ref={latest} className="flex flex-wrap items-start gap-1">
-          <div className="shrink-0 rounded-lg border border-border p-1">
-            <p className="px-1 text-[11px] font-medium">Ривер</p>
+          <div className={cn("shrink-0 rounded-lg border p-1", askRiver ? "next-step border-ok bg-ok/10" : "border-border")}>
+            <p className={cn("px-1 text-[11px] font-medium", askRiver ? "text-ok" : "")}>{askRiver ? "Дальше · ривер" : "Ривер"}</p>
             <div className="mt-1">
-              <CardSlot card={cards.r ?? null} active={queue[0] === "r"} small onClick={() => open("r")} />
+              <CardSlot card={cards.r ?? null} active={queue[0] === "r"} cue={askRiver} small onClick={() => open("r")} />
             </div>
             <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
           </div>

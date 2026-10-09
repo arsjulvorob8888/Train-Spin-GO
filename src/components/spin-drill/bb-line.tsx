@@ -247,13 +247,15 @@ export function ActionLine({
         ) : null}
       </div>
       {live ? <BoardLine openBoard /> : null}
-      <p className={cn("text-sm", expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
+      <p className={cn("text-sm", live && board.length < 3 ? "font-medium text-ok" : expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."
           : folded
             ? "Раздача закрыта. Вы сбросили, карт дальше нет."
             : waiting
               ? "Отметьте действия оппонентов. Карты флопа появятся, только если раздача идёт дальше."
+            : live && board.length < 3
+              ? "Префлоп закрыт. Дальше флоп: три карты подсвечены зелёным."
             : board.length >= 5
           ? "Каждая улица на своей строке. Последняя галочка — раздача закрыта."
           : board.length >= 3
