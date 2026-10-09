@@ -1,7 +1,7 @@
 import type { Card } from "@/lib/poker/cards";
 import { evaluateBest, unpack } from "@/lib/poker/evaluate";
 import type { Mix, MixAction } from "@/lib/spin-drill/mix";
-import { handPower } from "@/lib/spin-drill/stack-ranges";
+import { handPower, rangeAtStack } from "@/lib/spin-drill/stack-ranges";
 import { chartStrategy, type SimStrategy, type StyleId } from "@/lib/spin-drill/sim-strategy";
 
 export type PrizeRow = {
@@ -113,7 +113,10 @@ export function addTotals(into: SimTotals, part: SimTotals) {
   }
 }
 
+const stackCache = new Map<string, Record<string, Mix>>();
+
 export function playBatch(strategy: SimStrategy, games: number, seed: number): SimTotals {
+  stackCache.clear();
   const rng = mulberry32(seed);
   const totals = emptyTotals();
   let bank = 0;
@@ -439,14 +442,10 @@ function choose(
 ): Open {
   const alive = live.length === 2 ? 2 : 3;
   const chartSpot = spotId(alive, player.seat, acted);
-  const book = player.hero || strategy.mirror ? strategy.ranges : BASE_RANGES;
-  let action = chartToOpen(sampleMix(book[chartSpot]?.[player.hand], rng), acted);
   const rivals = live.filter((p) => p.in && p !== player);
   const eff = Math.min(player.stack + player.put, ...rivals.map((p) => p.stack + p.put));
   const depth = eff / Math.max(1, blind.bb);
-  const adapt = player.hero ? strategy.adaptStack : true;
-  if (adapt && depth <= 9 && action === "raise") action = "jam";
-  if (adapt && depth >= 22 && action === "jam" && player.power < 190) action = "raise";
+  let action = chartToOpen(sampleMix(chartLine(strategy, player, chartSpot, depth), rng), acted);
   if (!player.hero) action = styleAction(action, player.power, strategy.style, rng);
   const toCall = Math.max(0, Math.max(...live.map((p) => p.put)) - player.put);
   if (player.hero && strategy.bluff && action === "fold" && acted.length === 0 && player.seat === "BTN") {
@@ -454,6 +453,23 @@ function choose(
   }
   if (action === "fold" && toCall <= 0) action = "limp";
   return action;
+}
+
+function chartLine(strategy: SimStrategy, player: Player, spot: string, depth: number): Mix | undefined {
+  const own = player.hero || strategy.mirror;
+  const book = own ? strategy.ranges : BASE_RANGES;
+  const base = book[spot];
+  if (!base) return undefined;
+  const adapt = player.hero ? strategy.adaptStack : true;
+  const bb = Math.max(1, Math.min(30, Math.round(depth)));
+  if (!adapt || bb === 15) return base[player.hand];
+  const key = `${own ? "h" : "v"}:${spot}:${bb}`;
+  let shaped = stackCache.get(key);
+  if (!shaped) {
+    shaped = rangeAtStack(base, spot, bb);
+    stackCache.set(key, shaped);
+  }
+  return shaped[player.hand];
 }
 
 function sampleMix(mix: Mix | undefined, rng: Rng): MixAction {

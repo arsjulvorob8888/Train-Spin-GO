@@ -123,7 +123,7 @@ export function SimLab() {
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-medium">Симулятор (эксперимент)</h2>
         <p className="mt-1 text-sm text-muted">
-          Здесь прогоняется ваша стратегия, а не случайная игра. Префлоп — загруженные рейнджи. Постфлоп — те же действия, что пишет солвер: Check, Raise 2, Raise 4, All-in, Call, Fold. Призы и блайнды — PokerOK 3-max. Равные игроки получают около {fieldRoi().toFixed(1)}% ROI из-за рейка. Смотрите «против поля»: это и есть результат стратегии.
+          Стратегия — это весь комплект, не один рейндж. В прогон входят все {spots.length} префлоп-спотов солвера, на каждом стеке свой рейндж, и постфлоп: Check, Raise 2, Raise 4, All-in, Call, Fold. Плюс параметры ниже: блеф, тип стола, поправка колла. Сетка внизу показывает один спот, чтобы его править. Считаются все.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="text-sm">
@@ -176,7 +176,7 @@ export function SimLab() {
 
       <section className="grid gap-3 rounded-2xl border border-border bg-surface p-4 md:grid-cols-2">
         <Toggle on={strategy.potOdds} label="Постфлоп как солвер" text="Вкл: Check, Raise 2, Raise 4, All-in, Call и Fold по эквити и цене банка. Выкл: после префлопа только чек, колл с парой." onClick={() => patch({ potOdds: !strategy.potOdds })} />
-        <Toggle on={strategy.adaptStack} label="Учитывать стек" text="Короче 9bb ваш рейз становится олл-ином, глубже 22bb олл-ин становится рейзом. У оппонентов это включено всегда." onClick={() => patch({ adaptStack: !strategy.adaptStack })} />
+        <Toggle on={strategy.adaptStack} label="Рейндж по стеку" text="Вкл: каждый из 25 спотов берётся так, как солвер показывает на этой глубине, от 1 до 30bb. Выкл: везде базовый чарт 15bb." onClick={() => patch({ adaptStack: !strategy.adaptStack })} />
         <Toggle on={strategy.bluff} label="Добавить блеф" text="Поверх солвера: часть чеков с баттона и воздуха становится Raise 2, если стиль оппонентов достаточно часто сбрасывает." onClick={() => patch({ bluff: !strategy.bluff })} />
         <Toggle on={strategy.mirror} label="Оппоненты копируют чарт" text="Выкл: вы играете свою правку, они — исходный чарт. Вкл: все трое играют одно и то же, так проверяется сам чарт." onClick={() => patch({ mirror: !strategy.mirror })} />
         <Toggle on={strategy.fixedStack} label="Фиксированный стек" text="Выкл: стек берётся из множителя. Вкл: каждая игра начинается с выбранной глубины." onClick={() => patch({ fixedStack: !strategy.fixedStack })} />
@@ -220,16 +220,22 @@ export function SimLab() {
 
       <section className="rounded-2xl border border-border bg-surface p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="font-medium">Рейнджи стратегии</h3>
-          <select value={spotId} onChange={(event) => setSpotId(event.target.value)} className="h-11 rounded-md border border-border bg-surface-2 px-2 text-sm">
-            {spots.map((spot) => (
-              <option key={spot.id} value={spot.id}>
-                {spot.title}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-muted">Клик по клетке ставит 100%: Fold → Call → Raise → All-in. Смеси чарта живут, пока клетку не тронули.</span>
+          <h3 className="font-medium">Все рейнджи, {spots.length}</h3>
+          <span className="text-xs text-muted">Сейчас открыт один спот для правки. Клик по названию открывает другой. В симуляцию входят все.</span>
         </div>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {spots.map((spot) => (
+            <button
+              key={spot.id}
+              type="button"
+              onClick={() => setSpotId(spot.id)}
+              className={cn("h-9 rounded-full border px-3 text-xs", spotId === spot.id ? "border-fg bg-fg text-bg" : "border-border text-muted")}
+            >
+              {spot.title}
+            </button>
+          ))}
+        </div>
+        <p className="mb-2 text-xs text-muted">Клик по клетке ставит 100%: Fold, Call, Raise, All-in. Меняется только открытый спот.</p>
         <div className="grid max-w-[520px] grid-cols-13 gap-px">
           {Array.from({ length: 13 }, (_, row) =>
             Array.from({ length: 13 }, (_, col) => {
