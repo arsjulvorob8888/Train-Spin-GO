@@ -203,7 +203,7 @@ export type Consult = {
   street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
   verdict: string;
   random: boolean;
-  bluff: { title: string; text: string } | null;
+  bluff: { title: string; action: string; reasons: string[] } | null;
 };
 
 function likelyHands(combos: Combo[], byWeight: boolean): { hand: string; pct: number }[] {
@@ -323,8 +323,8 @@ function advice(opts: {
       }
       if (semiBluff(opts.draw, opts.made, opts.equity)) {
         return {
-          verdict: "Raise 2",
-          text: `${opts.street}: готовой руки нет, ${opts.draw}. Эквити ${pct}%. Сейчас уместен маленький блеф — Raise 2. Крупнее не ставь: на этих лимитах без дро блеф проигрывает. ${dropped}`,
+          verdict: "Блеф · Raise 2",
+          text: `БЛЕФ, не вэлью. ${opts.street}: готовой руки нет, ${opts.draw}. Эквити ${pct}%. Солвер ставит маленький Raise 2, потому что дро само по себе добирает банк, а часть рук оппонента ещё и сбросит. Крупный блеф и блеф без дро здесь запрещены. ${dropped}`,
         };
       }
       return {
@@ -387,13 +387,20 @@ function bluffCue(opts: {
   draw: string | null;
   made: string | null;
   equity: number;
-}): { title: string; text: string } | null {
+}): { title: string; action: string; reasons: string[] } | null {
   if (opts.phase !== "act" || opts.facing !== "none") return null;
   if (opts.street !== "Флоп" && opts.street !== "Тёрн") return null;
   if (!semiBluff(opts.draw, opts.made, opts.equity)) return null;
+  const pct = Math.round(opts.equity * 100);
   return {
-    title: "Сейчас уместен блеф",
-    text: "Готовой руки нет, есть сильное дро, и ставить в вас никто не ставил. Raise 2: часть диапазона сбросит, а если заколлируют — у дро ещё есть эквити. Без дро, на ривере и против того, кто коллит всё, эту ставку не делай.",
+    title: "Оптимальный блеф",
+    action: "Raise 2",
+    reasons: [
+      "Готовой руки нет. Ставка не для вскрытия — это и есть блеф.",
+      `Дро: ${opts.draw}. Если оппонент колл, у вас ещё ${pct}% на банк, ставка не сгорает целиком.`,
+      "В вас никто не ставил, размер ваш. Маленький Raise 2 плюсовой, если сбросит примерно четверть их рук.",
+      "Олл-ин, ривер и ставка без дро здесь минус: на $0.25 и $1 так не блефуем.",
+    ],
   };
 }
 

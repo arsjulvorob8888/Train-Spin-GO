@@ -51,7 +51,7 @@ type HandApi = {
     need: number | null;
     action: string;
     label: string;
-    bluff: { title: string; text: string } | null;
+    bluff: { title: string; action: string; reasons: string[] } | null;
   } | null;
   typedOdds: number | null;
   pot: number | null;
@@ -486,9 +486,9 @@ export function EquityDesk() {
           <div className="flex items-end gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
-                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : "Солвер ждёт"}
+                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff ? "Солвер: это блеф" : "Солвер ждёт"}
               </p>
-              <p className={cn("text-3xl font-semibold leading-none", isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
+              <p className={cn("text-3xl font-semibold leading-none", shown.bluff ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
                 {shown.verdict}
               </p>
               <p className="mt-1 text-xs text-muted">
@@ -756,6 +756,7 @@ function StreetColumns({
               {menu.map((item) => {
                 const on = col.selected === item.id;
                 const wanted = col.live && col.seat === hero && suggest === item.id;
+                const bluffWanted = wanted && hint.toLowerCase().includes("блеф");
                 return (
                   <button
                     key={item.id}
@@ -767,11 +768,11 @@ function StreetColumns({
                     }}
                     className={cn(
                       "rounded px-1 py-1 text-left text-xs",
-                      on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
+                      on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                     )}
                   >
                     {title(item.id, col.seat)}
-                    {wanted && !on ? " · солвер" : ""}
+                    {bluffWanted && !on ? " · БЛЕФ" : wanted && !on ? " · солвер" : ""}
                   </button>
                 );
               })}
@@ -939,7 +940,7 @@ function suggested(verdict: string, facing: boolean): LineAction | null {
   if (name === "fold" || name === "фолд") return "fold";
   if (name === "call" || name === "колл") return "call";
   if (name === "check" || name === "чек") return "check";
-  if (name.startsWith("raise 2")) return "bet33";
+  if (name.includes("блеф") || name.startsWith("raise 2")) return "bet33";
   if (name.startsWith("raise 4") || name === "ставка") return facing ? "raise" : "bet66";
   if (name === "raise" || name === "рейз") return facing ? "raise" : "bet66";
   if (name.startsWith("all-in") || name === "пуш") return "allin";
@@ -985,24 +986,59 @@ function OddsBar({ need, equity, street }: { need: number | null; equity: number
   );
 }
 
-function BluffNotice({ bluff }: { bluff: { title: string; text: string } | null }) {
-  if (!bluff) return null;
+function playBluffSting() {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = playBluffSting.ctx ?? new Ctx();
+  playBluffSting.ctx = ctx;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  [523, 659, 784, 1046].forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    const start = now + index * 0.07;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.07, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.24);
+  });
+}
+playBluffSting.ctx = null as AudioContext | null;
+
+function BluffNotice({ bluff }: { bluff: { title: string; action: string; reasons: string[] } | null }) {
   const saw = journalSummary(readJournal()).saw;
-  const sticky = saw.station >= 3 && saw.station >= saw.nit && saw.station >= saw.lag;
+  const sticky = Boolean(bluff) && saw.station >= 3 && saw.station >= saw.nit && saw.station >= saw.lag;
+  const show = Boolean(bluff) && !sticky;
+  useEffect(() => {
+    if (!show) return;
+    playBluffSting();
+  }, [show, bluff?.title, bluff?.action]);
+  if (!bluff) return null;
   if (sticky) {
     return (
       <div className="mt-3 rounded-xl border border-bad bg-bad/10 px-3 py-3">
-        <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Блеф</p>
-        <p className="mt-1 text-lg font-medium">Сейчас не блефуй</p>
-        <p className="mt-1 text-sm text-muted">Дро есть, но журнал говорит, что стол коллит всё. Ставка без руки ему платит. Чек, либо колл только если шансы банка уже зелёные.</p>
+        <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Блеф отменён</p>
+        <p className="mt-1 text-lg font-medium">Дро есть, блеф не бери</p>
+        <p className="mt-1 text-sm text-muted">Солвер видит блеф по дро, но журнал говорит, что стол коллит всё. Такая ставка ему платит. Здесь чек.</p>
       </div>
     );
   }
   return (
-    <div className="mt-3 rounded-xl border border-ok bg-ok/10 px-3 py-3">
-      <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Блеф</p>
-      <p className="mt-1 text-lg font-medium">{bluff.title}</p>
-      <p className="mt-1 text-sm text-muted">{bluff.text}</p>
+    <div className="bluff-card relative mt-3 overflow-hidden rounded-xl border-2 border-bluff bg-bluff/15 px-3 py-3">
+      <div className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+      <p className="text-[10px] font-medium tracking-[0.2em] text-bluff uppercase">Это блеф · не вэлью</p>
+      <p className="mt-1 text-2xl font-semibold text-bluff">{bluff.title}</p>
+      <p className="mt-1 text-sm font-medium">Солвер: {bluff.action}</p>
+      <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-fg">
+        {bluff.reasons.map((reason) => (
+          <li key={reason}>{reason}</li>
+        ))}
+      </ul>
     </div>
   );
 }
