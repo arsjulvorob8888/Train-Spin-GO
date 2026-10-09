@@ -121,9 +121,12 @@ export function ActionLine({
         {cols.map((col, index) => (
           <div
             key={`${col.seat}-${index}`}
-            className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.hero ? "border-ok" : "border-border")}
+            className={cn(
+              "w-[6.4rem] shrink-0 rounded-lg border p-1",
+              col.hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : "border-border",
+            )}
           >
-            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", head(col.seat))}>
+            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.hero ? "bg-ok text-bg" : head(col.seat))}>
               <span className="font-medium">{col.hero ? "Вы · ваш ход" : (col.title ?? col.seat)}</span>
               <span className="font-mono">{trim(col.stack)}</span>
             </div>

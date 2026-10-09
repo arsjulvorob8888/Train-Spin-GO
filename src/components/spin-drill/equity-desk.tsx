@@ -743,9 +743,12 @@ function StreetColumns({
         return (
           <div
             key={`${col.seat}-${index}`}
-            className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.seat === hero ? "border-ok" : "border-border")}
+            className={cn(
+              "w-[6.4rem] shrink-0 rounded-lg border p-1",
+              col.seat === hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : "border-border",
+            )}
           >
-            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", seatHead(col.seat))}>
+            <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.seat === hero ? "bg-ok text-bg" : seatHead(col.seat))}>
               <span className="font-medium">{col.seat === hero ? "Вы · ваш ход" : col.seat}</span>
               <span className="font-mono">{seatStack(col.seat, bb)}</span>
             </div>
