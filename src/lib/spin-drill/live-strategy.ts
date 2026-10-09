@@ -26,7 +26,7 @@ export function readLive(): LiveStrategy | null {
   }
 }
 
-export function publishLive(strategy: SimStrategy) {
+export function publishLive(strategy: SimStrategy, open = true) {
   const live: LiveStrategy = {
     name: strategy.name || "Стратегия",
     publishedAt: new Date().toISOString(),
@@ -38,7 +38,7 @@ export function publishLive(strategy: SimStrategy) {
     adaptStack: strategy.adaptStack,
   };
   localStorage.setItem(KEY, JSON.stringify(live));
-  window.dispatchEvent(new CustomEvent("spin-live", { detail: { open: true } }));
+  window.dispatchEvent(new CustomEvent("spin-live", { detail: { open } }));
 }
 
 export function clearLive() {

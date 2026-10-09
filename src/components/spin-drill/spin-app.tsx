@@ -42,13 +42,15 @@ import {
 } from "@/lib/spin-drill/stats";
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
-import { clearLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
+import { JournalPanel } from "@/components/spin-drill/journal-panel";
+import { clearLive, publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
+import { MICRO_NAME, MICRO_RULES, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats";
+type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -485,6 +487,7 @@ export function SpinApp() {
   useEffect(() => {
     setStore(loadStore());
     setHideRange(localStorage.getItem("spin-hide-range") === "1");
+    if (!readLive()) publishLive(microStrategy(), false);
     setLive(readLive());
     const sync = (event: Event) => {
       setLive(readLive());
@@ -630,6 +633,7 @@ export function SpinApp() {
     { id: "practice", label: "Тренировка" },
     { id: "sim", label: "Симулятор" },
     { id: "strategy", label: "Стратегия" },
+    { id: "journal", label: "Журнал" },
     { id: "table", label: "Раздача" },
     { id: "experiment", label: "GAME" },
     { id: "hands", label: "Комбинации" },
@@ -716,13 +720,33 @@ export function SpinApp() {
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
               {live ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
-                  <p>Играете загруженную стратегию «{live.name}». Солвер и тренировка отвечают по её рейнджам.</p>
-                  <button type="button" className="h-9 rounded-md border border-border px-3 text-xs" onClick={() => { clearLive(); setLive(null); }}>
-                    Вернуть чарт солвера
-                  </button>
+                <div className="rounded-xl bg-surface-2 px-3 py-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p>Сейчас в игре: «{live.name}». Тренировка отвечает по этим рейнджам.</p>
+                    <div className="flex gap-2">
+                      {live.name !== MICRO_NAME ? (
+                        <button type="button" className="h-9 rounded-md bg-fg px-3 text-xs text-bg" onClick={() => publishLive(microStrategy(), false)}>
+                          Поставить микро
+                        </button>
+                      ) : null}
+                      <button type="button" className="h-9 rounded-md border border-border px-3 text-xs" onClick={() => { clearLive(); setLive(null); }}>
+                        Вернуть голый чарт
+                      </button>
+                    </div>
+                  </div>
+                  {live.name === MICRO_NAME ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-muted">
+                      {MICRO_RULES.map((rule) => (
+                        <li key={rule}>{rule}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <button type="button" className="h-11 rounded-md bg-fg px-4 text-sm font-medium text-bg" onClick={() => publishLive(microStrategy(), false)}>
+                  Поставить микро $0.25–$1
+                </button>
+              )}
               <div className="mt-4">
                 <SpotPills
                   compact
@@ -755,7 +779,11 @@ export function SpinApp() {
                 <StackRail bb={bb} onChange={setBb} />
               </div>
               <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
+              <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">{spotTip(spot.id)}</p>
               <EquityDesk />
+              {live?.name === MICRO_NAME ? (
+                <p className="mt-2 text-sm text-muted">Постфлоп без блефа: воздух чек, пара и сильнее — ставка, если пот-оддс не велят сбрасывать.</p>
+              ) : null}
               <p className="mt-2 text-sm text-muted">
                 {spot.id === "hu_bb_limp"
                   ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."
@@ -784,6 +812,7 @@ export function SpinApp() {
 
         {tab === "experiment" && <RangeExperiment />}
         {tab === "sim" && <SimLab />}
+        {tab === "journal" && <JournalPanel />}
 
         {tab === "practice" && (
           <div className="space-y-4">
