@@ -785,7 +785,8 @@ export function SpinApp() {
                     setStackOpen(false);
                     return;
                   }
-                  const next = GROUPS[(GROUPS.indexOf(group) + 1) % GROUPS.length]!;
+                  const turn: Record<string, SpotGroup> = { BTN: "BB", BB: "SB", SB: "BTN" };
+                  const next = turn[group] ?? "BTN";
                   const first = spotsIn(next)[0];
                   if (!first) return;
                   setGroup(next);
