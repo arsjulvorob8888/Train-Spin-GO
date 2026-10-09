@@ -3,7 +3,7 @@ import { emptyMix, mixOf, type Mix, type MixAction } from "@/lib/spin-drill/mix"
 import { SPOTS } from "@/lib/spin-drill/spots";
 
 export type { Mix, MixAction };
-export type StyleId = "off" | "nit" | "reg" | "lag";
+export type StyleId = "off" | "nit" | "reg" | "lag" | "station";
 export type RangeMap = Record<string, Record<string, Mix>>;
 
 export type SimStrategy = {
@@ -17,6 +17,18 @@ export type SimStrategy = {
   bluff: boolean;
   bluffFreq: number;
   adaptStack: boolean;
+  /** Extra first-in opens, 0..0.5 of folded hands. */
+  steal: number;
+  /** Positive calls more jams, negative folds more jams. */
+  defend: number;
+  /** Fold marginal hands when someone has raised. */
+  foldAgg: number;
+  /** Shift postflop betting. Positive = thinner value. */
+  value: number;
+  /** Extra small continuation bets. */
+  cbet: number;
+  /** Fold thin calls when second place is paid. */
+  survive: boolean;
   /** When on, opponents use this chart too. Off: they play the built-in 15bb chart. */
   mirror: boolean;
   ranges: RangeMap;
@@ -62,6 +74,12 @@ export function chartStrategy(): SimStrategy {
     bluff: false,
     bluffFreq: 0.12,
     adaptStack: true,
+    steal: 0,
+    defend: 0,
+    foldAgg: 0,
+    value: 0,
+    cbet: 0,
+    survive: false,
     mirror: false,
     ranges,
   };
@@ -109,10 +127,16 @@ export function parseStrategy(raw: string): SimStrategy {
     fixedStack: Boolean(data.fixedStack),
     potOdds: Boolean(data.potOdds),
     edge: clamp(num(data.edge, 0), -0.1, 0.2),
-    style: data.style === "nit" || data.style === "lag" || data.style === "off" || data.style === "reg" ? data.style : "off",
+    style: data.style === "nit" || data.style === "lag" || data.style === "station" || data.style === "off" || data.style === "reg" ? data.style : "off",
     bluff: Boolean(data.bluff),
     bluffFreq: clamp(num(data.bluffFreq, 0.12), 0, 0.5),
     adaptStack: data.adaptStack !== false,
+    steal: clamp(num(data.steal, 0), 0, 0.6),
+    defend: clamp(num(data.defend, 0), -0.5, 0.5),
+    foldAgg: clamp(num(data.foldAgg, 0), 0, 0.6),
+    value: clamp(num(data.value, 0), -0.12, 0.12),
+    cbet: clamp(num(data.cbet, 0), 0, 0.5),
+    survive: Boolean(data.survive),
     mirror: Boolean(data.mirror),
     ranges,
   };

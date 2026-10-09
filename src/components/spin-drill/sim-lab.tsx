@@ -2,7 +2,7 @@
 
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
 import { primary, type MixAction } from "@/lib/spin-drill/mix";
-import { addTotals, emptyTotals, fieldRoi, playBatch, PRIZES, thinCurve, type SimTotals } from "@/lib/spin-drill/sim-engine";
+import { addTotals, commonEdge, emptyTotals, fieldRoi, playBatch, PRIZES, thinCurve, type SimTotals } from "@/lib/spin-drill/sim-engine";
 import {
   chartStrategy,
   cloneStrategy,
@@ -16,6 +16,7 @@ import {
   type StyleId,
 } from "@/lib/spin-drill/sim-strategy";
 import { publishLive } from "@/lib/spin-drill/live-strategy";
+import { bakeRanges, searchSteps } from "@/lib/spin-drill/sim-search";
 import { cn } from "@/lib/utils";
 import { useMemo, useRef, useState } from "react";
 
@@ -59,7 +60,8 @@ export function SimLab() {
   const [totals, setTotals] = useState<SimTotals | null>(null);
   const [before, setBefore] = useState<SimTotals | null>(null);
   const [running, setRunning] = useState(false);
-  const [mode, setMode] = useState<"one" | "cloud">("cloud");
+  const [mode, setMode] = useState<"one" | "cloud" | "search">("cloud");
+  const [found, setFound] = useState<{ name: string; roi: number; versus: number; common: number; games: number; patch: Partial<SimStrategy> }[]>([]);
   const [target, setTarget] = useState(1000);
   const [paths, setPaths] = useState<number[][]>([]);
   const [error, setError] = useState("");
@@ -196,6 +198,39 @@ export function SimLab() {
       haltWorkers();
       setRunning(false);
     }
+  }
+
+  async function runSearch() {
+    const id = ++generation.current;
+    stop.current = false;
+    haltWorkers();
+    setRunning(true);
+    setMode("search");
+    setError("");
+    setFound([]);
+    const steps = searchSteps(strategy.style);
+    const rows: { name: string; roi: number; versus: number; common: number; games: number; patch: Partial<SimStrategy> }[] = [];
+    try {
+      for (let i = 0; i < steps.length && !stop.current && id === generation.current; i++) {
+        const step = steps[i]!;
+        const trial = { ...cloneStrategy(strategy), ...step.patch, ranges: strategy.ranges };
+        const games = 1200;
+        const part = playBatch(trial, games, 1000 + i * 997);
+        const roi = (part.profit / games) * 100;
+        rows.push({ name: step.name, roi, versus: roi - fieldRoi(), common: commonEdge(part), games, patch: step.patch });
+        rows.sort((a, b) => b.common - a.common);
+        setFound(rows.slice());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    } catch (reason) {
+      if (id === generation.current) setError(reason instanceof Error ? reason.message : "Подбор остановился");
+    }
+    if (id === generation.current) setRunning(false);
+  }
+
+  function takeTrial(patch: Partial<SimStrategy>, name: string) {
+    const next = bakeRanges({ ...cloneStrategy(strategy), ...patch, name });
+    setStrategy(next);
   }
 
   function cloudWorkers(snapshot: SimStrategy, take: (curve: number[], part: SimTotals) => void): Promise<boolean> {
@@ -347,6 +382,7 @@ export function SimLab() {
             <option value="reg">Регуляр, тот же чарт</option>
             <option value="nit">Нит, фолдит шире</option>
             <option value="lag">Агрессивный, входит шире</option>
+            <option value="station">Колл-станция, не фолдит</option>
           </select>
         </label>
         <Slider label={`Поправка колла: ${(strategy.edge * 100).toFixed(0)}%`} min={-5} max={15} value={Math.round(strategy.edge * 100)} onChange={(value) => patch({ edge: value / 100 })} />
@@ -365,6 +401,57 @@ export function SimLab() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-medium">Подбор факторов</h3>
+            <p className="mt-1 max-w-2xl text-sm text-muted">
+              Рейк не обыгрывается одинаковым чартом. Плюс берётся из ошибок стола: нит фолдит лишнее, колл-станция оплачивает велью, агрессивный ставит слишком широко. На 2000 играх чарт уже дал около +4% ROI против нита и около +5% против колл-станции. Лишний стил поверх чарта плюс не увеличил. Против такого же чарта и против агрессивного прибыль после комиссии не появилась.
+            </p>
+          </div>
+          <button type="button" className="h-11 rounded-md bg-fg px-4 text-sm font-medium text-bg" disabled={running} onClick={() => void runSearch()}>
+            {running && mode === "search" ? `Подбор ${found.length} / ${searchSteps(strategy.style).length}` : "Подобрать"}
+          </button>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <Slider label={`Стил сверх чарта: ${Math.round((strategy.steal ?? 0) * 100)}%`} min={0} max={45} value={Math.round((strategy.steal ?? 0) * 100)} onChange={(value) => patch({ steal: value / 100, bluff: value > 0, bluffFreq: value / 100 })} />
+          <Slider label={`Колл пуша: ${(strategy.defend ?? 0) > 0 ? "+" : ""}${Math.round((strategy.defend ?? 0) * 100)}%`} min={-40} max={40} value={Math.round((strategy.defend ?? 0) * 100)} onChange={(value) => patch({ defend: value / 100 })} />
+          <Slider label={`Фолд на их рейз: ${Math.round((strategy.foldAgg ?? 0) * 100)}%`} min={0} max={50} value={Math.round((strategy.foldAgg ?? 0) * 100)} onChange={(value) => patch({ foldAgg: value / 100 })} />
+          <Slider label={`Велью-бет: ${Math.round((strategy.value ?? 0) * 100)} п.п.`} min={-8} max={10} value={Math.round((strategy.value ?? 0) * 100)} onChange={(value) => patch({ value: value / 100 })} />
+          <Slider label={`Контбет: ${Math.round((strategy.cbet ?? 0) * 100)}%`} min={0} max={40} value={Math.round((strategy.cbet ?? 0) * 100)} onChange={(value) => patch({ cbet: value / 100 })} />
+          <Toggle on={strategy.survive ?? false} label="Беречь второе место" text="На x10 и выше, где платят не только победителю, тонкий колл пуша становится фолдом." onClick={() => patch({ survive: !strategy.survive })} />
+        </div>
+        {found.length ? (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="font-mono text-xs text-subtle">
+                <tr>
+                  <th className="py-1 pr-3">Фактор</th>
+                  <th className="py-1 pr-3">На x2–x5</th>
+                  <th className="py-1 pr-3">ROI</th>
+                  <th className="py-1" />
+                </tr>
+              </thead>
+              <tbody>
+                {found.map((row) => (
+                  <tr key={row.name} className="border-t border-border">
+                    <td className="py-1.5 pr-3">{row.name}</td>
+                    <td className={cn("py-1.5 pr-3 font-mono", row.common >= 0 ? "text-ok" : "text-bad")}>{signed(row.common)}%</td>
+                    <td className={cn("py-1.5 pr-3 font-mono", row.roi >= 0 ? "text-ok" : "text-bad")}>{signed(row.roi)}%</td>
+                    <td className="py-1.5 text-right">
+                      <button type="button" className="h-8 rounded-md border border-border px-2 text-xs" onClick={() => takeTrial(row.patch, row.name)}>
+                        В рейнджи
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-muted">Сортировка по x2–x5: это почти все игры, без случайного джекпота. Зелёный ROI — прибыль уже после комиссии. 1200 игр хватает, чтобы отсеять вредное. Победителя всё равно проверяйте облаком.</p>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-4">

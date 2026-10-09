@@ -84,6 +84,23 @@ export function fieldRoi(): number {
   return (pool / 3 - 1) * 100;
 }
 
+/** Edge versus a fair player on the common multipliers, ignoring rare jackpots. */
+export function commonEdge(totals: SimTotals): number {
+  let profit = 0;
+  let games = 0;
+  let fair = 0;
+  for (const row of PRIZES) {
+    if (row.mult > 5) continue;
+    const got = totals.byMult[row.mult];
+    if (!got?.games) continue;
+    games += got.games;
+    profit += got.profit;
+    fair += got.games * (row.mult / 3 - 1);
+  }
+  if (!games) return 0;
+  return ((profit - fair) / games) * 100;
+}
+
 export function thinCurve(curve: number[], points = 81): number[] {
   if (curve.length === 0) return [0];
   if (curve.length <= points) return curve.slice();
@@ -131,6 +148,7 @@ export function addTotals(into: SimTotals, part: SimTotals) {
   }
 }
 
+let prizeProtect = false;
 const stackCache = new Map<string, Record<string, Mix>>();
 
 export function playBatch(strategy: SimStrategy, games: number, seed: number): SimTotals {
@@ -189,6 +207,7 @@ type Player = {
 
 function playTournament(strategy: SimStrategy, rng: Rng): { profit: number; place: number; mult: number; spots: Record<string, { hands: number; chips: number }> } {
   const wheel = spin(rng);
+  prizeProtect = wheel.places[1] > 0;
   const stack = strategy.fixedStack ? Math.max(160, Math.round(strategy.stackBb) * 20) : wheel.stack;
   const players: Player[] = [0, 1, 2].map((id) => ({
     id,
@@ -377,7 +396,9 @@ function streetAction(strategy: SimStrategy, player: Player, board: Card[], pot:
   let eq = boardEquity(player, board, made);
   if (!player.hero && strategy.style === "nit") eq -= 0.08;
   if (!player.hero && strategy.style === "lag") eq += 0.07;
+  if (!player.hero && strategy.style === "station") eq += 0.12;
   if (player.hero) eq -= strategy.edge;
+  if (player.hero) eq += strategy.value ?? 0;
   const facing = toCall > 0;
   const useSolver = player.hero ? strategy.potOdds : true;
   if (!useSolver) {
@@ -392,6 +413,7 @@ function streetAction(strategy: SimStrategy, player: Player, board: Card[], pot:
     const allin = toCall >= player.stack - bb;
     if (!allin && eq >= price + 0.18 && eq >= 0.55) return "raise";
     if (eq + 0.01 >= price) return "call";
+    if (!player.hero && strategy.style === "station" && eq + 0.1 >= price) return "call";
     if (player.hero && strategy.bluff && !allin && rng() < strategy.bluffFreq * 0.35 && stealFold(strategy.style) >= 0.6 && made === 0) return "raise";
     return "fold";
   }
@@ -401,6 +423,11 @@ function streetAction(strategy: SimStrategy, player: Player, board: Card[], pot:
   if (monster || eq >= 0.62) return "raise4";
   if (eq >= 0.5) return "raise2";
   if (player.hero && strategy.bluff && rng() < strategy.bluffFreq && stealFold(strategy.style) >= 0.55) return "raise2";
+  if (player.hero && (strategy.cbet ?? 0) > 0 && rng() < (strategy.cbet ?? 0)) {
+    const folds = stealFold(strategy.style);
+    if (folds >= 0.55 && eq >= 0.38) return "raise2";
+    if (folds < 0.5 && made >= 1 && eq >= 0.46) return "raise2";
+  }
   if (!player.hero && strategy.style === "lag" && eq >= 0.42 && rng() < 0.18) return "raise2";
   return "check";
 }
@@ -487,6 +514,7 @@ function choose(
   const depth = eff / Math.max(1, blind.bb);
   let action = chartToOpen(sampleMix(chartLine(strategy, player, chartSpot, depth), rng), acted);
   if (!player.hero) action = styleAction(action, player.power, strategy.style, rng);
+  else action = heroTune(strategy, player, action, acted, depth, rng);
   const toCall = Math.max(0, Math.max(...live.map((p) => p.put)) - player.put);
   if (player.hero && strategy.bluff && action === "fold" && acted.length === 0 && player.seat === "BTN") {
     if (rng() < strategy.bluffFreq && stealFold(strategy.style) >= 0.55) action = depth <= 10 ? "jam" : "raise";
@@ -523,10 +551,32 @@ function sampleMix(mix: Mix | undefined, rng: Rng): MixAction {
   return "fold";
 }
 
+function heroTune(strategy: SimStrategy, player: Player, action: Open, acted: { act: Open }[], depth: number, rng: Rng): Open {
+  const firstIn = acted.every((item) => item.act === "fold");
+  const facingJam = acted.some((item) => item.act === "jam");
+  const facingRaise = acted.some((item) => item.act === "raise" || item.act === "jam");
+  const steal = strategy.steal ?? 0;
+  const folds = stealFold(strategy.style);
+  if (steal > 0 && folds >= 0.5 && action === "fold" && firstIn && (player.seat === "BTN" || player.seat === "SB") && player.power > 45 && rng() < steal * (folds / 0.7)) {
+    return depth <= 10 ? "jam" : "raise";
+  }
+  const defend = strategy.defend ?? 0;
+  if (facingJam && action === "fold" && defend > 0 && player.power > 145 - defend * 90 && rng() < defend + 0.15) return "limp";
+  if (facingJam && action !== "fold" && action !== "jam" && defend < 0 && player.power < 175 && rng() < -defend) return "fold";
+  const foldAgg = strategy.foldAgg ?? 0;
+  if (foldAgg > 0 && facingRaise && !facingJam && action !== "fold" && action !== "jam" && player.power < 165 && rng() < foldAgg) return "fold";
+  if ((strategy.survive ?? false) && prizeProtect && facingJam && action !== "fold" && action !== "jam" && player.power < 185 && rng() < 0.5) return "fold";
+  return action;
+}
+
 function styleAction(action: Open, power: number, style: StyleId, rng: Rng): Open {
   if (style === "off" || style === "reg") return action;
   if (style === "nit") {
     if (action !== "fold" && power < 130 && rng() < 0.22) return "fold";
+    return action;
+  }
+  if (style === "station") {
+    if (action === "fold" && power > 50 && rng() < 0.42) return "limp";
     return action;
   }
   if (action === "fold" && power > 80 && rng() < 0.16) return "raise";
@@ -536,6 +586,7 @@ function styleAction(action: Open, power: number, style: StyleId, rng: Rng): Ope
 function stealFold(style: StyleId): number {
   if (style === "nit") return 0.72;
   if (style === "lag") return 0.4;
+  if (style === "station") return 0.22;
   return 0.58;
 }
 
