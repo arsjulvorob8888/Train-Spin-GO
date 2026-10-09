@@ -268,18 +268,10 @@ function advice(opts: {
   waiting: string;
   customTo: number | null;
   customOff: boolean;
+  jam: boolean;
 }): { verdict: string; text: string } {
   const pct = Math.round(opts.equity * 100);
-  if (opts.customOff && opts.street === "Префлоп" && opts.need != null && opts.customTo != null) {
-    const need = Math.round(opts.need * 100);
-    const allin = opts.customTo >= opts.bb - 0.15;
-    const pricedIn = opts.equity + 0.01 >= opts.need;
-    const verdict = allin ? `All-in ${opts.bb}` : pricedIn && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55 ? "Raise" : pricedIn ? "Call" : "Fold";
-    return {
-      verdict,
-      text: `Оппонент поставил до ${opts.customTo}bb, это не размер чарта. Нужно ${need}% на колл, у руки ${pct}%. ${verdict}. Чарт на стандартный размер говорил: ${opts.label}.`,
-    };
-  }
+  if (opts.street === "Префлоп" && opts.need != null) return preflopByPrice(opts, pct);
   if (opts.street !== "Префлоп" && opts.phase === "wait") {
     const hand = opts.made ?? "старшая карта";
     return {
@@ -377,17 +369,6 @@ function advice(opts: {
       text: `${opts.street}: ${hand}${extra}. Нужно ${need}% на колл, у руки ${pct}%. Фолд: эквити не оплачивает ставку. ${dropped}`,
     };
   }
-  if (opts.need != null) {
-    const need = Math.round(opts.need * 100);
-    const pricedIn = opts.equity + 0.01 >= opts.need;
-    const price = pricedIn
-      ? `Цена колла ${need}%, у руки ${pct}%. Колл по шансам банка.`
-      : `Цена колла ${need}%, у руки ${pct}%. По шансам банка это фолд.`;
-    return {
-      verdict: opts.label,
-      text: `Пот-оддс обязателен. ${price} Чарт на ${opts.bb}bb: ${opts.label}. Ниже цены колл не добавляй. На пуше короткого стека чарт важнее голой цены: в нём уже есть фолды оппонента.`,
-    };
-  }
   const why: Record<MixAction, string> = {
     allin: "Пуш забирает банк сразу, когда оппонент сбрасывает, и оставляет это эквити, когда коллирует.",
     raise: "Рейз меньше пуша: блайнды сбрасывают чаще, а рука ещё может играть флоп.",
@@ -396,7 +377,51 @@ function advice(opts: {
   };
   return {
     verdict: opts.label,
-    text: `Префлоп. На ${opts.bb}bb чарт: ${opts.label}. Против диапазона «${opts.who}» у руки около ${pct}% банка. ${why[opts.action]}`,
+    text: `Префлоп. На ${opts.bb}bb чарт: ${opts.label}. Против диапазона «${opts.who}» у руки около ${pct}% банка. ${why[opts.action]} Ставки, которую надо коллировать, нет — пот-оддс решение не меняет.`,
+  };
+}
+
+function preflopByPrice(
+  opts: {
+    action: MixAction;
+    label: string;
+    equity: number;
+    need: number | null;
+    customTo: number | null;
+    customOff: boolean;
+    jam: boolean;
+  },
+  pct: number,
+): { verdict: string; text: string } {
+  const price = opts.need ?? 0;
+  const need = Math.round(price * 100);
+  const short = opts.equity + 0.04 < price;
+  const clear = opts.equity > price + 0.06;
+  const rich = opts.equity >= price + 0.18 && opts.equity >= 0.55;
+  let verdict = opts.label;
+  let state: "changed" | "jam" | "same" = "same";
+  if ((opts.action === "call" || opts.action === "raise" || opts.action === "allin") && short) {
+    verdict = "Fold";
+    state = "changed";
+  } else if (opts.action === "fold" && clear && !opts.jam) {
+    verdict = "Call";
+    state = "changed";
+  } else if (opts.action === "raise" && opts.customOff && !rich) {
+    verdict = "Call";
+    state = "changed";
+  } else if (opts.jam && opts.action === "fold") {
+    state = "jam";
+  }
+  const size = opts.customTo != null ? ` Рейз до ${opts.customTo}bb, это не размер чарта.` : "";
+  const tail =
+    state === "changed"
+      ? ` Пот-оддс меняет решение: чарт говорил «${opts.label}», сейчас ${verdict}.`
+      : state === "jam"
+        ? ` Пуш: чарт «${opts.label}» остаётся. Голой цены колла мало, в клетке уже сидит ICM.`
+        : ` Чарт «${opts.label}» и пот-оддс совпали.`;
+  return {
+    verdict,
+    text: `Пот-оддс обязателен. Нужно ${need}% на колл, у руки ${pct}%.${size}${tail}`,
   };
 }
 
@@ -626,6 +651,11 @@ export function consult(opts: {
     draw: drawBits.length ? drawBits.join(", ") : null,
     customTo: customOff ? raiseTo : null,
     customOff,
+    jam:
+      jammed.length > 0 ||
+      /jam|push|reshove/.test(opts.spotId) ||
+      facing === "allin" ||
+      (customOff && raiseTo != null && raiseTo >= opts.bb - 0.15),
   });
 
   return {

@@ -369,20 +369,18 @@ function PreflopNote({
   range: MixRange;
   labels: SpotDef["labels"];
 }) {
-  const { shown, sizeText } = useHand();
+  const { shown } = useHand();
   const chart = selected ? primary(mixOf(range, selected)) : null;
-  const custom = sizeText.trim().length > 0;
+  const priced = shown?.street === "Префлоп" && shown.need != null;
+  const want = shown ? verdictMix(shown.verdict) : null;
   if (!mine) return null;
-  if (custom && shown?.street === "Префлоп") {
-    const want = verdictMix(shown.verdict);
-    if (want && want !== mine) {
-      return (
-        <p className="mt-2 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">
-          Против рейза до {sizeText}bb солвер: {shown.verdict}. Вы отметили {labels[mine]}. Для этого размера чарт уже не действует.
-        </p>
-      );
-    }
-    return null;
+  if (priced && want && want !== mine) {
+    return (
+      <p className="mt-2 rounded-lg border border-bad bg-bad/10 px-3 py-2 text-sm">
+        Пот-оддс пересчитал решение: {shown.verdict}. Вы отметили {labels[mine]}.
+        {chart && want !== chart ? ` Чарт на стандартный размер: ${labels[chart]}.` : ""}
+      </p>
+    );
   }
   if (chart && chart !== mine) {
     return (

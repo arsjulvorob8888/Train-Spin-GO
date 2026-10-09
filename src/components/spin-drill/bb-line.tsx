@@ -321,15 +321,24 @@ function cycleClosed(cols: Column[]): boolean {
 
 function wantedAction(spot: SpotDef, hand: string, range: MixRange, sizeText: string, verdict: string | null): MixAction | null {
   if (!hand) return null;
-  if (sizeText.trim() && verdict) {
-    const name = verdict.toLowerCase();
-    if (name === "fold" || name === "фолд") return playable(spot, "fold");
-    if (name === "call" || name === "колл" || name === "check" || name === "чек" || name.startsWith("check")) return playable(spot, "call");
-    if (name.startsWith("raise") || name === "рейз" || name === "ставка") return playable(spot, "raise");
-    if (name.startsWith("all-in") || name === "пуш") return playable(spot, "allin");
-    return null;
-  }
+  const fromPrice = verdict ? verdictAction(verdict) : null;
+  if (fromPrice && (sizeText.trim() || verdictIncludesPrice(verdict))) return playable(spot, fromPrice);
   return playable(spot, primary(mixOf(range, hand)));
+}
+
+function verdictIncludesPrice(verdict: string | null): boolean {
+  if (!verdict) return false;
+  const name = verdict.toLowerCase();
+  return name === "fold" || name === "фолд" || name === "call" || name === "колл" || name.startsWith("raise") || name.startsWith("all-in");
+}
+
+function verdictAction(verdict: string): MixAction | null {
+  const name = verdict.toLowerCase();
+  if (name === "fold" || name === "фолд") return "fold";
+  if (name === "call" || name === "колл" || name === "check" || name === "чек" || name.startsWith("check")) return "call";
+  if (name.startsWith("raise") || name === "рейз" || name === "ставка") return "raise";
+  if (name.startsWith("all-in") || name === "пуш") return "allin";
+  return null;
 }
 
 function playable(spot: SpotDef, action: MixAction): MixAction {
