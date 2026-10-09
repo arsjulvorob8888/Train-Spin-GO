@@ -778,6 +778,13 @@ export function SpinApp() {
                 onSpot={changeSpot}
                 onMine={setMine}
                 onAdvance={() => {
+                  if (group === "HU") {
+                    setSpotId(spot.hero === "SB" ? "hu_bb_raise" : "hu_sb");
+                    setMine("");
+                    setSelected("");
+                    setStackOpen(false);
+                    return;
+                  }
                   const next = GROUPS[(GROUPS.indexOf(group) + 1) % GROUPS.length]!;
                   const first = spotsIn(next)[0];
                   if (!first) return;
