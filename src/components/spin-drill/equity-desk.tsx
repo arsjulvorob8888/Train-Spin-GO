@@ -896,6 +896,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
             <div className="mt-1">
               <CardSlot card={cards.t ?? null} active={queue[0] === "t"} cue={askTurn} small onClick={() => open("t")} />
             </div>
+            {askTurn ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
             <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} />
           </div>
           {board.length >= 4 ? (
@@ -911,6 +912,7 @@ export function BoardLine({ openBoard }: { openBoard: boolean }) {
             <div className="mt-1">
               <CardSlot card={cards.r ?? null} active={queue[0] === "r"} cue={askRiver} small onClick={() => open("r")} />
             </div>
+            {askRiver ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
             <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} />
           </div>
           {board.length >= 5 ? (

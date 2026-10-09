@@ -3,6 +3,7 @@ import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
+import { preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
 import { BoardLine, Hole, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, setResult, handNonce, setOut, hero } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -80,6 +81,13 @@ export function ActionLine({
   const chartSize = chartRaiseTo(spot.id, bb);
   const doneRight = cycleClosed(cols) && actionMatches(spot, mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
   const expected = board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
+  const order = seatsInHand(spot.id, out);
+  const jammed = preflopAllin(spot.id);
+  const flopDone = board.length >= 3 && streetStatus(order, line, "flop", jammed).closed;
+  const turnDone = board.length >= 4 && streetStatus(order, line, "turn", jammed).closed;
+  const askFlop = live && board.length < 3;
+  const askTurn = flopDone && board.length < 4;
+  const askRiver = turnDone && board.length < 5;
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   useEffect(() => {
     if (!sized && board.length < 3) setSizeText("");
@@ -247,15 +255,19 @@ export function ActionLine({
         ) : null}
       </div>
       {live ? <BoardLine openBoard /> : null}
-      <p className={cn("text-sm", live && board.length < 3 ? "font-medium text-ok" : expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
+      <p className={cn("text-sm", askFlop || askTurn || askRiver ? "font-medium text-ok" : expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."
           : folded
             ? "Раздача закрыта. Вы сбросили, карт дальше нет."
             : waiting
               ? "Отметьте действия оппонентов. Карты флопа появятся, только если раздача идёт дальше."
-            : live && board.length < 3
+            : askFlop
               ? "Префлоп закрыт. Дальше флоп: три карты подсвечены зелёным."
+            : askTurn
+              ? "Флоп закрыт. Дальше тёрн: карта подсвечена зелёным."
+            : askRiver
+              ? "Тёрн закрыт. Дальше ривер: карта подсвечена зелёным."
             : board.length >= 5
           ? "Каждая улица на своей строке. Последняя галочка — раздача закрыта."
           : board.length >= 3
