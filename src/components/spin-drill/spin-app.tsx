@@ -796,19 +796,6 @@ export function SpinApp() {
                       ? "BB против пуша SB. Зелёный — колл, синий — фолд. Чем короче стек, тем шире колл."
                       : stackNote(bb)}
               </p>
-              <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
-                <p className="font-mono text-lg font-semibold">{gridName(selected)}</p>
-                <p className="mb-3 text-sm text-muted">
-                  {paint?.[selected] ? sizeCaption(paint[selected], bb) : labels[primary(mixOf(range, selected))]}
-                </p>
-                <MixBars range={range} hand={selected} labels={labels} />
-              </div>
-              <div className="mt-3">
-                <Meta spot={spot} bb={bb} range={range} labels={labels} />
-              </div>
-              <div className="mt-3">
-                <SpotExplain spot={spot} />
-              </div>
             </section>
           </HandProvider>
         )}
