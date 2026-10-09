@@ -278,14 +278,17 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
   );
 }
 
-function NewHand() {
+function NewHand({ onAdvance }: { onAdvance: () => void }) {
   const { resetHand } = useHand();
   return (
     <button
       type="button"
       aria-label="Новая раздача"
-      title="Новая раздача"
-      onClick={resetHand}
+      title="Новая раздача и следующая позиция"
+      onClick={() => {
+        resetHand();
+        onAdvance();
+      }}
       className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-fg"
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -566,6 +569,25 @@ export function SpinApp() {
     setCards(dealCombo(picked.hand));
   }
 
+  function advanceSeat() {
+    if (group === "HU") {
+      setSpotId(spot.hero === "SB" ? "hu_bb_raise" : "hu_sb");
+      setMine("");
+      setSelected("");
+      setStackOpen(false);
+      return;
+    }
+    const turn: Record<string, SpotGroup> = { BTN: "BB", BB: "SB", SB: "BTN" };
+    const next = turn[group] ?? "BTN";
+    const first = spotsIn(next)[0];
+    if (!first) return;
+    setGroup(next);
+    setSpotId(first.id);
+    setMine("");
+    setSelected("");
+    setStackOpen(false);
+  }
+
   function changeGroup(g: SpotGroup) {
     const first = spotsIn(g)[0];
     if (first) changeSpot(first.id);
@@ -756,7 +778,7 @@ export function SpinApp() {
                   extra={
                     <>
                       <StackType bb={bb} onChange={setBb} />
-                      <NewHand />
+                      <NewHand onAdvance={advanceSeat} />
                       <PotFields />
                       <button
                         type="button"
@@ -777,24 +799,7 @@ export function SpinApp() {
                 selected={selected}
                 onSpot={changeSpot}
                 onMine={setMine}
-                onAdvance={() => {
-                  if (group === "HU") {
-                    setSpotId(spot.hero === "SB" ? "hu_bb_raise" : "hu_sb");
-                    setMine("");
-                    setSelected("");
-                    setStackOpen(false);
-                    return;
-                  }
-                  const turn: Record<string, SpotGroup> = { BTN: "BB", BB: "SB", SB: "BTN" };
-                  const next = turn[group] ?? "BTN";
-                  const first = spotsIn(next)[0];
-                  if (!first) return;
-                  setGroup(next);
-                  setSpotId(first.id);
-                  setMine("");
-                  setSelected("");
-                  setStackOpen(false);
-                }}
+                onAdvance={advanceSeat}
               />
               {stackOpen ? <StackPick bb={bb} onPick={takeStack} /> : null}
               <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
