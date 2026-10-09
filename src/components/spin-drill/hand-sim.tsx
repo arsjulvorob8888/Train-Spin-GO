@@ -226,7 +226,7 @@ export function HandSim() {
 
         {post?.actor && post.actor !== hero ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            {(facing(post.order, lastBySeat(line[street as StreetId]), post.actor) ? ["fold", "call", "raise", "allin"] : ["check", "bet33", "bet66", "allin"]).map((action) => (
+            {(facing(post.order, lastBySeat(line[street as StreetId]), post.actor) ? ["fold", "call", "raise", "allin"] : ["check", "bet33", "bet66", "betpot", "allin"]).map((action) => (
               <button
                 key={action}
                 type="button"
@@ -374,7 +374,7 @@ function facing(order: Seat[], acts: Partial<Record<Seat, LineAction>>, seat: Se
   const index = order.indexOf(seat);
   return order.slice(0, index).some((item) => {
     const action = acts[item];
-    return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
+    return action === "bet33" || action === "bet66" || action === "betpot" || action === "raise" || action === "allin";
   });
 }
 
@@ -384,7 +384,7 @@ function facingSize(order: Seat[], acts: Partial<Record<Seat, LineAction>>, pot:
     const action = acts[seat];
     if (action === "bet33") size = round(pot / 3);
     if (action === "bet66") size = round(pot * 0.66);
-    if (action === "raise") size = round(pot);
+    if (action === "betpot" || action === "raise") size = round(pot);
     if (action === "allin") size = stack;
   }
   return size;
@@ -393,13 +393,14 @@ function facingSize(order: Seat[], acts: Partial<Record<Seat, LineAction>>, pot:
 function verdictAction(verdict: string, order: Seat[], acts: Partial<Record<Seat, LineAction>>): LineAction {
   const against = order.some((seat) => {
     const action = acts[seat];
-    return action === "bet33" || action === "bet66" || action === "raise" || action === "allin";
+    return action === "bet33" || action === "bet66" || action === "betpot" || action === "raise" || action === "allin";
   });
   const name = verdict.toLowerCase();
   if (name === "fold" || name === "фолд") return "fold";
   if (name === "check" || name === "чек") return "check";
   if (name === "call" || name === "колл") return "call";
   if (name.startsWith("raise 2")) return "bet33";
+  if (name.startsWith("raise 6")) return against ? "raise" : "betpot";
   if (name.startsWith("raise 4") || name === "ставка") return against ? "raise" : "bet66";
   if (name === "raise" || name === "рейз") return against ? "raise" : "bet66";
   if (name.startsWith("all-in") || name === "пуш") return "allin";

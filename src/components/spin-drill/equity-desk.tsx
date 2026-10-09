@@ -724,7 +724,7 @@ function StreetColumns({
   const jammed = preflopAllin(spotId);
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
-  const { pot, callText, setCallText } = useHand();
+  const { pot, potText, setPotText, callText, setCallText } = useHand();
   const title = (action: LineAction, seat: Seat) => actionTitle(action, pot, seatStack(seat, bb));
   const cols: { seat: Seat; selected: LineAction | null; live: boolean }[] = acts.map((act) => ({
     seat: act.seat,
@@ -786,18 +786,33 @@ function StreetColumns({
         );
       })}
       {opponentLive ? (
-        <label className="w-[6.4rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
+        <div className="w-[8.4rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
           <span className="block px-1 font-medium">Его рейз, bb</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {[2, 4, 6].map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => {
+                  setCallText(String(size));
+                  if (!potText.trim()) setPotText("5.5");
+                }}
+                className={cn("h-7 rounded px-1.5 font-mono text-[11px]", Number(callText) === size ? "bg-fg text-bg" : "bg-surface-2 text-muted")}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
           <input
             inputMode="decimal"
             value={callText}
             placeholder="2"
-            aria-label="Размер ставки оппонента, если он не как на кнопке"
+            aria-label="Размер ставки оппонента в больших блайндах"
             onChange={(event) => setCallText(event.target.value)}
             className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
           />
-          <span className="mt-1 block px-1 leading-tight text-muted">Если поставил не 2 и не 4.</span>
-        </label>
+          <span className="mt-1 block px-1 leading-tight text-muted">4 и 6 меняют шансы банка.</span>
+        </div>
       ) : null}
     </>
   );
@@ -941,6 +956,7 @@ function suggested(verdict: string, facing: boolean): LineAction | null {
   if (name === "call" || name === "колл") return "call";
   if (name === "check" || name === "чек") return "check";
   if (name.includes("блеф") || name.startsWith("raise 2")) return "bet33";
+  if (name.startsWith("raise 6")) return facing ? "raise" : "betpot";
   if (name.startsWith("raise 4") || name === "ставка") return facing ? "raise" : "bet66";
   if (name === "raise" || name === "рейз") return facing ? "raise" : "bet66";
   if (name.startsWith("all-in") || name === "пуш") return "allin";

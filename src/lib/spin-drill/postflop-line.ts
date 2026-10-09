@@ -3,12 +3,13 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 
 export type Seat = "BTN" | "SB" | "BB";
 export type StreetId = "flop" | "turn" | "river";
-export type LineAction = "check" | "bet33" | "bet66" | "fold" | "call" | "raise" | "allin";
+export type LineAction = "check" | "bet33" | "bet66" | "betpot" | "fold" | "call" | "raise" | "allin";
 
 export const OPEN_ACTIONS: { id: LineAction; label: string }[] = [
   { id: "check", label: "Check" },
   { id: "bet33", label: "Raise 2" },
   { id: "bet66", label: "Raise 4" },
+  { id: "betpot", label: "Raise 6" },
   { id: "allin", label: "All-in" },
 ];
 
@@ -23,6 +24,7 @@ const LABEL: Record<LineAction, string> = {
   check: "Check",
   bet33: "Raise",
   bet66: "Raise",
+  betpot: "Raise",
   fold: "Fold",
   call: "Call",
   raise: "Raise",
@@ -68,7 +70,7 @@ export function seatStack(seat: Seat, bb: number): number {
   return Math.round(Math.max(0.5, left) * 10) / 10;
 }
 
-const AGGRESSIVE: LineAction[] = ["bet33", "bet66", "raise", "allin"];
+const AGGRESSIVE: LineAction[] = ["bet33", "bet66", "betpot", "raise", "allin"];
 
 export type StreetState = {
   closed: boolean;
@@ -211,6 +213,7 @@ export function callSize(action: LineAction, pot: number | null, stackBb: number
   if (pot == null || pot <= 0) return null;
   if (action === "bet33") return roundMult(pot / 3);
   if (action === "bet66") return roundMult((pot * 2) / 3);
+  if (action === "betpot") return roundMult(pot);
   return roundMult(pot);
 }
 
@@ -225,7 +228,7 @@ export function actionTitle(action: LineAction, pot: number | null, stackBb: num
   if (action === "call") return "Call";
   if (action === "allin") return "All-in";
   const size = callSize(action, pot != null && pot > 0 ? pot : 6, stackBb);
-  const stepped = size ?? (action === "bet33" ? 2 : action === "bet66" ? 4 : 4);
+  const stepped = size ?? (action === "bet33" ? 2 : action === "bet66" ? 4 : 6);
   const text = Number.isInteger(stepped) ? String(stepped) : stepped.toFixed(1);
   return `Raise ${text}`;
 }
@@ -267,6 +270,12 @@ function keep(category: number, draw: boolean, action: LineAction): number {
     if (nuts || two || draw) return 1;
     if (pair) return 0.3;
     return 0.1;
+  }
+  if (action === "betpot") {
+    if (nuts || draw) return 1;
+    if (two) return 0.45;
+    if (pair) return 0.12;
+    return 0.04;
   }
   if (action === "allin") {
     if (nuts || draw) return 1;

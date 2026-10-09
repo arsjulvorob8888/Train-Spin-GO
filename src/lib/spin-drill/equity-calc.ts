@@ -2,7 +2,7 @@ import { handClass, partialShuffle, remainingDeck, type Card } from "@/lib/poker
 import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
-import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
+import { rangeAtStack, handPower } from "@/lib/spin-drill/stack-ranges";
 import { facingPrice, lineNote, narrowSeat, openStreet, preflopAllin, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
@@ -107,7 +107,7 @@ function villainSpec(spotId: string, live: Seat[], hero: Seat): Spec {
   return base;
 }
 
-function villainCombos(spotId: string, bb: number, used: Set<string>, live: Seat[], hero: Seat): { combos: Combo[]; who: string; random: boolean } {
+function villainCombos(spotId: string, bb: number, used: Set<string>, live: Seat[], hero: Seat, raiseTo: number | null): { combos: Combo[]; who: string; random: boolean } {
   const spec = villainSpec(spotId, live, hero);
   const spot = findSpot(spec.spotId);
   const range = rangeAtStack(spot.range, spot.id, bb);
@@ -119,7 +119,34 @@ function villainCombos(spotId: string, bb: number, used: Set<string>, live: Seat
     for (const [a, b] of expand(klass, used)) combos.push({ a, b, w: freq, klass });
   }
   if (combos.length < 8) return { combos: [], who: "случайная рука", random: true };
-  return { combos, who: spec.who, random: false };
+  const chartTo = chartRaiseTo(spotId, bb);
+  const sized = tightenForSize(combos, raiseTo, chartTo);
+  const bigger = raiseTo != null && chartTo != null && raiseTo > chartTo + 0.2;
+  const who = bigger ? `${spec.who}, рейз до ${trimSize(raiseTo)}bb — диапазон уже, чем на минимальном рейзе` : spec.who;
+  return { combos: sized, who, random: false };
+}
+
+function trimSize(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function tightenForSize(combos: Combo[], raiseTo: number | null, chartTo: number | null): Combo[] {
+  if (raiseTo == null || chartTo == null || chartTo <= 0) return combos;
+  const ratio = raiseTo / chartTo;
+  if (ratio < 1.35) return combos;
+  const keepFrac = ratio >= 3 ? 0.22 : ratio >= 2 ? 0.38 : 0.58;
+  const ranked = combos.slice().sort((a, b) => handPower(b.klass) - handPower(a.klass));
+  const total = ranked.reduce((sum, combo) => sum + combo.w, 0);
+  if (total <= 0) return combos;
+  const kept: Combo[] = [];
+  let acc = 0;
+  for (const combo of ranked) {
+    if (kept.length >= 8 && acc / total >= keepFrac) break;
+    kept.push(combo);
+    acc += combo.w;
+  }
+  return kept.length ? kept : combos;
 }
 
 function spotPrice(spotId: string, bb: number): { toCall: number; pot: number } | null {
@@ -450,7 +477,7 @@ export function consult(opts: {
   const used = new Set([...opts.hero, ...opts.board].map(keyOf));
   const heroSeat = opts.heroSeat ?? "BTN";
   const order = seatsInHand(opts.spotId, opts.out ?? []);
-  const villain = villainCombos(opts.spotId, opts.bb, used, order, heroSeat);
+  const villain = villainCombos(opts.spotId, opts.bb, used, order, heroSeat, opts.raiseTo != null && opts.raiseTo > 0 ? opts.raiseTo : null);
   const opponents = order.filter((seat) => seat !== heroSeat);
   const acted = opponents.filter((seat) =>
     opts.line ? (["flop", "turn", "river"] as const).some((street) => opts.line![street].some((act) => act.seat === seat)) : false,
@@ -565,8 +592,8 @@ export function consult(opts: {
       : null;
   const priced = face ? facingPrice(face, heroSeat, opts.bb, opts.pot ?? null) : null;
   const userPrice =
-    opts.toCall != null && opts.toCall > 0 && opts.pot != null && opts.pot >= 0
-      ? opts.toCall / (opts.pot + opts.toCall)
+    opts.toCall != null && opts.toCall > 0
+      ? opts.toCall / ((opts.pot != null && opts.pot >= 0 ? opts.pot : Math.max(1.5, (priced ? priced.pot - priced.toCall : 1.5))) + opts.toCall)
       : null;
   const need = userPrice ?? (priced ? priced.toCall / (priced.pot + priced.toCall) : auto ? auto.toCall / (auto.pot + auto.toCall) : null);
   const facing = face ? (face.action === "allin" ? "allin" : "bet") : "none";

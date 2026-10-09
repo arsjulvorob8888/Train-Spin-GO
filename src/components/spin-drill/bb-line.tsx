@@ -81,6 +81,9 @@ export function ActionLine({
   const expected = board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   useEffect(() => {
+    if (!sized && board.length < 3) setSizeText("");
+  }, [sized, board.length, spot.id, setSizeText]);
+  useEffect(() => {
     setResult(won ? "win" : folded ? "fold" : "");
   }, [won, folded, setResult]);
   return (
@@ -177,7 +180,7 @@ export function ActionLine({
                       on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                     )}
                   >
-                    {action.label}
+                    {sizeLabel(action.label, on, sizeText)}
                     {wanted && !on ? " · солвер" : ""}
                   </button>
                 );
@@ -186,18 +189,33 @@ export function ActionLine({
           </div>
         ))}
         {sized ? (
-          <label className="w-[8.5rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
-            <span className="block px-1 font-medium">Другой рейз, bb</span>
+          <div className="w-[11.5rem] shrink-0 rounded-lg border border-border p-1 text-[11px]">
+            <span className="block px-1 font-medium">Размер рейза, bb</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {[2, 2.5, 3, 4, 6, 8].map((size) => {
+                const on = Number(sizeText.replace(",", ".")) === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setSizeText(String(size))}
+                    className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
+            </div>
             <input
               inputMode="decimal"
               value={sizeText}
               placeholder={chartSize != null ? String(chartSize) : "2"}
-              aria-label="Размер рейза оппонента, если он не как в чарте"
+              aria-label="Свой размер рейза в больших блайндах"
               onChange={(event) => setSizeText(event.target.value)}
               className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
             />
-            <span className="mt-1 block px-1 leading-tight text-muted">Пусто — размер из чарта. Впиши число, только если оппонент поставил иначе.</span>
-          </label>
+            <span className="mt-1 block px-1 leading-tight text-muted">2, 4 или 6 меняют цену колла и сужают диапазон. Пусто — размер чарта.</span>
+          </div>
         ) : null}
         {doneRight ? (
           <div className="grid w-14 shrink-0 place-items-center self-center text-ok" title="Цикл закрыт, действие верное">
@@ -248,6 +266,15 @@ export function ActionLine({
       </p>
     </div>
   );
+}
+
+function sizeLabel(label: string, selected: boolean, sizeText: string): string {
+  if (!selected || !sizeText.trim()) return label;
+  if (!/^raise/i.test(label) && label !== "3-bet") return label;
+  const size = Number(sizeText.replace(",", "."));
+  if (!Number.isFinite(size) || size <= 0) return label;
+  const text = Number.isInteger(size) ? String(size) : String(Math.round(size * 10) / 10);
+  return `Raise ${text}`;
 }
 
 function preflopFolded(spot: SpotDef, sbAct: Blind, bbAct: Blind, btnAct: Blind): ("BTN" | "SB" | "BB")[] {
