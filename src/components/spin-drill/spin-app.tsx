@@ -12,6 +12,7 @@ import { EquityDrill } from "@/components/spin-drill/equity-drill";
 import { PotOddsDrill } from "@/components/spin-drill/pot-odds-drill";
 import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
 import { RangeExperiment } from "@/components/spin-drill/range-experiment";
+import { SimLab } from "@/components/spin-drill/sim-lab";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL, gridName } from "@/lib/spin-drill/legacy-ranges";
@@ -46,7 +47,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-type Tab = "practice" | "strategy" | "table" | "experiment" | "hands" | "math" | "stats";
+type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -617,6 +618,7 @@ export function SpinApp() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "practice", label: "Тренировка" },
+    { id: "sim", label: "Симулятор" },
     { id: "strategy", label: "Стратегия" },
     { id: "table", label: "Раздача" },
     { id: "experiment", label: "GAME" },
@@ -658,8 +660,10 @@ export function SpinApp() {
                 ? "Комбинации"
                 : tab === "experiment"
                   ? "GAME"
-                : tab === "math"
-                  ? "Математика"
+                  : tab === "sim"
+                    ? "Симулятор"
+                    : tab === "math"
+                      ? "Математика"
                   : tab === "practice" && practiceMode === "math"
                     ? mathDrill === "equity"
                       ? "Эквити"
@@ -761,6 +765,7 @@ export function SpinApp() {
         )}
 
         {tab === "experiment" && <RangeExperiment />}
+        {tab === "sim" && <SimLab />}
 
         {tab === "practice" && (
           <div className="space-y-4">
