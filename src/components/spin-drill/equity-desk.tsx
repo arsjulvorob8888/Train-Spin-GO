@@ -1,6 +1,7 @@
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
 import { evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
+import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
 import {
   FACING_ACTIONS,
   OPEN_ACTIONS,
@@ -47,8 +48,10 @@ type HandApi = {
     draw?: string | null;
     text: string;
     equity: number;
+    need: number | null;
     action: string;
     label: string;
+    bluff: { title: string; text: string } | null;
   } | null;
   typedOdds: number | null;
   pot: number | null;
@@ -509,9 +512,11 @@ export function EquityDesk() {
               ? shown.text
               : "Сначала карты, потом линия префлопа, потом борд. Совет пересчитывается после каждого хода."}
       </p>
+      {shown && result !== "win" && result !== "fold" ? <OddsBar need={shown.need} equity={shown.equity} street={shown.street} /> : null}
+      {shown && result !== "win" && result !== "fold" ? <BluffNotice bluff={shown.bluff} /> : null}
       <div className="mt-3 grid max-w-sm grid-cols-2 gap-2">
         <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-          Банк, bb
+          Банк, bb · обязательно
           <input
             inputMode="decimal"
             value={potText}
@@ -521,7 +526,7 @@ export function EquityDesk() {
           />
         </label>
         <label className="block text-[10px] font-medium tracking-wide text-subtle uppercase">
-          Докинуть, bb
+          Докинуть, bb · обязательно
           <input
             inputMode="decimal"
             value={callText}
@@ -925,4 +930,65 @@ function suggested(verdict: string, facing: boolean): LineAction | null {
   if (name === "raise" || name === "рейз") return facing ? "raise" : "bet66";
   if (name.startsWith("all-in") || name === "пуш") return "allin";
   return null;
+}
+
+function OddsBar({ need, equity, street }: { need: number | null; equity: number; street: string }) {
+  const eq = Math.round(equity * 100);
+  if (need == null || need <= 0) {
+    return (
+      <div className="mt-3 rounded-xl border border-border bg-bg px-3 py-3">
+        <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Пот-оддс</p>
+        <p className="mt-1 text-sm">Ставки нет, коллировать нечего. Как только появится цена, здесь будут две цифры: сколько нужно и сколько у руки.</p>
+      </div>
+    );
+  }
+  const req = Math.round(need * 100);
+  const ok = equity + 0.01 >= need;
+  const scale = Math.max(req, eq, 1);
+  return (
+    <div className={cn("mt-3 rounded-xl border px-3 py-3", ok ? "border-ok bg-ok/10" : "border-bad bg-bad/10")}>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Нужно на колл</p>
+          <p className="font-mono text-4xl font-semibold leading-none">{req}%</p>
+        </div>
+        <p className={cn("pb-1 text-sm font-medium", ok ? "text-ok" : "text-bad")}>{ok ? "Колл по шансам" : "Фолд по шансам"}</p>
+        <div className="text-right">
+          <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">У руки</p>
+          <p className="font-mono text-4xl font-semibold leading-none">{eq}%</p>
+        </div>
+      </div>
+      <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-surface">
+        <div className="absolute inset-y-0 left-0 bg-fg/20" style={{ width: `${Math.min(100, (req / scale) * 100)}%` }} />
+        <div className={cn("absolute inset-y-0 left-0", ok ? "bg-ok" : "bg-bad")} style={{ width: `${Math.min(100, (eq / scale) * 100)}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-muted">
+        {street === "Префлоп"
+          ? "Пот-оддс обязателен. Ниже цены колл не добавляй. На пуше короткого стека клетка чарта главнее: в ней уже сидят фолды."
+          : "Пот-оддс обязателен. Рука ниже цены — фолд, даже если хочется доехать."}
+      </p>
+    </div>
+  );
+}
+
+function BluffNotice({ bluff }: { bluff: { title: string; text: string } | null }) {
+  if (!bluff) return null;
+  const saw = journalSummary(readJournal()).saw;
+  const sticky = saw.station >= 3 && saw.station >= saw.nit && saw.station >= saw.lag;
+  if (sticky) {
+    return (
+      <div className="mt-3 rounded-xl border border-bad bg-bad/10 px-3 py-3">
+        <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Блеф</p>
+        <p className="mt-1 text-lg font-medium">Сейчас не блефуй</p>
+        <p className="mt-1 text-sm text-muted">Дро есть, но журнал говорит, что стол коллит всё. Ставка без руки ему платит. Чек, либо колл только если шансы банка уже зелёные.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-ok bg-ok/10 px-3 py-3">
+      <p className="text-[10px] font-medium tracking-[0.16em] text-subtle uppercase">Блеф</p>
+      <p className="mt-1 text-lg font-medium">{bluff.title}</p>
+      <p className="mt-1 text-sm text-muted">{bluff.text}</p>
+    </div>
+  );
 }

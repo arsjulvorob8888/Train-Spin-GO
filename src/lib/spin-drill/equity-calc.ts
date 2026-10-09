@@ -203,6 +203,7 @@ export type Consult = {
   street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
   verdict: string;
   random: boolean;
+  bluff: { title: string; text: string } | null;
 };
 
 function likelyHands(combos: Combo[], byWeight: boolean): { hand: string; pct: number }[] {
@@ -320,6 +321,12 @@ function advice(opts: {
           text: `${opts.street}: ${hand}${extra}. Эквити ${pct}%. Тонкое вэлью — Raise 2, не крупный рейз. ${dropped}`,
         };
       }
+      if (semiBluff(opts.draw, opts.made, opts.equity)) {
+        return {
+          verdict: "Raise 2",
+          text: `${opts.street}: готовой руки нет, ${opts.draw}. Эквити ${pct}%. Сейчас уместен маленький блеф — Raise 2. Крупнее не ставь: на этих лимитах без дро блеф проигрывает. ${dropped}`,
+        };
+      }
       return {
         verdict: "Check",
         text: `${opts.street}: ${hand}${extra}. Эквити ${pct}%. ${opts.draw ? "Дро есть, но без ставки оппонента чаще чек." : "Чек, ставить нечего."} ${dropped}`,
@@ -351,7 +358,7 @@ function advice(opts: {
       : `Цена колла ${need}%, у руки ${pct}%. По шансам банка это фолд.`;
     return {
       verdict: opts.label,
-      text: `${price} Префлоп-чарт на ${opts.bb}bb: ${opts.label}. Если цифры расходятся, на коротком стеке верь чарту: в нём уже есть фолды оппонента и ICM.`,
+      text: `Пот-оддс обязателен. ${price} Чарт на ${opts.bb}bb: ${opts.label}. Ниже цены колл не добавляй. На пуше короткого стека чарт важнее голой цены: в нём уже есть фолды оппонента.`,
     };
   }
   const why: Record<MixAction, string> = {
@@ -363,6 +370,30 @@ function advice(opts: {
   return {
     verdict: opts.label,
     text: `Префлоп. На ${opts.bb}bb чарт: ${opts.label}. Против диапазона «${opts.who}» у руки около ${pct}% банка. ${why[opts.action]}`,
+  };
+}
+
+function semiBluff(draw: string | null, made: string | null, equity: number): boolean {
+  if (!draw) return false;
+  const strong = draw.includes("флеш-дро") || draw.includes("двусторонний");
+  const air = !made || made === "старшая карта";
+  return strong && air && equity >= 0.28 && equity < 0.5;
+}
+
+function bluffCue(opts: {
+  street: "Префлоп" | "Флоп" | "Тёрн" | "Ривер";
+  phase: "act" | "wait" | "done";
+  facing: "none" | "bet" | "allin";
+  draw: string | null;
+  made: string | null;
+  equity: number;
+}): { title: string; text: string } | null {
+  if (opts.phase !== "act" || opts.facing !== "none") return null;
+  if (opts.street !== "Флоп" && opts.street !== "Тёрн") return null;
+  if (!semiBluff(opts.draw, opts.made, opts.equity)) return null;
+  return {
+    title: "Сейчас уместен блеф",
+    text: "Готовой руки нет, есть сильное дро, и ставить в вас никто не ставил. Raise 2: часть диапазона сбросит, а если заколлируют — у дро ещё есть эквити. Без дро, на ривере и против того, кто коллит всё, эту ставку не делай.",
   };
 }
 
@@ -577,6 +608,7 @@ export function consult(opts: {
     street,
     verdict: said.verdict,
     random: villain.random,
+    bluff: bluffCue({ street, phase, facing, draw: drawBits.length ? drawBits.join(", ") : null, made, equity }),
     text: said.text,
   };
 }
