@@ -82,6 +82,15 @@ export function fieldRoi(): number {
   return (pool / 3 - 1) * 100;
 }
 
+export function thinCurve(curve: number[], points = 81): number[] {
+  if (curve.length === 0) return [0];
+  if (curve.length <= points) return curve.slice();
+  const last = curve.length - 1;
+  const out: number[] = [];
+  for (let i = 0; i < points; i++) out.push(curve[Math.round((i / (points - 1)) * last)] ?? 0);
+  return out;
+}
+
 export function emptyTotals(): SimTotals {
   const byMult: SimTotals["byMult"] = {};
   for (const row of PRIZES) byMult[row.mult] = { games: 0, profit: 0, wins: 0 };

@@ -2,7 +2,7 @@
 
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
 import { primary, type MixAction } from "@/lib/spin-drill/mix";
-import { addTotals, emptyTotals, fieldRoi, playBatch, PRIZES, type SimTotals } from "@/lib/spin-drill/sim-engine";
+import { addTotals, emptyTotals, fieldRoi, playBatch, PRIZES, thinCurve, type SimTotals } from "@/lib/spin-drill/sim-engine";
 import {
   chartStrategy,
   cloneStrategy,
@@ -19,6 +19,24 @@ import { cn } from "@/lib/utils";
 import { useMemo, useRef, useState } from "react";
 
 const ACTIONS: MixAction[] = ["fold", "call", "raise", "allin"];
+const CLOUD_RUNS = 100;
+const CLOUD_GAMES = 5000;
+
+type CloudMessage =
+  | { pong: true }
+  | {
+      games: number;
+      profit: number;
+      wins: number;
+      second: number;
+      third: number;
+      sumSq: number;
+      maxUp: number;
+      maxDown: number;
+      byMult: SimTotals["byMult"];
+      curve: number[];
+    };
+
 const PAINT: Record<MixAction, string> = {
   fold: "bg-fold",
   call: "bg-call",
@@ -33,9 +51,14 @@ export function SimLab() {
   const [totals, setTotals] = useState<SimTotals | null>(null);
   const [before, setBefore] = useState<SimTotals | null>(null);
   const [running, setRunning] = useState(false);
+  const [mode, setMode] = useState<"one" | "cloud">("cloud");
   const [target, setTarget] = useState(1000);
+  const [paths, setPaths] = useState<number[][]>([]);
   const [error, setError] = useState("");
   const stop = useRef(false);
+  const pool = useRef<Worker[]>([]);
+  const cloudDone = useRef<(() => void) | null>(null);
+  const generation = useRef(0);
   const spots = useMemo(() => spotChoices(), []);
   const range = strategy.ranges[spotId] ?? {};
 
@@ -94,16 +117,20 @@ export function SimLab() {
   }
 
   async function run() {
+    const id = ++generation.current;
     stop.current = false;
+    haltWorkers();
     setRunning(true);
+    setMode("one");
     setError("");
+    setPaths([]);
     setBefore(totals);
     try {
       let acc = emptyTotals();
       let seed = Date.now() % 1000000000;
       let left = target;
       setTotals(acc);
-      while (left > 0 && !stop.current) {
+      while (left > 0 && !stop.current && id === generation.current) {
         const chunk = Math.min(40, left);
         const part = playBatch(strategy, chunk, seed);
         seed += 997;
@@ -115,7 +142,124 @@ export function SimLab() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Симуляция остановилась");
     }
-    setRunning(false);
+    if (id === generation.current) setRunning(false);
+  }
+
+  function haltWorkers() {
+    for (const worker of pool.current) worker.terminate();
+    pool.current = [];
+    cloudDone.current?.();
+    cloudDone.current = null;
+  }
+
+  async function runCloud() {
+    const id = ++generation.current;
+    stop.current = false;
+    haltWorkers();
+    setRunning(true);
+    setMode("cloud");
+    setError("");
+    setPaths([]);
+    setBefore(totals);
+    const snapshot = cloneStrategy(strategy);
+    let acc = emptyTotals();
+    setTotals(acc);
+    const take = (curve: number[], part: SimTotals) => {
+      if (stop.current || id !== generation.current) return;
+      acc = merge(acc, part);
+      setTotals(acc);
+      setPaths((prev) => [...prev, curve]);
+    };
+    try {
+      const parallel = await cloudWorkers(snapshot, take);
+      if (!parallel && id === generation.current) {
+        let seed = Date.now() % 1000000000;
+        for (let i = 0; i < CLOUD_RUNS && !stop.current && id === generation.current; i++) {
+          const part = playBatch(snapshot, CLOUD_GAMES, seed);
+          seed += 997;
+          take(thinCurve(part.curve, 81), { ...part, curve: [0] });
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+    } catch (reason) {
+      if (id === generation.current) setError(reason instanceof Error ? reason.message : "Облако остановилось");
+    }
+    if (id === generation.current) {
+      haltWorkers();
+      setRunning(false);
+    }
+  }
+
+  function cloudWorkers(snapshot: SimStrategy, take: (curve: number[], part: SimTotals) => void): Promise<boolean> {
+    return new Promise((resolve) => {
+      let worker: Worker;
+      try {
+        worker = new Worker(new URL("../../lib/spin-drill/sim-worker.ts", import.meta.url), { type: "module" });
+      } catch {
+        resolve(false);
+        return;
+      }
+      const fail = () => {
+        worker.terminate();
+        resolve(false);
+      };
+      const timer = setTimeout(fail, 20000);
+      worker.onerror = fail;
+      worker.onmessage = () => {
+        clearTimeout(timer);
+        worker.terminate();
+        spawnPool(snapshot, take).then(() => resolve(true)).catch(() => resolve(false));
+      };
+      worker.postMessage({ ping: true });
+    });
+  }
+
+  function spawnPool(snapshot: SimStrategy, take: (curve: number[], part: SimTotals) => void): Promise<void> {
+    const cores = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
+    let next = 0;
+    let finished = 0;
+    return new Promise((resolve) => {
+      const done = () => {
+        if (!cloudDone.current) return;
+        cloudDone.current = null;
+        resolve();
+      };
+      cloudDone.current = done;
+      const workers = Array.from({ length: cores }, () => new Worker(new URL("../../lib/spin-drill/sim-worker.ts", import.meta.url), { type: "module" }));
+      pool.current = workers;
+      for (const worker of workers) {
+        const send = () => {
+          if (stop.current || next >= CLOUD_RUNS) return;
+          const seed = (Date.now() + next * 997) % 1000000000;
+          next += 1;
+          worker.postMessage({ games: CLOUD_GAMES, seed, strategy: snapshot });
+        };
+        worker.onerror = () => {
+          setError("Поток симуляции остановился. Облако неполное.");
+          done();
+        };
+        worker.onmessage = (event: MessageEvent<CloudMessage>) => {
+          const data = event.data;
+          if (!data || "pong" in data || stop.current) return;
+          const part = emptyTotals();
+          part.games = data.games;
+          part.profit = data.profit;
+          part.wins = data.wins;
+          part.second = data.second;
+          part.third = data.third;
+          part.sumSq = data.sumSq;
+          part.maxUp = data.maxUp;
+          part.maxDown = data.maxDown;
+          part.byMult = data.byMult;
+          part.curve = [0];
+          finished += 1;
+          take(data.curve, part);
+          if (finished >= CLOUD_RUNS) done();
+          else send();
+        };
+        send();
+      }
+    });
   }
 
   return (
@@ -205,17 +349,22 @@ export function SimLab() {
               {n} игр
             </button>
           ))}
-          <button type="button" className="h-11 rounded-md bg-fg px-4 text-sm font-medium text-bg" disabled={running} onClick={() => void run()}>
-            {running ? "Счёт..." : "Прогнать стратегию"}
+          <button type="button" className="h-11 rounded-md bg-fg px-4 text-sm font-medium text-bg" disabled={running} onClick={() => void runCloud()}>
+            {running && mode === "cloud" ? `Облако ${paths.length} / ${CLOUD_RUNS}` : "Облако 100 × 5000"}
+          </button>
+          <button type="button" className="h-11 rounded-md border border-border px-4 text-sm" disabled={running} onClick={() => void run()}>
+            {running && mode === "one" ? "Счёт..." : "Один прогон"}
           </button>
           {running ? (
-            <button type="button" className="h-11 rounded-md border border-border px-3 text-sm" onClick={() => (stop.current = true)}>
+            <button type="button" className="h-11 rounded-md border border-border px-3 text-sm" onClick={() => { generation.current += 1; stop.current = true; haltWorkers(); setRunning(false); }}>
               Стоп
             </button>
           ) : null}
         </div>
-        <p className="mt-3 text-sm text-muted">Сначала прогоните как есть. Потом поменяйте один рейндж, блеф или тип игрока и прогоните снова: разница с прошлым результатом появится под цифрами.</p>
-        {totals ? <Report totals={totals} previous={before} strategy={strategy} /> : null}
+        <p className="mt-3 text-sm text-muted">
+          Облако — это 100 отдельных прогонов по 5000 игр. Каждая линия — одна возможная судьба банкролла. Ноль — уровень рейка. Линия выше нуля обыграла поле. Один прогон слева нужен только для быстрой проверки.
+        </p>
+        {totals ? <Report totals={totals} previous={before} strategy={strategy} cloud={paths} /> : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-4">
@@ -275,7 +424,7 @@ function Slider({ label, min, max, value, onChange }: { label: string; min: numb
   );
 }
 
-function Report({ totals, previous, strategy }: { totals: SimTotals; previous: SimTotals | null; strategy: SimStrategy }) {
+function Report({ totals, previous, strategy, cloud }: { totals: SimTotals; previous: SimTotals | null; strategy: SimStrategy; cloud: number[][] }) {
   const n = Math.max(1, totals.games);
   const roi = (totals.profit / n) * 100;
   const mean = totals.profit / n;
@@ -288,8 +437,9 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
   const second = totals.second / n;
   const third = totals.third / n;
   const points = totals.curve;
-  const peak = Math.max(...points);
-  const floor = Math.min(...points);
+  const rawEnds = cloud.map((curve) => curve[curve.length - 1] ?? 0);
+  const peak = rawEnds.length ? Math.max(...rawEnds) : Math.max(...points);
+  const floor = rawEnds.length ? Math.min(...rawEnds) : Math.min(...points);
   const common = [2, 3].map((mult) => {
     const got = totals.byMult[mult];
     const fair = (mult / 3 - 1) * 100;
@@ -305,8 +455,8 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
         <Stat label="Профит, бай-ины" value={`${signed(totals.profit)}`} hint="Сумма за весь прогон. Одна удачная x100 двигает её сильнее, чем сто обычных игр." />
         <Stat label="1 / 2 / 3 место" value={`${pct(totals.wins, n)} / ${pct(totals.second, n)} / ${pct(totals.third, n)}`} hint="У равных игроков около 33 / 33 / 33. Сдвиг показывает, вылетаете вы рано или не добираете победы." />
         <Stat label="95% коридор" value={`±${ci.toFixed(1)}%`} hint="Если «против поля» внутри этой вилки, разница ещё может быть случайностью." tone={ci > 8 ? "bad" : "flat"} />
-        <Stat label="Лучшая точка" value={`${signed(peak)} би`} hint="Самый высокий банкролл на дистанции. Показывает удачный отрезок, не силу стратегии." />
-        <Stat label="Просадка" value={`${floor.toFixed(1)} би`} hint="Насколько банк уходил в минус. Такой запас бай-инов нужен, чтобы досидеть этот отрезок." tone={floor < -20 ? "bad" : "flat"} />
+        <Stat label="Лучшая точка" value={`${signed(peak)} би`} hint={cloud.length ? "Самый удачный из прогонов облака к последней игре." : "Самый высокий банкролл на дистанции. Показывает удачный отрезок, не силу стратегии."} />
+        <Stat label="Просадка" value={`${floor.toFixed(1)} би`} hint={cloud.length ? "Самый неудачный прогон облака к последней игре. Запас бай-инов должен пережить и его." : "Насколько банк уходил в минус. Такой запас бай-инов нужен, чтобы досидеть этот отрезок."} tone={floor < -20 ? "bad" : "flat"} />
         <Stat label="Среднее за игру" value={`${signed(mean)} би`} hint="То же, что ROI, но в бай-инах. Минус 0.07 — это просто рейк, не ошибка чарта." />
       </div>
       <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm leading-relaxed">
@@ -317,7 +467,7 @@ function Report({ totals, previous, strategy }: { totals: SimTotals; previous: S
           ))}
         </ul>
       </div>
-      <BankrollChart points={points} games={totals.games} />
+      <BankrollChart points={points} games={totals.games} cloud={cloud} />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="font-mono text-xs text-subtle">
@@ -426,7 +576,97 @@ function readResult(opts: {
   return lines;
 }
 
-function BankrollChart({ points, games }: { points: number[]; games: number }) {
+function CloudChart({ paths, games, done }: { paths: number[][]; games: number; done: number }) {
+  const width = 640;
+  const height = 280;
+  const left = 58;
+  const right = 16;
+  const top = 22;
+  const bottom = 36;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const field = fieldRoi() / 100;
+  const edges = paths.map((curve) =>
+    curve.map((value, index) => {
+      const played = curve.length <= 1 ? 0 : (index / (curve.length - 1)) * games;
+      return value - played * field;
+    }),
+  );
+  const steps = edges[0]?.length ?? 1;
+  const lowBand: number[] = [];
+  const midBand: number[] = [];
+  const highBand: number[] = [];
+  for (let index = 0; index < steps; index++) {
+    const column = edges.map((row) => row[index] ?? 0).sort((a, b) => a - b);
+    lowBand.push(column[Math.floor((column.length - 1) * 0.1)] ?? 0);
+    midBand.push(column[Math.floor((column.length - 1) * 0.5)] ?? 0);
+    highBand.push(column[Math.floor((column.length - 1) * 0.9)] ?? 0);
+  }
+  const flat = edges.flat();
+  const low = Math.min(...flat, ...lowBand, 0);
+  const high = Math.max(...flat, ...highBand, 0);
+  const span = high - low || 1;
+  const yOf = (value: number) => top + (1 - (value - low) / span) * plotH;
+  const xOf = (index: number) => left + (index / Math.max(1, steps - 1)) * plotW;
+  const lineOf = (row: number[]) => row.map((value, index) => `${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`).join(" ");
+  const band = `${lineOf(highBand)} ${[...lowBand].reverse().map((value, index) => `${xOf(lowBand.length - 1 - index).toFixed(1)},${yOf(value).toFixed(1)}`).join(" ")}`;
+  const ends = edges.map((row) => row[row.length - 1] ?? 0);
+  const above = ends.filter((value) => value > 0).length;
+  const sorted = [...ends].sort((a, b) => a - b);
+  const median = sorted[Math.floor((sorted.length - 1) * 0.5)] ?? 0;
+  const p10 = sorted[Math.floor((sorted.length - 1) * 0.1)] ?? 0;
+  const p90 = sorted[Math.floor((sorted.length - 1) * 0.9)] ?? 0;
+  const yTicks = [...new Set([high, 0, low])];
+  const xTicks = [0, Math.round(games / 2), games];
+  const note =
+    done < CLOUD_RUNS
+      ? "Облако ещё собирается. Смотрите, как линии расходятся, но вывод делайте по всем 100."
+      : p10 > 0
+        ? "Даже слабые прогоны выше нуля. Стратегия устойчиво обыгрывает поле — сохраните эту версию."
+        : p90 < 0
+          ? "Даже удачные прогоны ниже нуля. Стратегия сдаёт сверх рейка. Сужайте коллы и не добавляйте блеф."
+          : "Полоса пересекает ноль: часть прогонов лучше поля, часть хуже. Преимущество не доказано. Поменяйте один параметр и смотрите, поднялась ли жирная линия.";
+  return (
+    <figure>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-72 w-full rounded-xl bg-surface-2 text-fg" role="img" aria-label="Облако банкролла">
+        <text x={left} y={14} fill="currentColor" fontSize="11" opacity="0.72">
+          Сверх рейка, бай-ины
+        </text>
+        {yTicks.map((tick) => (
+          <g key={tick}>
+            <line x1={left} x2={left + plotW} y1={yOf(tick)} y2={yOf(tick)} stroke="currentColor" strokeOpacity={tick === 0 ? 0.55 : 0.14} />
+            <text x={left - 8} y={yOf(tick) + 4} textAnchor="end" fill="currentColor" fontSize="11" opacity="0.78">
+              {tick.toFixed(0)}
+            </text>
+          </g>
+        ))}
+        <polygon points={band} fill="currentColor" opacity="0.08" />
+        {edges.map((row, index) => (
+          <polyline key={index} fill="none" stroke={(row[row.length - 1] ?? 0) >= 0 ? "#3dba7c" : "#e25555"} strokeOpacity="0.28" strokeWidth="1" points={lineOf(row)} />
+        ))}
+        <polyline fill="none" stroke="currentColor" strokeWidth="2.4" points={lineOf(midBand)} />
+        {xTicks.map((tick) => (
+          <text key={tick} x={tick === 0 ? left : tick === games ? left + plotW : left + plotW / 2} y={height - 8} textAnchor={tick === 0 ? "start" : tick === games ? "end" : "middle"} fill="currentColor" fontSize="11" opacity="0.78">
+            {tick}
+          </text>
+        ))}
+        <text x={left + plotW} y={height - 22} textAnchor="end" fill="currentColor" fontSize="11" opacity="0.55">
+          игры
+        </text>
+      </svg>
+      <figcaption className="mt-2 space-y-1 text-xs leading-relaxed text-muted">
+        <p>Ось Y — бай-ины сверх рейка, ось X — игры внутри одного прогона. Ноль — уровень поля. Зелёная линия закончила выше поля, красная — ниже. Жирная линия — медиана, серая полоса — 80% прогонов.</p>
+        <p>
+          Медиана {signed(median)} би. 80% прогонов от {signed(p10)} до {signed(p90)} би. Выше поля: {above} из {done}.
+        </p>
+        <p>{note}</p>
+      </figcaption>
+    </figure>
+  );
+}
+
+function BankrollChart({ points, games, cloud }: { points: number[]; games: number; cloud: number[][] }) {
+  if (cloud.length > 0) return <CloudChart paths={cloud} games={CLOUD_GAMES} done={cloud.length} />;
   const width = 640;
   const height = 228;
   const left = 58;
