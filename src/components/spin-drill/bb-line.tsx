@@ -3,7 +3,7 @@ import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
-import { preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
+import { potFate, preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
 import { BoardLine, Hole, ResultBanner, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
@@ -90,9 +90,10 @@ export function ActionLine({
   const jammed = preflopAllin(spot.id);
   const flopDone = board.length >= 3 && streetStatus(order, line, "flop", jammed).closed;
   const turnDone = board.length >= 4 && streetStatus(order, line, "turn", jammed).closed;
-  const askFlop = live && board.length < 3;
-  const askTurn = flopDone && board.length < 4;
-  const askRiver = turnDone && board.length < 5;
+  const fate = board.length >= 3 ? potFate(order, line, spot.hero) : "play";
+  const askFlop = live && board.length < 3 && fate === "play";
+  const askTurn = flopDone && fate === "play" && board.length < 4;
+  const askRiver = turnDone && fate === "play" && board.length < 5;
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   function goNext() {
     archiveHand(mine);
@@ -288,6 +289,12 @@ export function ActionLine({
               ? "Отметьте действия оппонентов. Карты флопа появятся, только если раздача идёт дальше."
             : askFlop
               ? "Префлоп закрыт. Дальше флоп: три карты подсвечены зелёным."
+            : fate === "win"
+              ? "Все сбросили. Банк ваш, следующую карту открывать не нужно."
+            : fate === "loss"
+              ? "Вы сбросили. Раздача закрыта, карт дальше нет."
+            : fate === "runout"
+              ? "Все в олл-ине. Откройте оставшиеся карты сразу."
             : askTurn
               ? "Флоп закрыт. Дальше тёрн: карта подсвечена зелёным."
             : askRiver

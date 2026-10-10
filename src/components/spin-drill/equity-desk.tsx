@@ -4,7 +4,7 @@ import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
 import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, settleSpin, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
-import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
+import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
@@ -372,6 +372,7 @@ export function HandProvider({
     }
     const next = { ...line, [streetId]: [...line[streetId], { seat, action }] };
     setLine(next);
+    markFate(next);
     syncPrice(next);
   }
 
@@ -398,13 +399,22 @@ export function HandProvider({
     } else setDeviation(null);
     const next: Line = { ...prior, [streetId]: [...kept, { seat, action }] };
     setLine(next);
+    markFate(next);
     syncPrice(next);
+  }
+
+  function markFate(next: Line) {
+    const fate = potFate(seatsInHand(spot.id, out), next, spot.hero);
+    if (fate === "win") setResult("win");
+    else if (fate === "loss") setResult("fold");
+    else setResult("");
   }
 
   function undoLine(streetId: StreetId) {
     if (!line[streetId].length) return;
     const next = { ...line, [streetId]: line[streetId].slice(0, -1) };
     setLine(next);
+    markFate(next);
     setDeviation(null);
     syncPrice(next);
   }
@@ -1138,12 +1148,15 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
     heardDraw.current = drawKey;
   }, [openBoard, hero, drawKey]);
   if (!openBoard) return null;
+  const seats = seatsInHand(spot.id, out);
+  const fate = potFate(seats, line, spot.hero);
+  const showRunout = runout || fate === "runout";
   const fillBoard = () => {
     const slots = (["f0", "f1", "f2", "t", "r"] as const).filter((slot) => !cards[slot]);
     queueRef.current = [...slots];
     setQueue([...slots]);
   };
-  if (runout) {
+  if (showRunout) {
     const slots = ["f0", "f1", "f2", "t", "r"] as const;
     const ask = slots.some((slot) => !cards[slot]);
     return (
@@ -1164,16 +1177,16 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
       </div>
     );
   }
-  const seats = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
   const hole = hero ? [hero[0], hero[1]] : [];
   const flopClosed = board.length >= 3 && streetStatus(seats, line, "flop", jammed).closed;
   const turnClosed = board.length >= 4 && streetStatus(seats, line, "turn", jammed).closed;
   const finished = handFinished(spot.id, line, board.length, out);
+  const over = fate === "win" || fate === "loss";
   const hint = shown?.verdict ?? "";
   const askFlop = board.length < 3;
-  const askTurn = flopClosed && board.length < 4;
-  const askRiver = turnClosed && board.length < 5;
+  const askTurn = flopClosed && fate === "play" && board.length < 4;
+  const askRiver = turnClosed && fate === "play" && board.length < 5;
   return (
     <div className="flex flex-col gap-2">
       <div ref={board.length < 4 ? latest : undefined} className={cn("flex flex-wrap items-start gap-1", !hero ? "pointer-events-none opacity-40" : "")}>
@@ -1192,7 +1205,13 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
         ) : null}
         {flopClosed ? <CycleMark label="флоп" /> : null}
       </div>
-      {flopClosed ? (
+      {over ? (
+        <div>
+          <ResultBanner kind={fate === "win" ? "win" : "loss"} detail={fate === "win" ? "Все сбросили. Банк ваш, следующую карту открывать не нужно." : "Вы сбросили. Раздача закрыта, карт дальше нет."} />
+          <DoneMark label={fate === "win" ? "Победа" : "Фолд"} onAdvance={onAdvance} />
+        </div>
+      ) : null}
+      {flopClosed && fate === "play" ? (
         <div ref={board.length < 5 ? latest : undefined} className="flex flex-wrap items-start gap-1">
           <div className={cn("shrink-0 rounded-lg border p-1", askTurn ? "next-step border-ok bg-ok/10" : "border-border")}>
             <p className={cn("px-1 text-[11px] font-medium", askTurn ? "text-ok" : "")}>{askTurn ? "Дальше · тёрн" : "Тёрн"}</p>
@@ -1209,7 +1228,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           {turnClosed ? <CycleMark label="тёрн" /> : null}
         </div>
       ) : null}
-      {turnClosed ? (
+      {turnClosed && fate === "play" ? (
         <div ref={latest} className="flex flex-wrap items-start gap-1">
           <div className={cn("shrink-0 rounded-lg border p-1", askRiver ? "next-step border-ok bg-ok/10" : "border-border")}>
             <p className={cn("px-1 text-[11px] font-medium", askRiver ? "text-ok" : "")}>{askRiver ? "Дальше · ривер" : "Ривер"}</p>
@@ -1225,7 +1244,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
         </div>
       ) : null}
-      {board.length >= 5 || finished ? <ShowdownPanel /> : null}
+      {board.length >= 5 || (finished && !over) ? <ShowdownPanel /> : null}
     </div>
   );
 }

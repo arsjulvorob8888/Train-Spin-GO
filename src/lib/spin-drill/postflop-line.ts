@@ -152,6 +152,27 @@ export function streetStatus(order: Seat[], line: Line, street: StreetId, alread
   return { closed: true, seat: null, facing: false, aggressor, action };
 }
 
+/** The hand is over for the hero, or nobody can bet anymore so the board should run out. */
+export function potFate(order: Seat[], line: Line, hero: Seat): "win" | "loss" | "runout" | "play" {
+  const folded = new Set<Seat>();
+  const allin = new Set<Seat>();
+  let acted = 0;
+  for (const street of ["flop", "turn", "river"] as const) {
+    for (const act of line[street]) {
+      acted += 1;
+      if (act.action === "fold") folded.add(act.seat);
+      if (act.action === "allin") allin.add(act.seat);
+    }
+  }
+  if (folded.has(hero)) return "loss";
+  if (acted === 0) return "play";
+  const live = order.filter((seat) => !folded.has(seat));
+  if (live.length <= 1) return live[0] === hero ? "win" : "loss";
+  const canAct = live.filter((seat) => !allin.has(seat));
+  if (allin.size > 0 && canAct.length <= 1) return "runout";
+  return "play";
+}
+
 /** Seats who can still bet, in postflop order. */
 export function actingOrder(order: Seat[], line: Line, street: StreetId, alreadyAllin: Seat[] = []): Seat[] {
   const prior = carried(line, street, alreadyAllin);
