@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, handMoney, placeText, readCraft, removeCraft, trackHands, updateCraft, type CraftHand } from "@/lib/spin-drill/craft";
+import { findCraft, handMoney, placeText, readBank, readCraft, removeCraft, setBankCash, trackHands, updateCraft, type BankBook, type CraftHand } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -49,14 +49,18 @@ export function CraftTable() {
   }
   if (!hands.length) {
     return (
-      <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="text-lg font-semibold">PokerCraft</h2>
-        <p className="mt-2 text-sm text-muted">Раздач пока нет. Сыграйте руку в Стратегии и нажмите галочку или «Новая раздача» — разбор и трекер сохранятся сюда.</p>
-      </section>
+      <div className="space-y-4">
+        <BankRoll />
+        <section className="rounded-2xl border border-border bg-surface p-4">
+          <h2 className="text-lg font-semibold">PokerCraft</h2>
+          <p className="mt-2 text-sm text-muted">Раздач пока нет. Сыграйте руку в Стратегии и нажмите галочку или «Новая раздача» — разбор и трекер сохранятся сюда.</p>
+        </section>
+      </div>
     );
   }
   return (
     <div className="space-y-4">
+      <BankRoll />
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">Трекер</h2>
         <p className="mt-1 text-sm text-muted">Как PokerTracker по вашим раздачам: винрейт, фактические фишки и EV решения. ROI спина в долларах здесь нет — в архиве руки, а не финиш турнира.</p>
@@ -205,6 +209,66 @@ function HandEdit({ hand, onSave, onCancel }: { hand: CraftHand; onSave: (result
         </button>
       </div>
     </div>
+  );
+}
+
+function money(value: number): string {
+  return `$${value.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function BankRoll() {
+  const [book, setBook] = useState<BankBook | null>(null);
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    const next = readBank();
+    setBook(next);
+    setDraft(next.cash.toFixed(2).replace(".", ","));
+  }, []);
+  if (!book) return null;
+  const profit = Math.round((book.cash - book.anchor) * 100) / 100;
+  const spent = book.spins.reduce((sum, spin) => sum + spin.buy, 0);
+  const roi = spent > 0 ? Math.round(((book.cash - book.anchor) / spent) * 1000) / 10 : null;
+  const wins = book.spins.filter((spin) => spin.won).length;
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4">
+      <h2 className="text-lg font-semibold">Банк</h2>
+      <p className="mt-1 font-mono text-3xl font-semibold">{money(book.cash)}</p>
+      <p className="mt-1 text-sm text-muted">
+        Старт {money(book.anchor)} · профит {profit > 0 ? "+" : ""}
+        {money(profit)} · спинов {book.spins.length} · побед {wins}
+        {roi == null ? "" : ` · ROI ${roi}%`}
+      </p>
+      <form
+        className="mt-3 flex flex-wrap items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const cash = Number(draft.replace(",", ".").replace(/[^0-9.-]/g, ""));
+          if (!Number.isFinite(cash)) return;
+          setBankCash(cash);
+          const next = readBank();
+          setBook(next);
+          setDraft(next.cash.toFixed(2).replace(".", ","));
+        }}
+      >
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="Банк, доллары" className="h-9 w-28 rounded-md border border-border bg-bg px-2 font-mono text-sm" />
+        <button type="submit" className="h-9 rounded-full bg-fg px-3 text-xs text-bg">
+          Записать банк
+        </button>
+      </form>
+      <p className="mt-2 text-[11px] text-muted">Спин в Стратегии закрывается кнопкой «Спин окончен». Выигрыш добавляет банк минус бай-ин, проигрыш списывает бай-ин. Число можно поправить вручную.</p>
+      {book.spins.length ? (
+        <ul className="mt-3 space-y-1 text-sm">
+          {book.spins.slice(0, 8).map((spin) => (
+            <li key={spin.id} className="flex justify-between gap-3 border-t border-border py-1">
+              <span>
+                {spin.won ? "Выигрыш" : "Проигрыш"} ${spin.prize} · бай-ин ${spin.buy}
+              </span>
+              <span className="font-mono text-xs">{money(spin.cash)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 

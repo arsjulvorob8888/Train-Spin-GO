@@ -3,7 +3,7 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { PRIZES, blindStatus, cardLabel, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
+import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, settleSpin, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -457,19 +457,20 @@ export function HandProvider({
 }
 
 export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
-  const { hero } = useHand();
   const [saved, setSaved] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [later, setLater] = useState(false);
   const [status, setStatus] = useState<ReturnType<typeof blindStatus>>(null);
-  useEffect(() => {
-    setSaved(readPrize()?.prize ?? 0);
-  }, [hero]);
   useEffect(() => {
     const tick = () => {
       const next = blindStatus();
       setStatus(next);
+      setSaved(readPrize()?.prize ?? 0);
       if (next) onStack(next.stack);
     };
     tick();
+    setReady(true);
     const id = window.setInterval(tick, 1000);
     window.addEventListener("spin-blind", tick);
     return () => {
@@ -477,34 +478,65 @@ export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
       window.removeEventListener("spin-blind", tick);
     };
   }, [onStack]);
-  return (
-    <div className={cn("rounded-xl border p-2", hero ? "border-border" : "border-ok bg-ok/10")}>
-      <p className="text-xs font-medium">{hero ? "Банк спина" : "Новая игра. Какой банк показал PokerOK?"}</p>
-      <p className="mt-0.5 text-[11px] leading-snug text-muted">
-        На PokerOK 3-max блайнды стартуют 10/20 и растут сами: x2 каждую минуту, x3 каждые 2, x5 каждые 3, x10 каждые 10 раздач. Стек в больших блайндах пересчитывается. Ползунок всё равно можно сдвинуть.
-      </p>
-      <div className="mt-1 flex flex-wrap gap-1">
-        {PRIZES.map((item) => (
-          <button
-            key={item.prize}
-            type="button"
-            title={item.note}
-            onClick={() => {
-              rememberPrize(item.prize, item.bb);
-              setSaved(item.prize);
-              onStack(startBlind(item.prize));
-            }}
-            className={cn("h-8 rounded-full px-2 font-mono text-xs", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-muted")}
-          >
-            {item.prize} · {item.bb}bb
+  function finish(won: boolean) {
+    const current = readPrize();
+    const item = PRIZES.find((prize) => prize.prize === current?.prize);
+    if (item) settleSpin(item.prize, item.buy, won);
+    clearBlind();
+    setEnding(false);
+    setStatus(null);
+  }
+  if (!ready) return null;
+  if (!status && !later) {
+    return (
+      <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
+          <h2 className="text-lg font-semibold">Какой банк?</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {PRIZES.map((item) => (
+              <button
+                key={item.prize}
+                type="button"
+                title={item.note}
+                onClick={() => {
+                  rememberPrize(item.prize, item.bb);
+                  setSaved(item.prize);
+                  onStack(startBlind(item.prize));
+                }}
+                className={cn("h-11 rounded-full px-3 font-mono text-sm", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
+              >
+                ${item.prize}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => setLater(true)} className="mt-3 text-xs text-muted underline">
+            Позже
           </button>
-        ))}
+        </div>
       </div>
-      {status ? (
-        <p className="mt-1 font-mono text-[11px] text-fg">
-          Уровень {status.level} · блайнды {status.sb}/{status.bb} · {status.left} · {status.chips} фишек · {status.stack}bb
-        </p>
-      ) : null}
+    );
+  }
+  if (!status) return null;
+  return (
+    <div className="fixed right-3 bottom-3 z-40 w-36 rounded-xl border border-border bg-surface p-2 shadow-lg">
+      <p className="font-mono text-2xl font-semibold leading-none">{status.left.replace(/^ещё /, "")}</p>
+      <p className="mt-1 text-xs text-muted">
+        {status.sb}/{status.bb} · ур. {status.level}
+      </p>
+      {ending ? (
+        <div className="mt-2 grid gap-1">
+          <button type="button" onClick={() => finish(true)} className="h-8 rounded-md bg-fg text-xs text-bg">
+            Выиграл ${saved}
+          </button>
+          <button type="button" onClick={() => finish(false)} className="h-8 rounded-md bg-surface-2 text-xs text-fg">
+            Проиграл
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setEnding(true)} className="mt-2 text-xs text-muted underline">
+          Спин окончен
+        </button>
+      )}
     </div>
   );
 }

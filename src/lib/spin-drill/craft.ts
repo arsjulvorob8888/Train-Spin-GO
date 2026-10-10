@@ -4,16 +4,16 @@ import { chartRaiseTo, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { callSize, seatStack, type Line, type LineAction, type Seat } from "@/lib/spin-drill/postflop-line";
 
 /** Prize shown in the middle of a PokerOK 3-max Spin & Gold, and the stack it starts. */
-export const PRIZES: { prize: number; bb: number; note: string }[] = [
-  { prize: 0.5, bb: 15, note: "$0.25 · x2 · 300 фишек · уровень 1 мин" },
-  { prize: 0.75, bb: 15, note: "$0.25 · x3 · 300 фишек · уровень 2 мин" },
-  { prize: 2, bb: 15, note: "$1 · x2 · 300 фишек · уровень 1 мин" },
-  { prize: 3, bb: 15, note: "$1 · x3 · 300 фишек · уровень 2 мин" },
-  { prize: 4, bb: 25, note: "x4 · 500 фишек · уровень 2 мин" },
-  { prize: 5, bb: 25, note: "x5 · 500 фишек · уровень 3 мин" },
-  { prize: 10, bb: 25, note: "$1 · x10 · 500 фишек · 10 раздач" },
-  { prize: 40, bb: 40, note: "x50 · 800 фишек · 15 раздач" },
-  { prize: 50, bb: 40, note: "x100 · 800 фишек · 15 раздач" },
+export const PRIZES: { prize: number; bb: number; buy: number; note: string }[] = [
+  { prize: 0.5, bb: 15, buy: 0.25, note: "$0.25 · x2" },
+  { prize: 0.75, bb: 15, buy: 0.25, note: "$0.25 · x3" },
+  { prize: 2, bb: 15, buy: 1, note: "$1 · x2" },
+  { prize: 3, bb: 15, buy: 1, note: "$1 · x3" },
+  { prize: 4, bb: 25, buy: 1, note: "$1 · x4" },
+  { prize: 5, bb: 25, buy: 1, note: "$1 · x5" },
+  { prize: 10, bb: 25, buy: 1, note: "$1 · x10" },
+  { prize: 40, bb: 40, buy: 1, note: "$1 · x50" },
+  { prize: 50, bb: 40, buy: 1, note: "$1 · x100" },
 ];
 
 /** PokerOK Spin & Gold 3-max ladder. The same steps for every multiplier. */
@@ -111,6 +111,64 @@ export function noteBlindHand() {
   const session = readBlind();
   if (!session || typeof sessionStorage === "undefined") return;
   writeBlind({ ...session, hands: session.hands + 1 });
+}
+
+export function clearBlind() {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.removeItem(BLIND_KEY);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("spin-blind"));
+}
+
+export type BankSpin = {
+  id: string;
+  at: number;
+  buy: number;
+  prize: number;
+  won: boolean;
+  cash: number;
+};
+
+export type BankBook = {
+  cash: number;
+  anchor: number;
+  spins: BankSpin[];
+};
+
+const BANK_KEY = "spin-bank-v1";
+const BANK_START = 24.41;
+
+export function readBank(): BankBook {
+  const empty = { cash: BANK_START, anchor: BANK_START, spins: [] as BankSpin[] };
+  if (typeof localStorage === "undefined") return empty;
+  try {
+    const raw = localStorage.getItem(BANK_KEY);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as BankBook;
+    if (typeof parsed.cash !== "number") return empty;
+    return { cash: parsed.cash, anchor: typeof parsed.anchor === "number" ? parsed.anchor : BANK_START, spins: Array.isArray(parsed.spins) ? parsed.spins : [] };
+  } catch {
+    return empty;
+  }
+}
+
+function writeBank(book: BankBook) {
+  localStorage.setItem(BANK_KEY, JSON.stringify(book));
+}
+
+export function setBankCash(cash: number) {
+  const book = readBank();
+  writeBank({ ...book, cash: Math.round(cash * 100) / 100 });
+}
+
+/** Winner takes the displayed prize and has already paid the buy-in. A loss costs the buy-in. */
+export function settleSpin(prize: number, buy: number, won: boolean): BankBook {
+  const book = readBank();
+  const delta = won ? prize - buy : -buy;
+  const cash = Math.round((book.cash + delta) * 100) / 100;
+  const spin: BankSpin = { id: `${Date.now()}`, at: Date.now(), buy, prize, won, cash };
+  const next = { ...book, cash, spins: [spin, ...book.spins].slice(0, 500) };
+  writeBank(next);
+  return next;
 }
 
 export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number } | null {
