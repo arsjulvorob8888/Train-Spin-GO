@@ -377,3 +377,52 @@
 .hand-draw {
   animation: hand-pop 0.4s ease-out, draw-glow 0.7s ease-in-out 3;
 }
+
+@keyframes win-burst {
+  0% {
+    transform: scale(0.96);
+  }
+  45% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes win-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 185, 66, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 28px 8px rgba(245, 185, 66, 0.85);
+  }
+}
+
+.win-banner {
+  background: linear-gradient(120deg, #f5b942, #7adf63 55%, #3dba7c);
+  animation: win-burst 0.55s ease-out, win-glow 0.9s ease-in-out 4;
+}
+
+@keyframes loss-shake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.loss-banner {
+  border: 1px solid #b45353;
+  background: #3a1d1d;
+  color: #fecaca;
+  animation: loss-shake 0.4s ease-out;
+}

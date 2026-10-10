@@ -4,7 +4,7 @@ import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
 import { preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
-import { BoardLine, Hole, useHand } from "@/components/spin-drill/equity-desk";
+import { BoardLine, Hole, ResultBanner, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
 type Pick = { spot?: string; mine?: MixAction };
@@ -54,7 +54,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -65,6 +65,9 @@ export function ActionLine({
     stamped.current = key;
     if (action !== mine) onMine(action);
   }, [hero, selected, spot.group, spot.hero, spot.actions, bb, range, board.length, mine, onMine]);
+  useEffect(() => {
+    if (mine) setPlayed(mine);
+  }, [mine, setPlayed]);
   useEffect(() => {
     setSbAct("");
     setBbAct("");
@@ -275,6 +278,7 @@ export function ActionLine({
         ) : null}
       </div>
       {live ? <BoardLine openBoard onAdvance={goNext} runout={runout} /> : null}
+      {won ? <ResultBanner kind="win" detail="Все сбросили. Банк ваш, флопа нет." /> : null}
       <p className={cn("text-sm", askFlop || askTurn || askRiver ? "font-medium text-ok" : expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."

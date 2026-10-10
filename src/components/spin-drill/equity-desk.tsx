@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
@@ -28,6 +29,8 @@ type HandApi = {
   place: "" | "hero" | "villain" | "split";
   setPlace: (value: "" | "hero" | "villain" | "split") => void;
   archiveHand: (played?: string) => void;
+  savedId: string;
+  setPlayed: (value: string) => void;
   hero: [Card, Card] | null;
   board: Card[];
   shown: {
@@ -117,6 +120,9 @@ export function HandProvider({
   const [callText, setCallTextState] = useState("");
   const [streetBet, setStreetBetState] = useState("");
   const [place, setPlace] = useState<"" | "hero" | "villain" | "split">("");
+  const [played, setPlayed] = useState("");
+  const [savedId, setSavedId] = useState("");
+  const kept = useRef("");
   const manual = useRef(false);
   const [line, setLine] = useState<Line>(emptyLine);
   const [deviation, setDeviation] = useState<string | null>(null);
@@ -254,6 +260,9 @@ export function HandProvider({
     setCallTextState("");
     setStreetBetState("");
     setPlace("");
+    setPlayed("");
+    setSavedId("");
+    kept.current = "";
     manual.current = false;
     setDeviation(null);
     setSizeText("");
@@ -300,8 +309,8 @@ export function HandProvider({
     setStreetBetState(trimNum(priced.toCall));
   }
 
-  function archiveHand(played = "") {
-    if (!cards.h0 || !cards.h1) return;
+  function archiveHand(acted = "") {
+    if (!cards.h0 || !cards.h1) return kept.current;
     const hole = [cards.h0, cards.h1];
     const known = board;
     const villains = [
@@ -311,8 +320,10 @@ export function HandProvider({
     const auto = decideShowdown(hole, villains, known);
     const settled = place || (result === "win" ? "win" : result === "fold" ? "fold" : auto);
     const prize = readPrize();
+    const id = kept.current || `${Date.now()}`;
+    const fresh = !kept.current;
     const hand: CraftHand = {
-      id: `${Date.now()}`,
+      id,
       at: Date.now(),
       prize: prize?.prize ?? null,
       bb,
@@ -334,10 +345,13 @@ export function HandProvider({
       bluff: shown?.bluff ?? null,
       result: settled,
       villains: villains.map((pair) => pair.map(cardLabel).join(" ")).join(" · "),
-      played,
+      played: acted || played,
     };
+    kept.current = id;
+    setSavedId(id);
     saveCraft(hand);
-    noteBlindHand();
+    if (fresh) noteBlindHand();
+    return id;
   }
 
   function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
@@ -409,6 +423,8 @@ export function HandProvider({
     place,
     setPlace,
     archiveHand,
+    savedId,
+    setPlayed,
     hero,
     board,
     shown,
@@ -1128,6 +1144,8 @@ function ShowdownPanel() {
   const villains = seatsInHand(spot.id, out).filter((seat) => seat !== spot.hero && !folded.has(seat));
   const known = [cards.v0 && cards.v1 ? [cards.v0, cards.v1] : [], cards.w0 && cards.w1 ? [cards.w0, cards.w1] : []].filter((pair) => pair.length === 2);
   const auto = hero && board.length >= 5 ? decideShowdown(hero, known, board) : "";
+  const marked = place || auto;
+  const outcome = marked === "hero" ? "win" : marked === "villain" ? "loss" : marked === "split" ? "split" : "";
   const pairs: { title: string; slots: ["v0", "v1"] | ["w0", "w1"] }[] = [];
   if (villains[0]) pairs.push({ title: villains[0], slots: ["v0", "v1"] });
   if (villains[1]) pairs.push({ title: villains[1], slots: ["w0", "w1"] });
@@ -1149,6 +1167,7 @@ function ShowdownPanel() {
       <p className="mt-1 text-xs text-muted">
         {auto === "hero" ? "По картам вы старше." : auto === "villain" ? "По картам соперник старше." : auto === "split" ? "Ничья по картам." : "Если карты показали — выберите их. Победителя можно указать и вручную."}
       </p>
+      {outcome ? <ResultBanner kind={outcome} detail={auto === "hero" || place === "hero" ? "Ваша комбинация старше." : outcome === "loss" ? "На вскрытии старше рука соперника." : "Банк делится."} /> : null}
       <div className="mt-1 flex flex-wrap gap-1">
         {(
           [
@@ -1203,6 +1222,34 @@ function drawTags(hero: Card[], board: Card[]): string[] {
   if (info.overcards === 2) tags.push("Две оверкарты");
   else if (info.overcards === 1) tags.push("Оверкарта");
   return tags;
+}
+
+export function ResultBanner({ kind, detail }: { kind: "win" | "loss" | "split"; detail: string }) {
+  const { archiveHand, savedId } = useHand();
+  const heard = useRef("");
+  useEffect(() => {
+    archiveHand();
+    if (heard.current === kind) return;
+    heard.current = kind;
+    if (kind === "win") playWinSting();
+    else if (kind === "loss") playLossSting();
+    // The banner mounts once per result. archiveHand is recreated every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+  const title = kind === "win" ? "Победа" : kind === "loss" ? "Проигрыш" : "Ничья";
+  return (
+    <div className={cn("relative mt-2 overflow-hidden rounded-xl px-4 py-3", kind === "win" ? "win-banner text-bg" : kind === "loss" ? "loss-banner" : "border border-border bg-surface text-fg")}>
+      {kind === "win" ? <span className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent" /> : null}
+      <p className="text-2xl font-semibold leading-none">{title}</p>
+      <p className="mt-1 text-sm font-medium">{detail}</p>
+      <p className="mt-1 text-sm">Раздача сохранена и внесена в журнал. Разбор можно изучить.</p>
+      {savedId ? (
+        <Link to="/pokercraft/$id" params={{ id: savedId }} className={cn("mt-2 inline-block text-sm font-semibold underline", kind === "loss" ? "text-red-100" : "")}>
+          Открыть разбор
+        </Link>
+      ) : null}
+    </div>
+  );
 }
 
 function DoneMark({ label, onAdvance }: { label: string; onAdvance?: () => void }) {
@@ -1325,6 +1372,52 @@ function playBluffSting() {
   });
 }
 playBluffSting.ctx = null as AudioContext | null;
+
+function playWinSting() {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = playBluffSting.ctx ?? new Ctx();
+  playBluffSting.ctx = ctx;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  [523, 659, 784, 1046, 1318].forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    const start = now + index * 0.09;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.1, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.34);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.36);
+  });
+}
+
+function playLossSting() {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = playBluffSting.ctx ?? new Ctx();
+  playBluffSting.ctx = ctx;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  [311, 233, 175].forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const start = now + index * 0.12;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.05, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.24);
+  });
+}
 
 function playHandSting(category: number) {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
