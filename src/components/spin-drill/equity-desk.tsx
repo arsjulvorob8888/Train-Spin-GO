@@ -2,7 +2,7 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { PRIZES, cardLabel, decideShowdown, holeKlass, quotePot, readPrize, rememberPrize, saveCraft, type CraftHand } from "@/lib/spin-drill/craft";
+import { PRIZES, blindStatus, cardLabel, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -337,6 +337,7 @@ export function HandProvider({
       played,
     };
     saveCraft(hand);
+    noteBlindHand();
   }
 
   function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
@@ -442,14 +443,29 @@ export function HandProvider({
 export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
   const { hero } = useHand();
   const [saved, setSaved] = useState(0);
+  const [status, setStatus] = useState<ReturnType<typeof blindStatus>>(null);
   useEffect(() => {
     setSaved(readPrize()?.prize ?? 0);
   }, [hero]);
+  useEffect(() => {
+    const tick = () => {
+      const next = blindStatus();
+      setStatus(next);
+      if (next) onStack(next.stack);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    window.addEventListener("spin-blind", tick);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("spin-blind", tick);
+    };
+  }, [onStack]);
   return (
     <div className={cn("rounded-xl border p-2", hero ? "border-border" : "border-ok bg-ok/10")}>
       <p className="text-xs font-medium">{hero ? "Банк спина" : "Новая игра. Какой банк показал PokerOK?"}</p>
       <p className="mt-0.5 text-[11px] leading-snug text-muted">
-        На 3-max x2 и x3 — это 15bb, стек 300. x4, x5 и x10 — 25bb, стек 500. x50 и x100 — 40bb, стек 800. Блайнды 10/20, стартовый банк раздачи 1.5bb. Стек можно поправить вручную.
+        На PokerOK 3-max блайнды стартуют 10/20 и растут сами: x2 каждую минуту, x3 каждые 2, x5 каждые 3, x10 каждые 10 раздач. Стек в больших блайндах пересчитывается. Ползунок всё равно можно сдвинуть.
       </p>
       <div className="mt-1 flex flex-wrap gap-1">
         {PRIZES.map((item) => (
@@ -460,7 +476,7 @@ export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
             onClick={() => {
               rememberPrize(item.prize, item.bb);
               setSaved(item.prize);
-              onStack(item.bb);
+              onStack(startBlind(item.prize));
             }}
             className={cn("h-8 rounded-full px-2 font-mono text-xs", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-muted")}
           >
@@ -468,6 +484,11 @@ export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
           </button>
         ))}
       </div>
+      {status ? (
+        <p className="mt-1 font-mono text-[11px] text-fg">
+          Уровень {status.level} · блайнды {status.sb}/{status.bb} · {status.left} · {status.chips} фишек · {status.stack}bb
+        </p>
+      ) : null}
     </div>
   );
 }

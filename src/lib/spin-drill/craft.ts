@@ -5,16 +5,133 @@ import { callSize, seatStack, type Line, type LineAction, type Seat } from "@/li
 
 /** Prize shown in the middle of a PokerOK 3-max Spin & Gold, and the stack it starts. */
 export const PRIZES: { prize: number; bb: number; note: string }[] = [
-  { prize: 0.5, bb: 15, note: "$0.25 · x2 · стек 300" },
-  { prize: 0.75, bb: 15, note: "$0.25 · x3 · стек 300" },
-  { prize: 2, bb: 15, note: "$1 · x2 · стек 300" },
-  { prize: 3, bb: 15, note: "$1 · x3 · стек 300" },
-  { prize: 4, bb: 25, note: "x4 · стек 500" },
-  { prize: 5, bb: 25, note: "x5 · стек 500" },
-  { prize: 10, bb: 25, note: "$1 · x10 · стек 500" },
-  { prize: 40, bb: 40, note: "x50 · стек 800" },
-  { prize: 50, bb: 40, note: "x100 · стек 800" },
+  { prize: 0.5, bb: 15, note: "$0.25 · x2 · 300 фишек · уровень 1 мин" },
+  { prize: 0.75, bb: 15, note: "$0.25 · x3 · 300 фишек · уровень 2 мин" },
+  { prize: 2, bb: 15, note: "$1 · x2 · 300 фишек · уровень 1 мин" },
+  { prize: 3, bb: 15, note: "$1 · x3 · 300 фишек · уровень 2 мин" },
+  { prize: 4, bb: 25, note: "x4 · 500 фишек · уровень 2 мин" },
+  { prize: 5, bb: 25, note: "x5 · 500 фишек · уровень 3 мин" },
+  { prize: 10, bb: 25, note: "$1 · x10 · 500 фишек · 10 раздач" },
+  { prize: 40, bb: 40, note: "x50 · 800 фишек · 15 раздач" },
+  { prize: 50, bb: 40, note: "x100 · 800 фишек · 15 раздач" },
 ];
+
+/** PokerOK Spin & Gold 3-max ladder. The same steps for every multiplier. */
+export const BLIND_LEVELS: [number, number][] = [
+  [10, 20],
+  [15, 30],
+  [20, 40],
+  [30, 60],
+  [40, 80],
+  [50, 100],
+  [60, 120],
+  [75, 150],
+  [90, 180],
+  [100, 200],
+  [125, 250],
+  [150, 300],
+  [200, 400],
+  [250, 500],
+  [300, 600],
+  [400, 800],
+  [500, 1000],
+];
+
+type SpinClock = { kind: "time"; seconds: number } | { kind: "hands"; hands: number };
+
+const SPIN_CLOCK: Record<number, { chips: number; clock: SpinClock }> = {
+  0.5: { chips: 300, clock: { kind: "time", seconds: 60 } },
+  0.75: { chips: 300, clock: { kind: "time", seconds: 120 } },
+  2: { chips: 300, clock: { kind: "time", seconds: 60 } },
+  3: { chips: 300, clock: { kind: "time", seconds: 120 } },
+  4: { chips: 500, clock: { kind: "time", seconds: 120 } },
+  5: { chips: 500, clock: { kind: "time", seconds: 180 } },
+  10: { chips: 500, clock: { kind: "hands", hands: 10 } },
+  40: { chips: 800, clock: { kind: "hands", hands: 15 } },
+  50: { chips: 800, clock: { kind: "hands", hands: 15 } },
+};
+
+export type BlindSession = {
+  prize: number;
+  chips: number;
+  startedAt: number;
+  hands: number;
+};
+
+const BLIND_KEY = "spin-blind-session";
+
+function writeBlind(session: BlindSession) {
+  sessionStorage.setItem(BLIND_KEY, JSON.stringify(session));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("spin-blind"));
+}
+
+export function readBlind(): BlindSession | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(BLIND_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BlindSession;
+    if (typeof parsed.prize !== "number" || typeof parsed.chips !== "number" || typeof parsed.startedAt !== "number") return null;
+    return { prize: parsed.prize, chips: parsed.chips, startedAt: parsed.startedAt, hands: parsed.hands || 0 };
+  } catch {
+    return null;
+  }
+}
+
+export function blindLevel(session: BlindSession, now = Date.now()): number {
+  const spec = SPIN_CLOCK[session.prize];
+  if (!spec) return 0;
+  const raw = spec.clock.kind === "time" ? Math.floor((now - session.startedAt) / 1000 / spec.clock.seconds) : Math.floor(session.hands / spec.clock.hands);
+  return Math.max(0, Math.min(BLIND_LEVELS.length - 1, raw));
+}
+
+export function stackFromBlinds(session: BlindSession, now = Date.now()): number {
+  const bb = BLIND_LEVELS[blindLevel(session, now)]?.[1] ?? 20;
+  return Math.max(1, Math.round(session.chips / bb));
+}
+
+export function startBlind(prize: number): number {
+  const spec = SPIN_CLOCK[prize] ?? { chips: prize >= 10 ? 500 : 300, clock: { kind: "time" as const, seconds: 60 } };
+  const session = { prize, chips: spec.chips, startedAt: Date.now(), hands: 0 };
+  if (typeof sessionStorage !== "undefined") writeBlind(session);
+  return stackFromBlinds(session);
+}
+
+/** Keep a hand-edited stack when the blinds tick: chips = stack × current big blind. */
+export function retargetChips(stackBb: number) {
+  const session = readBlind();
+  if (!session || typeof sessionStorage === "undefined") return;
+  const bb = BLIND_LEVELS[blindLevel(session)]?.[1] ?? 20;
+  const chips = Math.max(bb, Math.round(stackBb * bb));
+  if (chips === session.chips) return;
+  writeBlind({ ...session, chips });
+}
+
+export function noteBlindHand() {
+  const session = readBlind();
+  if (!session || typeof sessionStorage === "undefined") return;
+  writeBlind({ ...session, hands: session.hands + 1 });
+}
+
+export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number } | null {
+  const session = readBlind();
+  if (!session) return null;
+  const spec = SPIN_CLOCK[session.prize];
+  const level = blindLevel(session, now);
+  const pair = BLIND_LEVELS[level] ?? BLIND_LEVELS[0]!;
+  let left = "";
+  if (spec?.clock.kind === "time") {
+    const elapsed = Math.max(0, (now - session.startedAt) / 1000);
+    const remain = spec.clock.seconds - (elapsed % spec.clock.seconds);
+    const min = Math.floor(remain / 60);
+    const sec = Math.floor(remain % 60);
+    left = `ещё ${min}:${sec.toString().padStart(2, "0")}`;
+  } else if (spec?.clock.kind === "hands") {
+    const into = session.hands % spec.clock.hands;
+    left = `ещё ${spec.clock.hands - into} раздач`;
+  }
+  return { level: level + 1, sb: pair[0], bb: pair[1], stack: stackFromBlinds(session, now), left, chips: session.chips };
+}
 
 export type CraftBluff = {
   on: boolean;

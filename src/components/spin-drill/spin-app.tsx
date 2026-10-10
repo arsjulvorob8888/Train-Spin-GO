@@ -43,6 +43,7 @@ import {
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { CraftTable } from "@/components/spin-drill/craft-view";
+import { retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { clearLive, publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, MICRO_RULES, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
@@ -599,8 +600,13 @@ export function SpinApp() {
     }
   }
 
-  function takeStack(next: number) {
+  function tuneStack(next: number) {
     setBb(next);
+    retargetChips(next);
+  }
+
+  function takeStack(next: number) {
+    tuneStack(next);
     setStackOpen(false);
     window.setTimeout(() => setCardAsk((n) => n + 1), 0);
   }
@@ -781,7 +787,7 @@ export function SpinApp() {
                   onSpot={changeSpot}
                   extra={
                     <>
-                      <StackType bb={bb} onChange={setBb} />
+                      <StackType bb={bb} onChange={tuneStack} />
                       <NewHand onAdvance={advanceSeat} />
                       <PotFields />
                       <button
@@ -811,7 +817,7 @@ export function SpinApp() {
                   <div className="min-w-0 flex-1">
                     <MixGrid compact range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
                   </div>
-                  <StackRail bb={bb} onChange={setBb} />
+                  <StackRail bb={bb} onChange={tuneStack} />
                 </div>
                 <div className="min-w-0 lg:sticky lg:top-3">
                   <EquityDesk />
@@ -910,7 +916,7 @@ export function SpinApp() {
                   <div className="min-w-0 flex-1">
                     <MixGrid range={range} paint={paint} bb={bb} selected={current} onPick={setSelected} />
                   </div>
-                  <StackRail bb={bb} onChange={setBb} />
+                  <StackRail bb={bb} onChange={tuneStack} />
                 </div>
                 <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
               </section>
@@ -1006,7 +1012,7 @@ export function SpinApp() {
                 </>
               )}
               </div>
-              {hideRange ? <StackRail bb={bb} onChange={setBb} /> : null}
+              {hideRange ? <StackRail bb={bb} onChange={tuneStack} /> : null}
             </section>
           </div>
             )}
