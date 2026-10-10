@@ -44,7 +44,7 @@ import {
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { CraftTable } from "@/components/spin-drill/craft-view";
-import { retargetChips } from "@/lib/spin-drill/craft";
+import { clearBlind, retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
@@ -279,6 +279,24 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
       </div>
     </div>,
     document.body,
+  );
+}
+
+function NewGame({ onStart }: { onStart: () => void }) {
+  const { resetHand } = useHand();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        resetHand();
+        clearBlind();
+        window.dispatchEvent(new Event("spin-new-game"));
+        onStart();
+      }}
+      className="h-11 shrink-0 rounded-full border border-fg px-3 text-sm font-semibold text-fg"
+    >
+      Новая игра
+    </button>
   );
 }
 
@@ -610,6 +628,17 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     setStackOpen(false);
   }
 
+  function beginSpin() {
+    const first = spotsIn("BTN")[0];
+    if (first) {
+      setGroup("BTN");
+      setSpotId(first.id);
+    }
+    setMine("");
+    setSelected("");
+    setStackOpen(false);
+  }
+
   function changeGroup(g: SpotGroup) {
     const first = spotsIn(g)[0];
     if (first) changeSpot(first.id);
@@ -767,7 +796,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
         {tab === "strategy" && (
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
-              <StartBank onStack={setBb} />
+              <StartBank onStack={setBb} onStarted={() => setCardAsk((n) => n + 1)} />
               <div className="mt-4">
                 <SpotPills
                   compact
@@ -780,6 +809,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                     <>
                       <StackType bb={bb} onChange={tuneStack} />
                       <NewHand onAdvance={advanceSeat} />
+                      <NewGame onStart={beginSpin} />
                       <PotFields />
                       <button
                         type="button"

@@ -456,7 +456,7 @@ export function HandProvider({
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
 }
 
-export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
+export function StartBank({ onStack, onStarted }: { onStack: (bb: number) => void; onStarted?: () => void }) {
   const [saved, setSaved] = useState(0);
   const [ready, setReady] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -473,9 +473,12 @@ export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
     setReady(true);
     const id = window.setInterval(tick, 1000);
     window.addEventListener("spin-blind", tick);
+    const reopen = () => setLater(false);
+    window.addEventListener("spin-new-game", reopen);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("spin-blind", tick);
+      window.removeEventListener("spin-new-game", reopen);
     };
   }, [onStack]);
   function finish(won: boolean) {
@@ -501,7 +504,9 @@ export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
                 onClick={() => {
                   rememberPrize(item.prize, item.bb);
                   setSaved(item.prize);
+                  setLater(false);
                   onStack(startBlind(item.prize));
+                  onStarted?.();
                 }}
                 className={cn("h-11 rounded-full px-3 font-mono text-sm", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
               >
