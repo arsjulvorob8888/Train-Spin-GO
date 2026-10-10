@@ -1,5 +1,6 @@
 "use client";
 
+import { useNavigate } from "@tanstack/react-router";
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { ActionLine } from "@/components/spin-drill/bb-line";
@@ -52,7 +53,8 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft";
+export type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft";
+export type AppPane = "lesson" | "anchors" | "drill";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -444,8 +446,16 @@ function Meta({ spot, bb, range, labels }: { spot: SpotDef; bb: number; range: M
   );
 }
 
-export function SpinApp() {
-  const [tab, setTab] = useState<Tab>("strategy");
+export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
+  const navigate = useNavigate();
+  function setTab(next: Tab) {
+    localStorage.setItem("spin-open-tab", next);
+    void navigate({ to: "/", search: { tab: next, pane }, replace: true });
+  }
+  function setMathPane(next: AppPane) {
+    localStorage.setItem("spin-open-pane", next);
+    void navigate({ to: "/", search: { tab, pane: next }, replace: true });
+  }
   const [spotId, setSpotId] = useState("btn");
   const [mine, setMine] = useState<MixAction | "">("");
   const [group, setGroup] = useState<SpotGroup>("BTN");
@@ -460,7 +470,6 @@ export function SpinApp() {
   const [lastGrade, setLastGrade] = useState<"correct" | "mix" | "wrong" | null>(null);
   const [quiz, setQuiz] = useState<{ checked: boolean; ok: number; guesses: Record<number, string> } | null>(null);
   const [review, setReview] = useState(false);
-  const [mathPane, setMathPane] = useState<"lesson" | "anchors" | "drill">("lesson");
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
@@ -493,6 +502,16 @@ export function SpinApp() {
     setHideRange(localStorage.getItem("spin-hide-range") === "1");
     if (!readLive()) publishLive(microStrategy(), false);
     setLive(readLive());
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("tab")) {
+      const saved = localStorage.getItem("spin-open-tab");
+      const savedPane = localStorage.getItem("spin-open-pane");
+      const tabs: Tab[] = ["practice", "strategy", "table", "experiment", "sim", "hands", "math", "stats", "journal", "craft"];
+      const nextPane: AppPane = savedPane === "anchors" || savedPane === "drill" ? savedPane : "lesson";
+      if (saved && tabs.includes(saved as Tab) && (saved !== "strategy" || nextPane !== "lesson")) {
+        void navigate({ to: "/", search: { tab: saved as Tab, pane: nextPane }, replace: true });
+      }
+    }
     const sync = (event: Event) => {
       setLive(readLive());
       if ((event as CustomEvent<{ open?: boolean }>).detail?.open) setTab("strategy");
@@ -1114,16 +1133,16 @@ export function SpinApp() {
                   onClick={() => setMathPane(id)}
                   className={cn(
                     "h-11 rounded-full border px-3 text-sm",
-                    mathPane === id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
+                    pane === id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
                   )}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            {mathPane === "lesson" && <PostflopLesson />}
-            {mathPane === "anchors" && <EquitySheet hand={current} />}
-            {mathPane === "drill" && <MathDrill />}
+            {pane === "lesson" && <PostflopLesson />}
+            {pane === "anchors" && <EquitySheet hand={current} />}
+            {pane === "drill" && <MathDrill />}
           </div>
         )}
       </main>
