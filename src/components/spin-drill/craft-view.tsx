@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { findCraft, placeText, readCraft, type CraftHand } from "@/lib/spin-drill/craft";
+import { findCraft, handMoney, placeText, readCraft, trackHands, type CraftHand } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -15,57 +15,178 @@ function when(at: number): { day: string; time: string } {
 
 export function CraftTable() {
   const [hands, setHands] = useState<CraftHand[]>([]);
+  const [filter, setFilter] = useState("all");
   useEffect(() => {
     setHands(readCraft());
   }, []);
+  const shown = hands.filter((hand) => {
+    if (filter === "50") return false;
+    if (filter === "BTN" || filter === "SB" || filter === "BB") return hand.heroSeat === filter;
+    if (filter === "15") return hand.bb <= 16;
+    if (filter === "25") return hand.bb > 16 && hand.bb <= 25;
+    return true;
+  });
+  const slice = filter === "50" ? hands.slice(0, 50) : shown;
+  const track = trackHands(slice);
   if (!hands.length) {
     return (
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">PokerCraft</h2>
-        <p className="mt-2 text-sm text-muted">Раздач пока нет. Сыграйте руку в Стратегии и нажмите галочку или «Новая раздача» — разбор сохранится сюда.</p>
+        <p className="mt-2 text-sm text-muted">Раздач пока нет. Сыграйте руку в Стратегии и нажмите галочку или «Новая раздача» — разбор и трекер сохранятся сюда.</p>
       </section>
     );
   }
   return (
-    <section className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="text-lg font-semibold">PokerCraft</h2>
-      <p className="mt-1 text-sm text-muted">Каждая закрытая раздача: банк, пот-оддсы, эквити, блеф и вскрытие.</p>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-subtle">
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h2 className="text-lg font-semibold">Трекер</h2>
+        <p className="mt-1 text-sm text-muted">Как PokerTracker по вашим раздачам: винрейт, фактические фишки и EV решения. ROI спина в долларах здесь нет — в архиве руки, а не финиш турнира.</p>
+        <div className="mt-3 flex flex-wrap gap-1">
+          {[
+            ["all", "Все"],
+            ["50", "Последние 50"],
+            ["BTN", "BTN"],
+            ["SB", "SB"],
+            ["BB", "BB"],
+            ["15", "15bb"],
+            ["25", "25bb"],
+          ].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setFilter(id)} className={filter === id ? "h-8 rounded-full bg-fg px-3 text-xs text-bg" : "h-8 rounded-full bg-surface-2 px-3 text-xs text-muted"}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat name="Winrate" value={num(track.winrate, "%")} hint={`${track.wins} из ${track.hands} раздач банк ваш. В спине мало: нужен перевес над соперниками, не 33%.`} />
+          <Stat name="bb/100" value={signed(track.bb100)} hint={`Факт ${signed(track.net)} bb за выборку. Выигрыш — банк, который уже лежал. Проигрыш вскрытия — цена колла. Фолд — 0.`} />
+          <Stat name="EV bb/100" value={signed(track.ev100)} hint={`Матожидание ${signed(track.ev)} bb. Колл заменён на эквити × (банк + колл) − колл. Так трекеры убирают удачу борда.`} />
+          <Stat name="По чарту" value={num(track.match, "%")} hint="Доля рук, где ваше действие совпало с тем, что сказал солвер." />
+          <Stat name="VPIP" value={num(track.vpip, "%")} hint="Как часто вы сами вложили фишки: лимп, колл, рейз или пуш. Блайнд не считается." />
+          <Stat name="PFR" value={num(track.pfr, "%")} hint="Как часто рейз или олл-ин. Большой разрыв с VPIP — много лимпов и коллов." />
+          <Stat name="WWSF" value={num(track.wwsf, "%")} hint="Won when saw flop: как часто забираете банк, если дошли до флопа." />
+          <Stat name="W$SD" value={num(track.wsd, "%")} hint={`Вскрытие ${num(track.wtsd, "%")} рук, дошедших до флопа (WTSD). W$SD — сколько из вскрытий выиграли.`} />
+        </div>
+        <Curve points={track.curve} />
+        <p className="mt-1 text-[11px] text-muted">Сплошная линия — факт, пунктир — EV. Ноль посредине. Рост вверх — плюс в больших блайндах.</p>
+        {track.bySeat.length ? <Split title="По позиции" rows={track.bySeat} /> : null}
+        {track.byStack.length ? <Split title="По стеку" rows={track.byStack} /> : null}
+      </section>
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h2 className="text-lg font-semibold">Раздачи</h2>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="text-xs uppercase tracking-wide text-subtle">
+              <tr>
+                <th className="py-2 pr-3 font-medium">Дата</th>
+                <th className="py-2 pr-3 font-medium">Время</th>
+                <th className="py-2 pr-3 font-medium">Раздача</th>
+                <th className="py-2 pr-3 font-medium">bb</th>
+                <th className="py-2 pr-3 font-medium">EV</th>
+                <th className="py-2 font-medium">Разбор</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slice.map((hand) => {
+                const stamp = when(hand.at);
+                const money = handMoney(hand);
+                return (
+                  <tr key={hand.id} className="border-t border-border">
+                    <td className="py-2 pr-3 font-mono text-xs">{stamp.day}</td>
+                    <td className="py-2 pr-3 font-mono text-xs">{stamp.time}</td>
+                    <td className="py-2 pr-3">
+                      {hand.heroSeat} · {hand.klass || hand.hole} · {hand.bb}bb
+                      <span className="mt-0.5 block text-xs text-muted">
+                        {hand.spotTitle} · {placeText(hand.result)}
+                        {hand.verdict ? ` · ${hand.verdict}` : ""}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs">{signed(money.net)}</td>
+                    <td className="py-2 pr-3 font-mono text-xs">{signed(money.ev)}</td>
+                    <td className="py-2">
+                      <Link to="/pokercraft/$id" params={{ id: hand.id }} className="text-sm underline">
+                        Открыть
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function num(value: number | null, suffix: string): string {
+  if (value == null) return "—";
+  return `${value}${suffix}`;
+}
+
+function signed(value: number | null): string {
+  if (value == null) return "—";
+  return `${value > 0 ? "+" : ""}${value}`;
+}
+
+function Stat({ name, value, hint }: { name: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-bg p-3">
+      <p className="text-[10px] uppercase tracking-wide text-subtle">{name}</p>
+      <p className="mt-1 font-mono text-2xl font-semibold">{value}</p>
+      <p className="mt-1 text-[11px] leading-snug text-muted">{hint}</p>
+    </div>
+  );
+}
+
+function Split({ title, rows }: { title: string; rows: { label: string; hands: number; winrate: number | null; bb100: number | null; ev100: number | null }[] }) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-subtle">{title}</p>
+      <div className="mt-1 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-[10px] uppercase tracking-wide text-subtle">
             <tr>
-              <th className="py-2 pr-3 font-medium">Дата</th>
-              <th className="py-2 pr-3 font-medium">Время</th>
-              <th className="py-2 pr-3 font-medium">Раздача</th>
-              <th className="py-2 font-medium">Разбор</th>
+              <th className="py-1 pr-3 font-medium">Срез</th>
+              <th className="py-1 pr-3 font-medium">Рук</th>
+              <th className="py-1 pr-3 font-medium">Winrate</th>
+              <th className="py-1 pr-3 font-medium">bb/100</th>
+              <th className="py-1 font-medium">EV bb/100</th>
             </tr>
           </thead>
           <tbody>
-            {hands.map((hand) => {
-              const stamp = when(hand.at);
-              return (
-                <tr key={hand.id} className="border-t border-border">
-                  <td className="py-2 pr-3 font-mono text-xs">{stamp.day}</td>
-                  <td className="py-2 pr-3 font-mono text-xs">{stamp.time}</td>
-                  <td className="py-2 pr-3">
-                    {hand.heroSeat} · {hand.klass || hand.hole} · {hand.bb}bb
-                    <span className="mt-0.5 block text-xs text-muted">
-                      {hand.spotTitle} · {placeText(hand.result)}
-                      {hand.verdict ? ` · ${hand.verdict}` : ""}
-                    </span>
-                  </td>
-                  <td className="py-2">
-                    <Link to="/pokercraft/$id" params={{ id: hand.id }} className="text-sm underline">
-                      Открыть
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map((row) => (
+              <tr key={row.label} className="border-t border-border">
+                <td className="py-1 pr-3">{row.label}</td>
+                <td className="py-1 pr-3 font-mono text-xs">{row.hands}</td>
+                <td className="py-1 pr-3 font-mono text-xs">{num(row.winrate, "%")}</td>
+                <td className="py-1 pr-3 font-mono text-xs">{signed(row.bb100)}</td>
+                <td className="py-1 font-mono text-xs">{signed(row.ev100)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
+  );
+}
+
+function Curve({ points }: { points: { net: number; ev: number }[] }) {
+  if (points.length < 2) return <p className="mt-3 text-xs text-muted">График появится со второй раздачи.</p>;
+  const values = points.flatMap((point) => [point.net, point.ev]);
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const span = max - min || 1;
+  const width = 640;
+  const height = 160;
+  const x = (index: number) => (index / (points.length - 1)) * width;
+  const y = (value: number) => height - ((value - min) / span) * (height - 12) - 6;
+  const path = (key: "net" | "ev") => points.map((point, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(point[key]).toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-40 w-full text-fg">
+      <line x1="0" x2={width} y1={y(0)} y2={y(0)} stroke="currentColor" strokeOpacity="0.25" />
+      <path d={path("ev")} fill="none" stroke="currentColor" strokeOpacity="0.55" strokeDasharray="5 4" />
+      <path d={path("net")} fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
 

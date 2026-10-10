@@ -92,7 +92,7 @@ export function ActionLine({
   const askRiver = turnDone && board.length < 5;
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   function goNext() {
-    archiveHand();
+    archiveHand(mine);
     resetHand();
     onAdvance();
   }

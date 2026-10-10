@@ -50,6 +50,8 @@ export type CraftHand = {
   bluff: CraftBluff | null;
   result: "" | "win" | "fold" | "hero" | "villain" | "split";
   villains: string;
+  /** What the hero actually did, when the line recorded it. */
+  played?: string;
 };
 
 const KEY = "spin-craft-v1";
@@ -86,7 +88,7 @@ export function readCraft(): CraftHand[] {
 
 export function saveCraft(hand: CraftHand) {
   const prev = readCraft().filter((item) => item.id !== hand.id);
-  localStorage.setItem(KEY, JSON.stringify([hand, ...prev].slice(0, 200)));
+  localStorage.setItem(KEY, JSON.stringify([hand, ...prev].slice(0, 1000)));
 }
 
 export function findCraft(id: string): CraftHand | null {
@@ -180,4 +182,172 @@ export function placeText(result: CraftHand["result"]): string {
   if (result === "fold") return "фолд";
   if (result === "villain") return "проигрыш на вскрытии";
   return "не отмечено";
+}
+
+function round2(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+export function actionFamily(label: string): "" | "fold" | "call" | "raise" | "allin" {
+  const text = label.toLowerCase();
+  if (/fold|фолд/.test(text)) return "fold";
+  if (/all-in|allin|jam|пуш/.test(text)) return "allin";
+  if (/raise|рейз|3-bet|bet|ставка/.test(text)) return "raise";
+  if (/call|колл|limp|лимп|check|чек/.test(text)) return "call";
+  return "";
+}
+
+/** Action we can count, from the saved click or from how the hand ended. */
+export function playedOf(hand: CraftHand): string {
+  if (hand.played) return hand.played;
+  if (hand.result === "fold") return "fold";
+  if (hand.result === "win" && actionFamily(hand.verdict) === "allin") return "allin";
+  if (hand.result === "win" && actionFamily(hand.verdict) === "raise") return "raise";
+  if (hand.result === "hero" || hand.result === "villain" || hand.result === "split" || hand.result === "win") return "call";
+  return "";
+}
+
+/**
+ * Chip result of the logged decision.
+ * A win collects the pot that was already there. A lost showdown costs the call.
+ * A fold adds nothing: the fold itself does not put more chips in.
+ * EV replaces a priced call with equity × (pot + call) − call, the all-in EV trackers use.
+ */
+export function handMoney(hand: CraftHand): { net: number; ev: number } {
+  const pot = hand.pot ?? 0;
+  const call = Math.max(0, hand.toCall ?? 0);
+  const eq = hand.equity;
+  let net = 0;
+  if (hand.result === "hero" || hand.result === "win") net = pot > 0 ? pot : 1.5;
+  else if (hand.result === "villain") net = call > 0 ? -call : -1;
+  const ev = eq != null && call > 0 ? eq * (pot + call) - call : net;
+  return { net: round2(net), ev: round2(ev) };
+}
+
+export type TrackRow = {
+  label: string;
+  hands: number;
+  winrate: number | null;
+  bb100: number | null;
+  ev100: number | null;
+};
+
+export type Track = {
+  hands: number;
+  wins: number;
+  winrate: number | null;
+  net: number;
+  ev: number;
+  bb100: number | null;
+  ev100: number | null;
+  vpip: number | null;
+  pfr: number | null;
+  wwsf: number | null;
+  wtsd: number | null;
+  wsd: number | null;
+  match: number | null;
+  curve: { net: number; ev: number }[];
+  bySeat: TrackRow[];
+  byStack: TrackRow[];
+};
+
+function pct(part: number, whole: number): number | null {
+  if (whole <= 0) return null;
+  return Math.round((part / whole) * 1000) / 10;
+}
+
+function per100(sum: number, hands: number): number | null {
+  if (hands <= 0) return null;
+  return round2((sum / hands) * 100);
+}
+
+function row(label: string, hands: CraftHand[]): TrackRow {
+  let wins = 0;
+  let net = 0;
+  let ev = 0;
+  for (const hand of hands) {
+    if (hand.result === "hero" || hand.result === "win") wins += 1;
+    const money = handMoney(hand);
+    net += money.net;
+    ev += money.ev;
+  }
+  return { label, hands: hands.length, winrate: pct(wins, hands.length), bb100: per100(net, hands.length), ev100: per100(ev, hands.length) };
+}
+
+function stackName(bb: number): string {
+  if (bb <= 10) return "до 10bb";
+  if (bb <= 16) return "11–16bb";
+  if (bb <= 25) return "17–25bb";
+  return "26bb+";
+}
+
+function sawFlop(hand: CraftHand): boolean {
+  return hand.board.split(/\s+/).filter(Boolean).length >= 3;
+}
+
+function sawShowdown(hand: CraftHand): boolean {
+  return hand.result === "hero" || hand.result === "villain" || hand.result === "split";
+}
+
+export function trackHands(hands: CraftHand[]): Track {
+  const ordered = hands.slice().sort((a, b) => a.at - b.at);
+  let wins = 0;
+  let net = 0;
+  let ev = 0;
+  let vpip = 0;
+  let pfr = 0;
+  let known = 0;
+  let flop = 0;
+  let flopWins = 0;
+  let showdown = 0;
+  let showdownWins = 0;
+  let matched = 0;
+  let compared = 0;
+  const curve: { net: number; ev: number }[] = [];
+  for (const hand of ordered) {
+    if (hand.result === "hero" || hand.result === "win") wins += 1;
+    const money = handMoney(hand);
+    net += money.net;
+    ev += money.ev;
+    curve.push({ net: round2(net), ev: round2(ev) });
+    const played = actionFamily(playedOf(hand));
+    if (played) {
+      known += 1;
+      if (played !== "fold") vpip += 1;
+      if (played === "raise" || played === "allin") pfr += 1;
+    }
+    if (sawFlop(hand)) {
+      flop += 1;
+      if (hand.result === "hero" || hand.result === "win") flopWins += 1;
+    }
+    if (sawShowdown(hand)) {
+      showdown += 1;
+      if (hand.result === "hero") showdownWins += 1;
+    }
+    const told = actionFamily(hand.verdict);
+    if (played && told) {
+      compared += 1;
+      if (played === told) matched += 1;
+    }
+  }
+  const seats = ["BTN", "SB", "BB"].map((seat) => row(seat, ordered.filter((hand) => hand.heroSeat === seat)));
+  const stacks = ["до 10bb", "11–16bb", "17–25bb", "26bb+"].map((label) => row(label, ordered.filter((hand) => stackName(hand.bb) === label)));
+  return {
+    hands: ordered.length,
+    wins,
+    winrate: pct(wins, ordered.length),
+    net: round2(net),
+    ev: round2(ev),
+    bb100: per100(net, ordered.length),
+    ev100: per100(ev, ordered.length),
+    vpip: pct(vpip, known),
+    pfr: pct(pfr, known),
+    wwsf: pct(flopWins, flop),
+    wtsd: pct(showdown, flop),
+    wsd: pct(showdownWins, showdown),
+    match: pct(matched, compared),
+    curve,
+    bySeat: seats.filter((item) => item.hands > 0),
+    byStack: stacks.filter((item) => item.hands > 0),
+  };
 }

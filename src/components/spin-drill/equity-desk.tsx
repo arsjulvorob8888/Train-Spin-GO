@@ -27,7 +27,7 @@ type HandApi = {
   setStreetBet: (value: string) => void;
   place: "" | "hero" | "villain" | "split";
   setPlace: (value: "" | "hero" | "villain" | "split") => void;
-  archiveHand: () => void;
+  archiveHand: (played?: string) => void;
   hero: [Card, Card] | null;
   board: Card[];
   shown: {
@@ -300,7 +300,7 @@ export function HandProvider({
     setStreetBetState(trimNum(priced.toCall));
   }
 
-  function archiveHand() {
+  function archiveHand(played = "") {
     if (!cards.h0 || !cards.h1) return;
     const hole = [cards.h0, cards.h1];
     const known = board;
@@ -334,6 +334,7 @@ export function HandProvider({
       bluff: shown?.bluff ?? null,
       result: settled,
       villains: villains.map((pair) => pair.map(cardLabel).join(" ")).join(" · "),
+      played,
     };
     saveCraft(hand);
   }
