@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { HandReview } from "@/components/spin-drill/review-range";
+import { handClass, tryParseCard } from "@/lib/poker/cards";
 import { findCraft, handMoney, placeText, readCraft, trackHands, type CraftHand } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
@@ -220,7 +222,8 @@ function Report({ hand }: { hand: CraftHand }) {
   const stamp = when(hand.at);
   const spot = findSpot(hand.spotId);
   const range = spot ? rangeAtStack(spot.range, spot.id, hand.bb) : null;
-  const mix = range && hand.klass ? mixOf(range, hand.klass) : null;
+  const klass = heroClass(hand.hole) || hand.klass;
+  const mix = range && klass ? mixOf(range, klass) : null;
   const chart = mix ? spot?.labels[primary(mix)] : "";
   const need = hand.need == null ? null : Math.round(hand.need * 100);
   const eq = hand.equity == null ? null : Math.round(hand.equity * 100);
@@ -241,6 +244,11 @@ function Report({ hand }: { hand: CraftHand }) {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-subtle">Решение солвера</h2>
         <p className="mt-2 text-3xl font-semibold">{hand.verdict || "—"}</p>
         <p className="mt-2 text-sm leading-relaxed">{hand.text || "Солвер не успел посчитать эту руку."}</p>
+        {mix ? (
+          <p className="mt-2 font-mono text-xs text-muted">
+            Чарт {klass}: fold {Math.round(mix.fold)}% · call {Math.round(mix.call)}% · raise {Math.round(mix.raise)}% · all-in {Math.round(mix.allin)}%{chart ? ` · чаще всего ${chart}` : ""}
+          </p>
+        ) : null}
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">
@@ -279,17 +287,7 @@ function Report({ hand }: { hand: CraftHand }) {
         )}
       </section>
 
-      <section className="rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed">
-        <h2 className="font-semibold">Рейндж на старте</h2>
-        <p className="mt-2 text-muted">
-          {chart ? `Чарт этого спота на ${hand.bb}bb для ${hand.klass}: ${chart}.` : "Клетка чарта не сохранилась."} Это решение против диапазона, пока карты соперника закрыты.
-        </p>
-        {mix ? (
-          <p className="mt-2 font-mono text-xs">
-            fold {Math.round(mix.fold)}% · call {Math.round(mix.call)}% · raise {Math.round(mix.raise)}% · all-in {Math.round(mix.allin)}%
-          </p>
-        ) : null}
-      </section>
+      <HandReview hole={hand.hole} board={hand.board} villains={hand.villains} range={range} heroHand={klass} />
 
       <section className="rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed">
         <h2 className="font-semibold">Вскрытие</h2>
@@ -309,6 +307,15 @@ function Report({ hand }: { hand: CraftHand }) {
       </section>
     </article>
   );
+}
+
+function heroClass(hole: string): string {
+  const cards = hole
+    .split(/\s+/)
+    .map((token) => tryParseCard(token))
+    .filter((card) => card != null);
+  if (cards.length < 2) return "";
+  return handClass(cards[0]!, cards[1]!);
 }
 
 function Fact({ title, value }: { title: string; value: string }) {

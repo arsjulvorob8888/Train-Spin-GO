@@ -10,23 +10,24 @@ const GLYPH: Record<string, string> = { s: "♠", h: "♥", d: "♦", c: "♣" }
 
 export type Face = { rank: string; suit: string };
 
-export function PipCard({ card, tilt = 0 }: { card?: Face | null; tilt?: number }) {
-  if (!card) return <div className="h-[156px] w-[112px] rounded-[10px] bg-surface-2" />;
+export function PipCard({ card, tilt = 0, small = false }: { card?: Face | null; tilt?: number; small?: boolean }) {
+  if (!card) return <div className={small ? "h-[92px] w-[66px] rounded-lg bg-surface-2" : "h-[156px] w-[112px] rounded-[10px] bg-surface-2"} />;
   const red = card.suit === "h" || card.suit === "d";
   const rank = card.rank === "T" ? "10" : card.rank;
   return (
     <div
       className={cn(
-        "relative h-[156px] w-[112px] rounded-[10px] bg-card-face shadow-[0_18px_40px_rgba(0,0,0,0.45)]",
+        "relative bg-card-face shadow-[0_18px_40px_rgba(0,0,0,0.45)]",
+        small ? "h-[92px] w-[66px] rounded-lg" : "h-[156px] w-[112px] rounded-[10px]",
         red ? "text-suit-red" : "text-card-ink",
       )}
       style={{ transform: `rotate(${tilt}deg)` }}
     >
-      <div className="absolute top-2 left-2 font-mono text-xl font-semibold leading-none">
+      <div className={cn("absolute top-1.5 left-1.5 font-mono font-semibold leading-none", small ? "text-sm" : "top-2 left-2 text-xl")}>
         {rank}
-        <div className="text-base">{GLYPH[card.suit]}</div>
+        <div className={small ? "text-xs" : "text-base"}>{GLYPH[card.suit]}</div>
       </div>
-      <svg className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2" viewBox="0 0 24 24">
+      <svg className={cn("absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2", small ? "h-8 w-8" : "h-14 w-14")} viewBox="0 0 24 24">
         <path fill="currentColor" d={PIP[card.suit]} />
       </svg>
     </div>
