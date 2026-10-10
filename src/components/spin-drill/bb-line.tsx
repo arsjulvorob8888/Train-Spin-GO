@@ -54,7 +54,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -92,9 +92,19 @@ export function ActionLine({
   const askRiver = turnDone && board.length < 5;
   const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
   function goNext() {
+    archiveHand();
     resetHand();
     onAdvance();
   }
+  const runout =
+    result !== "win" &&
+    result !== "fold" &&
+    mine !== "fold" &&
+    mine !== "" &&
+    ((/jam|push|reshove/.test(spot.id) && mine === "call") ||
+      (mine === "allin" && (sbAct === "call" || bbAct === "call" || btnAct === "call" || back === "call")) ||
+      [...line.flop, ...line.turn, ...line.river].some((act) => act.action === "allin") &&
+        [...line.flop, ...line.turn, ...line.river].some((act) => act.action === "call"));
   useEffect(() => {
     if (!sized && board.length < 3) setSizeText("");
   }, [sized, board.length, spot.id, setSizeText]);
@@ -264,7 +274,7 @@ export function ActionLine({
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
       </div>
-      {live ? <BoardLine openBoard onAdvance={goNext} /> : null}
+      {live ? <BoardLine openBoard onAdvance={goNext} runout={runout} /> : null}
       <p className={cn("text-sm", askFlop || askTurn || askRiver ? "font-medium text-ok" : expected || board.length >= 3 ? "font-medium text-fg" : "text-xs text-muted")}>
         {won
           ? "Раздача закрыта. Оппоненты сбросили, вы забрали банк без флопа."

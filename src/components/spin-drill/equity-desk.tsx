@@ -2,23 +2,8 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import {
-  FACING_ACTIONS,
-  OPEN_ACTIONS,
-  actionTitle,
-  emptyLine,
-  facingPrice,
-  heroFacing,
-  openStreet,
-  preflopAllin,
-  seatStack,
-  seatsInHand,
-  streetStatus,
-  type Line,
-  type LineAction,
-  type Seat,
-  type StreetId,
-} from "@/lib/spin-drill/postflop-line";
+import { PRIZES, cardLabel, decideShowdown, holeKlass, quotePot, readPrize, rememberPrize, saveCraft, type CraftHand } from "@/lib/spin-drill/craft";
+import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { cn } from "@/lib/utils";
@@ -26,7 +11,7 @@ import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useSta
 import { createPortal } from "react-dom";
 
 const RANKS = [...RANK_CHARS].reverse();
-const SLOTS = ["h0", "h1", "f0", "f1", "f2", "t", "r"] as const;
+const SLOTS = ["h0", "h1", "f0", "f1", "f2", "t", "r", "v0", "v1", "w0", "w1"] as const;
 type Slot = (typeof SLOTS)[number];
 
 type HandApi = {
@@ -38,6 +23,11 @@ type HandApi = {
   setPotText: (value: string) => void;
   callText: string;
   setCallText: (value: string) => void;
+  streetBet: string;
+  setStreetBet: (value: string) => void;
+  place: "" | "hero" | "villain" | "split";
+  setPlace: (value: "" | "hero" | "villain" | "split") => void;
+  archiveHand: () => void;
   hero: [Card, Card] | null;
   board: Card[];
   shown: {
@@ -123,8 +113,11 @@ export function HandProvider({
   const queueRef = useRef<Slot[]>([]);
   const cardsRef = useRef<Partial<Record<Slot, Card>>>({});
   const [guard, setGuard] = useState(false);
-  const [potText, setPotText] = useState("");
-  const [callText, setCallText] = useState("");
+  const [potText, setPotTextState] = useState("");
+  const [callText, setCallTextState] = useState("");
+  const [streetBet, setStreetBetState] = useState("");
+  const [place, setPlace] = useState<"" | "hero" | "villain" | "split">("");
+  const manual = useRef(false);
   const [line, setLine] = useState<Line>(emptyLine);
   const [deviation, setDeviation] = useState<string | null>(null);
   const [sizeText, setSizeText] = useState("");
@@ -148,6 +141,18 @@ export function HandProvider({
   }
   const pot = parseBb(potText);
   const toCall = parseBb(callText);
+  function setPotText(value: string) {
+    manual.current = true;
+    setPotTextState(value);
+  }
+  function setCallText(value: string) {
+    manual.current = true;
+    setCallTextState(value);
+  }
+  function setStreetBet(value: string) {
+    manual.current = false;
+    setStreetBetState(value);
+  }
 
   useEffect(() => {
     if (!openCards) return;
@@ -180,27 +185,19 @@ export function HandProvider({
   }, [cards]);
 
   useEffect(() => {
-    if (board.length >= 3) return;
-    const raiseTo = parseBb(sizeText);
-    if (raiseTo == null) {
-      setPotText("");
-      setCallText("");
-      return;
-    }
-    const priced = priceFromRaise(spot.id, raiseTo);
-    if (!priced) return;
-    setPotText(trimNum(priced.pot));
-    setCallText(trimNum(priced.toCall));
-  }, [sizeText, spot.id, board.length]);
-
-  const preflopPot = useRef(true);
-  useEffect(() => {
-    if (preflopPot.current && board.length >= 3) {
-      setPotText("");
-      setCallText("");
-    }
-    preflopPot.current = board.length < 3;
-  }, [board.length]);
+    if (manual.current) return;
+    const quote = quotePot({
+      spotId: spot.id,
+      bb,
+      raiseTo: parseBb(sizeText),
+      streetBet: parseBb(streetBet),
+      line,
+      boardLength: board.length,
+      hero: spot.hero,
+    });
+    setPotTextState(trimNum(quote.pot));
+    setCallTextState(quote.toCall > 0 ? trimNum(quote.toCall) : "");
+  }, [spot.id, bb, sizeText, streetBet, line, board.length, handNonce]);
 
   const shown = useMemo(() => {
     if (!hero) return null;
@@ -253,8 +250,11 @@ export function HandProvider({
     setCards({});
     setQueue([]);
     setLine(emptyLine());
-    setPotText("");
-    setCallText("");
+    setPotTextState("");
+    setCallTextState("");
+    setStreetBetState("");
+    setPlace("");
+    manual.current = false;
     setDeviation(null);
     setSizeText("");
     setResult("");
@@ -278,22 +278,64 @@ export function HandProvider({
       ? (["h0", "h1"] as const).filter((item) => !prev[item])
       : slot === "f0" || slot === "f1" || slot === "f2"
         ? (["f0", "f1", "f2"] as const).filter((item) => !prev[item])
-        : [slot];
+        : slot === "v0" || slot === "v1"
+        ? (["v0", "v1"] as const).filter((item) => !prev[item])
+        : slot === "w0" || slot === "w1"
+          ? (["w0", "w1"] as const).filter((item) => !prev[item])
+          : [slot];
     queueRef.current = [...next];
     setQueue([...next]);
   }
 
   function syncPrice(next: Line) {
+    manual.current = false;
     const order = seatsInHand(spot.id, out);
     const jammed = preflopAllin(spot.id);
     const face = heroFacing(next, spot.hero, board.length, order, jammed);
     if (!face) {
-      setCallText("");
+      setStreetBetState("");
       return;
     }
     const priced = facingPrice(face, spot.hero, bb, pot);
-    if (!potText.trim()) setPotText(trimNum(priced.pot));
-    setCallText(trimNum(priced.toCall));
+    setStreetBetState(trimNum(priced.toCall));
+  }
+
+  function archiveHand() {
+    if (!cards.h0 || !cards.h1) return;
+    const hole = [cards.h0, cards.h1];
+    const known = board;
+    const villains = [
+      cards.v0 && cards.v1 ? [cards.v0, cards.v1] : [],
+      cards.w0 && cards.w1 ? [cards.w0, cards.w1] : [],
+    ].filter((pair) => pair.length === 2);
+    const auto = decideShowdown(hole, villains, known);
+    const settled = place || (result === "win" ? "win" : result === "fold" ? "fold" : auto);
+    const prize = readPrize();
+    const hand: CraftHand = {
+      id: `${Date.now()}`,
+      at: Date.now(),
+      prize: prize?.prize ?? null,
+      bb,
+      spotId: spot.id,
+      spotTitle: spot.title,
+      heroSeat: spot.hero,
+      klass: shown?.klass || holeKlass(hole),
+      hole: hole.map(cardLabel).join(" "),
+      board: known.map(cardLabel).join(" "),
+      line: lineNote(line),
+      pot,
+      toCall,
+      need: shown?.need ?? null,
+      equity: shown?.equity ?? null,
+      verdict: shown?.verdict ?? "",
+      text: shown?.text ?? "",
+      made: shown?.made ?? null,
+      draw: shown?.draw ?? null,
+      bluff: shown?.bluff ?? null,
+      result: settled,
+      villains: villains.map((pair) => pair.map(cardLabel).join(" ")).join(" · "),
+    };
+    saveCraft(hand);
   }
 
   function chooseLine(streetId: StreetId, seat: Seat, action: LineAction) {
@@ -360,6 +402,11 @@ export function HandProvider({
     setPotText,
     callText,
     setCallText,
+    streetBet,
+    setStreetBet,
+    place,
+    setPlace,
+    archiveHand,
     hero,
     board,
     shown,
@@ -389,6 +436,39 @@ export function HandProvider({
   };
 
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
+}
+
+export function StartBank({ onStack }: { onStack: (bb: number) => void }) {
+  const { hero } = useHand();
+  const [saved, setSaved] = useState(0);
+  useEffect(() => {
+    setSaved(readPrize()?.prize ?? 0);
+  }, [hero]);
+  return (
+    <div className={cn("rounded-xl border p-2", hero ? "border-border" : "border-ok bg-ok/10")}>
+      <p className="text-xs font-medium">{hero ? "Банк спина" : "Новая игра. Какой банк показал PokerOK?"}</p>
+      <p className="mt-0.5 text-[11px] leading-snug text-muted">
+        На 3-max x2 и x3 — это 15bb, стек 300. x4, x5 и x10 — 25bb, стек 500. x50 и x100 — 40bb, стек 800. Блайнды 10/20, стартовый банк раздачи 1.5bb. Стек можно поправить вручную.
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {PRIZES.map((item) => (
+          <button
+            key={item.prize}
+            type="button"
+            title={item.note}
+            onClick={() => {
+              rememberPrize(item.prize, item.bb);
+              setSaved(item.prize);
+              onStack(item.bb);
+            }}
+            className={cn("h-8 rounded-full px-2 font-mono text-xs", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-muted")}
+          >
+            {item.prize} · {item.bb}bb
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function PotFields() {
@@ -765,7 +845,7 @@ function StreetColumns({
   const jammed = preflopAllin(spotId);
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
-  const { pot, potText, setPotText, callText, setCallText } = useHand();
+  const { potText, setStreetBet, streetBet } = useHand();
   const raiseSized = (action: LineAction | null) => action === "bet33" || action === "bet66" || action === "betpot" || action === "raise";
   const cols: { seat: Seat; selected: LineAction | null; live: boolean }[] = acts.map((act) => ({
     seat: act.seat,
@@ -812,7 +892,7 @@ function StreetColumns({
                         on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                       )}
                     >
-                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, callText)}
+                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, streetBet)}
                       {bluffWanted ? "" : wanted && !on ? " · солвер" : ""}
                     </button>
                   );
@@ -829,15 +909,12 @@ function StreetColumns({
                 <span className="block px-1 font-medium">Рейз {col.seat}, bb</span>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {[2, 2.5, 3, 4, 6, 8].map((size) => {
-                    const on = Number(callText.replace(",", ".")) === size;
+                    const on = Number(streetBet.replace(",", ".")) === size;
                     return (
                       <button
                         key={size}
                         type="button"
-                        onClick={() => {
-                          setCallText(String(size));
-                          if (!potText.trim() && pot != null && pot > 0) setPotText(String(pot));
-                        }}
+                        onClick={() => setStreetBet(String(size))}
                         className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}
                       >
                         {size}
@@ -847,10 +924,10 @@ function StreetColumns({
                 </div>
                 <input
                   inputMode="decimal"
-                  value={callText}
+                  value={streetBet}
                   placeholder="2"
                   aria-label={`Размер рейза ${col.seat}, bb`}
-                  onChange={(event) => setCallText(event.target.value)}
+                  onChange={(event) => setStreetBet(event.target.value)}
                   className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
                 />
                 <span className="mt-1 block px-1 leading-tight text-muted">Это рейз {col.seat}. Меняет цену колла и его диапазон.</span>
@@ -887,8 +964,8 @@ function CycleMark({ label }: { label: string }) {
   );
 }
 
-export function BoardLine({ openBoard, onAdvance }: { openBoard: boolean; onAdvance?: () => void }) {
-  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out } = useHand();
+export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard: boolean; onAdvance?: () => void; runout?: boolean }) {
+  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out, setQueue, queueRef } = useHand();
   const latest = useRef<HTMLDivElement>(null);
   const heard = useRef(0);
   const holeNow = hero ? [hero[0], hero[1]] : [];
@@ -928,6 +1005,32 @@ export function BoardLine({ openBoard, onAdvance }: { openBoard: boolean; onAdva
     heardDraw.current = drawKey;
   }, [openBoard, hero, drawKey]);
   if (!openBoard) return null;
+  const fillBoard = () => {
+    const slots = (["f0", "f1", "f2", "t", "r"] as const).filter((slot) => !cards[slot]);
+    queueRef.current = [...slots];
+    setQueue([...slots]);
+  };
+  if (runout) {
+    const slots = ["f0", "f1", "f2", "t", "r"] as const;
+    const ask = slots.some((slot) => !cards[slot]);
+    return (
+      <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-wrap items-start gap-1", !hero ? "pointer-events-none opacity-40" : "")}>
+          <div className={cn("shrink-0 rounded-lg border p-1", ask ? "next-step border-ok bg-ok/10" : "border-border")}>
+            <p className={cn("px-1 text-[11px] font-medium", ask ? "text-ok" : "")}>{ask ? "Все карты сразу" : "Борд"}</p>
+            <div className="mt-1 flex gap-1">
+              {slots.map((slot) => (
+                <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} cue={ask} small onClick={fillBoard} />
+              ))}
+            </div>
+            <Holding cards={board.length >= 5 ? [...(hero ?? []), ...board] : []} fx={board.length >= 5} />
+          </div>
+        </div>
+        <ShowdownPanel />
+        {board.length >= 5 ? <DoneMark label={showdown([...(hero ?? []), ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
+      </div>
+    );
+  }
   const seats = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
   const hole = hero ? [hero[0], hero[1]] : [];
@@ -989,6 +1092,54 @@ export function BoardLine({ openBoard, onAdvance }: { openBoard: boolean; onAdva
           {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
         </div>
       ) : null}
+      {board.length >= 5 || finished ? <ShowdownPanel /> : null}
+    </div>
+  );
+}
+
+function ShowdownPanel() {
+  const { cards, open, queue, hero, board, place, setPlace, spot, out, line } = useHand();
+  const folded = new Set<Seat>();
+  for (const street of ["flop", "turn", "river"] as const) {
+    for (const act of line[street]) if (act.action === "fold") folded.add(act.seat);
+  }
+  const villains = seatsInHand(spot.id, out).filter((seat) => seat !== spot.hero && !folded.has(seat));
+  const known = [cards.v0 && cards.v1 ? [cards.v0, cards.v1] : [], cards.w0 && cards.w1 ? [cards.w0, cards.w1] : []].filter((pair) => pair.length === 2);
+  const auto = hero && board.length >= 5 ? decideShowdown(hero, known, board) : "";
+  const pairs: { title: string; slots: ["v0", "v1"] | ["w0", "w1"] }[] = [];
+  if (villains[0]) pairs.push({ title: villains[0], slots: ["v0", "v1"] });
+  if (villains[1]) pairs.push({ title: villains[1], slots: ["w0", "w1"] });
+  return (
+    <div className="rounded-lg border border-border p-2">
+      <p className="text-xs font-medium">Вскрытие</p>
+      <div className="mt-1 flex flex-wrap gap-3">
+        {pairs.map((pair) => (
+          <div key={pair.title}>
+            <p className="text-[10px] uppercase tracking-wide text-subtle">{pair.title}</p>
+            <div className="mt-0.5 flex gap-1">
+              {pair.slots.map((slot) => (
+                <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} small onClick={() => open(slot)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        {auto === "hero" ? "По картам вы старше." : auto === "villain" ? "По картам соперник старше." : auto === "split" ? "Ничья по картам." : "Если карты показали — выберите их. Победителя можно указать и вручную."}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {(
+          [
+            ["hero", "Я выиграл"],
+            ["villain", "Соперник"],
+            ["split", "Ничья"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setPlace(place === id ? "" : id)} className={cn("h-8 rounded px-2 text-xs", place === id || (!place && auto === id) ? "bg-fg font-medium text-bg" : "bg-surface-2 text-muted")}>
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

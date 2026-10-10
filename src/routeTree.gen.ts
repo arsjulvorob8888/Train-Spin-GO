@@ -10,33 +10,52 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PokercraftRouteImport } from './routes/pokercraft'
+import { Route as PokercraftIdRouteImport } from './routes/pokercraft.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PokercraftRoute = PokercraftRouteImport.update({
+  id: '/pokercraft',
+  path: '/pokercraft',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PokercraftIdRoute = PokercraftIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => PokercraftRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/pokercraft': typeof PokercraftRouteWithChildren
+  '/pokercraft/$id': typeof PokercraftIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/pokercraft': typeof PokercraftRouteWithChildren
+  '/pokercraft/$id': typeof PokercraftIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/pokercraft': typeof PokercraftRouteWithChildren
+  '/pokercraft/$id': typeof PokercraftIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/pokercraft' | '/pokercraft/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/pokercraft' | '/pokercraft/$id'
+  id: '__root__' | '/' | '/pokercraft' | '/pokercraft/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PokercraftRoute: typeof PokercraftRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +67,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pokercraft': {
+      id: '/pokercraft'
+      path: '/pokercraft'
+      fullPath: '/pokercraft'
+      preLoaderRoute: typeof PokercraftRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pokercraft/$id': {
+      id: '/pokercraft/$id'
+      path: '/$id'
+      fullPath: '/pokercraft/$id'
+      preLoaderRoute: typeof PokercraftIdRouteImport
+      parentRoute: typeof PokercraftRoute
+    }
   }
 }
 
+interface PokercraftRouteChildren {
+  PokercraftIdRoute: typeof PokercraftIdRoute
+}
+
+const PokercraftRouteChildren: PokercraftRouteChildren = {
+  PokercraftIdRoute: PokercraftIdRoute,
+}
+
+const PokercraftRouteWithChildren = PokercraftRoute._addFileChildren(
+  PokercraftRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PokercraftRoute: PokercraftRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -3,7 +3,7 @@
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { ActionLine } from "@/components/spin-drill/bb-line";
-import { EquityDesk, HandProvider, PotFields, QuickLine, useHand } from "@/components/spin-drill/equity-desk";
+import { EquityDesk, HandProvider, PotFields, QuickLine, StartBank, useHand } from "@/components/spin-drill/equity-desk";
 import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
@@ -42,6 +42,7 @@ import {
 } from "@/lib/spin-drill/stats";
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
+import { CraftTable } from "@/components/spin-drill/craft-view";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { clearLive, publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, MICRO_RULES, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
@@ -50,7 +51,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal";
+type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft";
 
 const KEYS: Record<string, MixAction> = {
   f: "fold",
@@ -279,13 +280,14 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
 }
 
 function NewHand({ onAdvance }: { onAdvance: () => void }) {
-  const { resetHand } = useHand();
+  const { resetHand, archiveHand } = useHand();
   return (
     <button
       type="button"
       aria-label="Новая раздача"
       title="Новая раздача и следующая позиция"
       onClick={() => {
+        archiveHand();
         resetHand();
         onAdvance();
       }}
@@ -654,6 +656,7 @@ export function SpinApp() {
     { id: "sim", label: "Симулятор" },
     { id: "strategy", label: "Стратегия" },
     { id: "journal", label: "Журнал" },
+    { id: "craft", label: "PokerCraft" },
     { id: "table", label: "Раздача" },
     { id: "experiment", label: "GAME" },
     { id: "hands", label: "Комбинации" },
@@ -739,6 +742,7 @@ export function SpinApp() {
         {tab === "strategy" && (
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
+              <StartBank onStack={setBb} />
               {live ? (
                 <div className="rounded-xl bg-surface-2 px-3 py-3 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -834,6 +838,7 @@ export function SpinApp() {
         {tab === "experiment" && <RangeExperiment />}
         {tab === "sim" && <SimLab />}
         {tab === "journal" && <JournalPanel />}
+        {tab === "craft" && <CraftTable />}
 
         {tab === "practice" && (
           <div className="space-y-4">
