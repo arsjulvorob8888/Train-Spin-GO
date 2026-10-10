@@ -46,8 +46,8 @@ import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { CraftTable } from "@/components/spin-drill/craft-view";
 import { retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
-import { clearLive, publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
-import { MICRO_NAME, MICRO_RULES, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
+import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
+import { MICRO_NAME, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
 import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -768,34 +768,6 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
               <StartBank onStack={setBb} />
-              {live ? (
-                <div className="rounded-xl bg-surface-2 px-3 py-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p>Сейчас в игре: «{live.name}». Тренировка отвечает по этим рейнджам.</p>
-                    <div className="flex gap-2">
-                      {live.name !== MICRO_NAME ? (
-                        <button type="button" className="h-9 rounded-md bg-fg px-3 text-xs text-bg" onClick={() => publishLive(microStrategy(), false)}>
-                          Поставить микро
-                        </button>
-                      ) : null}
-                      <button type="button" className="h-9 rounded-md border border-border px-3 text-xs" onClick={() => { clearLive(); setLive(null); }}>
-                        Вернуть голый чарт
-                      </button>
-                    </div>
-                  </div>
-                  {live.name === MICRO_NAME ? (
-                    <ul className="mt-2 list-disc space-y-1 pl-4 text-muted">
-                      {MICRO_RULES.map((rule) => (
-                        <li key={rule}>{rule}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : (
-                <button type="button" className="h-11 rounded-md bg-fg px-4 text-sm font-medium text-bg" onClick={() => publishLive(microStrategy(), false)}>
-                  Поставить микро $0.25–$1
-                </button>
-              )}
               <div className="mt-4">
                 <SpotPills
                   compact
