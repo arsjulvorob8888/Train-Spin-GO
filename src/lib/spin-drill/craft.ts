@@ -169,6 +169,8 @@ export type CraftHand = {
   villains: string;
   /** What the hero actually did, when the line recorded it. */
   played?: string;
+  /** A correction written later from the journal. */
+  note?: string;
 };
 
 const KEY = "spin-craft-v1";
@@ -206,6 +208,16 @@ export function readCraft(): CraftHand[] {
 export function saveCraft(hand: CraftHand) {
   const prev = readCraft().filter((item) => item.id !== hand.id);
   localStorage.setItem(KEY, JSON.stringify([hand, ...prev].slice(0, 1000)));
+}
+
+export function updateCraft(id: string, patch: Partial<CraftHand>) {
+  const next = readCraft().map((hand) => (hand.id === id ? { ...hand, ...patch, id: hand.id, at: hand.at } : hand));
+  localStorage.setItem(KEY, JSON.stringify(next));
+}
+
+export function removeCraft(ids: string[]) {
+  const drop = new Set(ids);
+  localStorage.setItem(KEY, JSON.stringify(readCraft().filter((hand) => !drop.has(hand.id))));
 }
 
 export function findCraft(id: string): CraftHand | null {

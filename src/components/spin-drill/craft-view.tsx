@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, handMoney, placeText, readCraft, trackHands, type CraftHand } from "@/lib/spin-drill/craft";
+import { findCraft, handMoney, placeText, readCraft, removeCraft, trackHands, updateCraft, type CraftHand } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -18,9 +18,16 @@ function when(at: number): { day: string; time: string } {
 export function CraftTable() {
   const [hands, setHands] = useState<CraftHand[]>([]);
   const [filter, setFilter] = useState("all");
+  const [picked, setPicked] = useState<string[]>([]);
+  const [editId, setEditId] = useState("");
   useEffect(() => {
     setHands(readCraft());
   }, []);
+  function reload(next?: CraftHand[]) {
+    const rows = next ?? readCraft();
+    setHands(rows);
+    setPicked((ids) => ids.filter((id) => rows.some((hand) => hand.id === id)));
+  }
   const shown = hands.filter((hand) => {
     if (filter === "50") return false;
     if (filter === "BTN" || filter === "SB" || filter === "BB") return hand.heroSeat === filter;
@@ -30,6 +37,16 @@ export function CraftTable() {
   });
   const slice = filter === "50" ? hands.slice(0, 50) : shown;
   const track = trackHands(slice);
+  const visibleIds = slice.map((hand) => hand.id);
+  const allOn = visibleIds.length > 0 && visibleIds.every((id) => picked.includes(id));
+  function drop(ids: string[]) {
+    if (!ids.length) return;
+    const word = ids.length === 1 ? "эту раздачу" : `${ids.length} раздач`;
+    if (!window.confirm(`Удалить ${word} из журнала? Трекер пересчитается. Разбор тоже пропадёт.`)) return;
+    removeCraft(ids);
+    if (ids.includes(editId)) setEditId("");
+    reload();
+  }
   if (!hands.length) {
     return (
       <section className="rounded-2xl border border-border bg-surface p-4">
@@ -74,25 +91,38 @@ export function CraftTable() {
         {track.byStack.length ? <Split title="По стеку" rows={track.byStack} /> : null}
       </section>
       <section className="rounded-2xl border border-border bg-surface p-4">
-        <h2 className="text-lg font-semibold">Раздачи</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold">Раздачи</h2>
+          <button type="button" disabled={!picked.length} onClick={() => drop(picked)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40">
+            Удалить выбранные{picked.length ? ` (${picked.length})` : ""}
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-muted">Галочка отмечает руку. Результат можно поправить: винрейт и bb пересчитаются. Заметка остаётся только в журнале.</p>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-subtle">
               <tr>
+                <th className="w-8 py-2 pr-2 font-medium">
+                  <input type="checkbox" checked={allOn} aria-label="Выбрать все на экране" onChange={() => setPicked(allOn ? picked.filter((id) => !visibleIds.includes(id)) : [...new Set([...picked, ...visibleIds])])} />
+                </th>
                 <th className="py-2 pr-3 font-medium">Дата</th>
                 <th className="py-2 pr-3 font-medium">Время</th>
                 <th className="py-2 pr-3 font-medium">Раздача</th>
                 <th className="py-2 pr-3 font-medium">bb</th>
                 <th className="py-2 pr-3 font-medium">EV</th>
-                <th className="py-2 font-medium">Разбор</th>
+                <th className="py-2 font-medium">Действия</th>
               </tr>
             </thead>
             <tbody>
               {slice.map((hand) => {
                 const stamp = when(hand.at);
                 const money = handMoney(hand);
+                const open = editId === hand.id;
                 return (
-                  <tr key={hand.id} className="border-t border-border">
+                  <tr key={hand.id} className="border-t border-border align-top">
+                    <td className="py-2 pr-2">
+                      <input type="checkbox" checked={picked.includes(hand.id)} aria-label="Выбрать раздачу" onChange={() => setPicked((ids) => (ids.includes(hand.id) ? ids.filter((id) => id !== hand.id) : [...ids, hand.id]))} />
+                    </td>
                     <td className="py-2 pr-3 font-mono text-xs">{stamp.day}</td>
                     <td className="py-2 pr-3 font-mono text-xs">{stamp.time}</td>
                     <td className="py-2 pr-3">
@@ -101,13 +131,33 @@ export function CraftTable() {
                         {hand.spotTitle} · {placeText(hand.result)}
                         {hand.verdict ? ` · ${hand.verdict}` : ""}
                       </span>
+                      {hand.note ? <span className="mt-0.5 block text-xs text-fg">{hand.note}</span> : null}
+                      {open ? (
+                        <HandEdit
+                          hand={hand}
+                          onCancel={() => setEditId("")}
+                          onSave={(result, note) => {
+                            updateCraft(hand.id, { result, note });
+                            setEditId("");
+                            reload();
+                          }}
+                        />
+                      ) : null}
                     </td>
                     <td className="py-2 pr-3 font-mono text-xs">{signed(money.net)}</td>
                     <td className="py-2 pr-3 font-mono text-xs">{signed(money.ev)}</td>
                     <td className="py-2">
-                      <Link to="/pokercraft/$id" params={{ id: hand.id }} className="text-sm underline">
-                        Открыть
-                      </Link>
+                      <div className="flex flex-col items-start gap-1">
+                        <Link to="/pokercraft/$id" params={{ id: hand.id }} className="text-sm underline">
+                          Открыть
+                        </Link>
+                        <button type="button" onClick={() => setEditId(open ? "" : hand.id)} className="text-sm text-muted underline">
+                          Изменить
+                        </button>
+                        <button type="button" onClick={() => drop([hand.id])} className="text-sm text-muted underline">
+                          Удалить
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -116,6 +166,44 @@ export function CraftTable() {
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+const RESULTS: { id: CraftHand["result"]; label: string }[] = [
+  { id: "win", label: "Все сбросили" },
+  { id: "hero", label: "Выиграл вскрытие" },
+  { id: "villain", label: "Проиграл вскрытие" },
+  { id: "split", label: "Ничья" },
+  { id: "fold", label: "Фолд" },
+  { id: "", label: "Не отмечено" },
+];
+
+function HandEdit({ hand, onSave, onCancel }: { hand: CraftHand; onSave: (result: CraftHand["result"], note: string) => void; onCancel: () => void }) {
+  const [result, setResult] = useState<CraftHand["result"]>(hand.result);
+  const [note, setNote] = useState(hand.note ?? "");
+  return (
+    <div className="mt-2 rounded-lg border border-border bg-bg p-2">
+      <p className="text-[10px] uppercase tracking-wide text-subtle">Результат</p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {RESULTS.map((item) => (
+          <button key={item.label} type="button" onClick={() => setResult(item.id)} className={result === item.id ? "h-7 rounded-full bg-fg px-2 text-[11px] text-bg" : "h-7 rounded-full bg-surface-2 px-2 text-[11px] text-muted"}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <label className="mt-2 block text-[10px] uppercase tracking-wide text-subtle">
+        Заметка
+        <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Что поправить в этой руке" className="mt-1 h-8 w-full rounded-md border border-border bg-surface px-2 text-sm text-fg normal-case" />
+      </label>
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={() => onSave(result, note.trim())} className="h-8 rounded-full bg-fg px-3 text-xs text-bg">
+          Сохранить
+        </button>
+        <button type="button" onClick={onCancel} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-muted">
+          Отмена
+        </button>
+      </div>
     </div>
   );
 }
@@ -238,6 +326,7 @@ function Report({ hand }: { hand: CraftHand }) {
           {hand.heroSeat} · {hand.hole || hand.klass || "без карт"} · {placeText(hand.result)}
         </h1>
         <p className="mt-1 text-sm text-muted">{hand.spotTitle}</p>
+        {hand.note ? <p className="mt-2 text-sm">{hand.note}</p> : null}
       </header>
 
       <section className="rounded-xl border border-border bg-surface p-4">
