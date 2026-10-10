@@ -796,7 +796,20 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
         {tab === "strategy" && (
           <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
-              <StartBank onStack={setBb} onStarted={() => setCardAsk((n) => n + 1)} />
+              <StartBank
+                onStack={setBb}
+                onSeat={(seat) => {
+                  const first = spotsIn(seat)[0];
+                  if (first) {
+                    setGroup(seat);
+                    setSpotId(first.id);
+                  }
+                  setMine("");
+                  setSelected("");
+                  setStackOpen(false);
+                }}
+                onStarted={() => setCardAsk((n) => n + 1)}
+              />
               <div className="mt-4">
                 <SpotPills
                   compact

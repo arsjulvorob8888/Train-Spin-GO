@@ -456,11 +456,12 @@ export function HandProvider({
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
 }
 
-export function StartBank({ onStack, onStarted }: { onStack: (bb: number) => void; onStarted?: () => void }) {
+export function StartBank({ onStack, onStarted, onSeat }: { onStack: (bb: number) => void; onStarted?: () => void; onSeat?: (seat: "BTN" | "SB" | "BB" | "HU") => void }) {
   const [saved, setSaved] = useState(0);
   const [ready, setReady] = useState(false);
   const [ending, setEnding] = useState(false);
   const [later, setLater] = useState(false);
+  const [seatAsk, setSeatAsk] = useState(false);
   const [status, setStatus] = useState<ReturnType<typeof blindStatus>>(null);
   useEffect(() => {
     const tick = () => {
@@ -473,7 +474,10 @@ export function StartBank({ onStack, onStarted }: { onStack: (bb: number) => voi
     setReady(true);
     const id = window.setInterval(tick, 1000);
     window.addEventListener("spin-blind", tick);
-    const reopen = () => setLater(false);
+    const reopen = () => {
+      setLater(false);
+      setSeatAsk(false);
+    };
     window.addEventListener("spin-new-game", reopen);
     return () => {
       window.clearInterval(id);
@@ -487,9 +491,11 @@ export function StartBank({ onStack, onStarted }: { onStack: (bb: number) => voi
     if (item) settleSpin(item.prize, item.buy, won);
     clearBlind();
     setEnding(false);
+    setSeatAsk(false);
     setStatus(null);
   }
   if (!ready) return null;
+  const clock = status ? <BlindClock status={status} saved={saved} ending={ending} onToggle={() => setEnding(true)} onWin={() => finish(true)} onLose={() => finish(false)} /> : null;
   if (!status && !later) {
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
@@ -506,7 +512,7 @@ export function StartBank({ onStack, onStarted }: { onStack: (bb: number) => voi
                   setSaved(item.prize);
                   setLater(false);
                   onStack(startBlind(item.prize));
-                  onStarted?.();
+                  setSeatAsk(true);
                 }}
                 className={cn("h-11 rounded-full px-3 font-mono text-sm", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
               >
@@ -521,24 +527,76 @@ export function StartBank({ onStack, onStarted }: { onStack: (bb: number) => voi
       </div>
     );
   }
-  if (!status) return null;
+  if (seatAsk) {
+    return (
+      <>
+        {clock}
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
+            <h2 className="text-lg font-semibold">Ваша позиция?</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(["BTN", "SB", "BB", "HU"] as const).map((seat) => (
+                <button
+                  key={seat}
+                  type="button"
+                  onClick={() => {
+                    onSeat?.(seat);
+                    setSeatAsk(false);
+                    onStarted?.();
+                  }}
+                  className="h-11 rounded-full bg-surface-2 px-4 text-sm font-semibold text-fg"
+                >
+                  {seat}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+  return clock;
+}
+
+function BlindClock({
+  status,
+  saved,
+  ending,
+  onToggle,
+  onWin,
+  onLose,
+}: {
+  status: NonNullable<ReturnType<typeof blindStatus>>;
+  saved: number;
+  ending: boolean;
+  onToggle: () => void;
+  onWin: () => void;
+  onLose: () => void;
+}) {
+  const heard = useRef("");
+  useEffect(() => {
+    const key = `${status.level}:${status.soon ? "soon" : "ok"}`;
+    if (!status.soon || heard.current === key) return;
+    heard.current = key;
+    playBlindWarn();
+  }, [status.level, status.soon]);
   return (
-    <div className="fixed right-3 bottom-3 z-40 w-36 rounded-xl border border-border bg-surface p-2 shadow-lg">
+    <div className={cn("fixed top-3 right-3 z-[60] w-36 rounded-xl border-2 bg-black/80 p-2 shadow-lg", status.soon ? "blind-hot border-red-500 text-red-400" : "border-emerald-400 text-emerald-400")}>
       <p className="font-mono text-2xl font-semibold leading-none">{status.left.replace(/^ещё /, "")}</p>
-      <p className="mt-1 text-xs text-muted">
+      <p className="mt-1 text-xs">
         {status.sb}/{status.bb} · ур. {status.level}
       </p>
       {ending ? (
         <div className="mt-2 grid gap-1">
-          <button type="button" onClick={() => finish(true)} className="h-8 rounded-md bg-fg text-xs text-bg">
+          <button type="button" onClick={onWin} className="h-8 rounded-md bg-fg text-xs text-bg">
             Выиграл ${saved}
           </button>
-          <button type="button" onClick={() => finish(false)} className="h-8 rounded-md bg-surface-2 text-xs text-fg">
+          <button type="button" onClick={onLose} className="h-8 rounded-md bg-surface-2 text-xs text-fg">
             Проиграл
           </button>
         </div>
       ) : (
-        <button type="button" onClick={() => setEnding(true)} className="mt-2 text-xs text-muted underline">
+        <button type="button" onClick={onToggle} className="mt-2 text-xs underline">
           Спин окончен
         </button>
       )}
@@ -1409,6 +1467,29 @@ function playBluffSting() {
   });
 }
 playBluffSting.ctx = null as AudioContext | null;
+
+function playBlindWarn() {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  const ctx = playBluffSting.ctx ?? new Ctx();
+  playBluffSting.ctx = ctx;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  [880, 1175].forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = freq;
+    const start = now + index * 0.16;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.06, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.14);
+  });
+}
 
 function playWinSting() {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;

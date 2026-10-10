@@ -171,24 +171,28 @@ export function settleSpin(prize: number, buy: number, won: boolean): BankBook {
   return next;
 }
 
-export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number } | null {
+export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number; soon: boolean } | null {
   const session = readBlind();
   if (!session) return null;
   const spec = SPIN_CLOCK[session.prize];
   const level = blindLevel(session, now);
   const pair = BLIND_LEVELS[level] ?? BLIND_LEVELS[0]!;
   let left = "";
+  let soon = false;
   if (spec?.clock.kind === "time") {
     const elapsed = Math.max(0, (now - session.startedAt) / 1000);
     const remain = spec.clock.seconds - (elapsed % spec.clock.seconds);
     const min = Math.floor(remain / 60);
     const sec = Math.floor(remain % 60);
     left = `ещё ${min}:${sec.toString().padStart(2, "0")}`;
+    soon = remain <= 15;
   } else if (spec?.clock.kind === "hands") {
     const into = session.hands % spec.clock.hands;
-    left = `ещё ${spec.clock.hands - into} раздач`;
+    const leftHands = spec.clock.hands - into;
+    left = `ещё ${leftHands} раздач`;
+    soon = leftHands <= 2;
   }
-  return { level: level + 1, sb: pair[0], bb: pair[1], stack: stackFromBlinds(session, now), left, chips: session.chips };
+  return { level: level + 1, sb: pair[0], bb: pair[1], stack: stackFromBlinds(session, now), left, chips: session.chips, soon };
 }
 
 export type CraftBluff = {
