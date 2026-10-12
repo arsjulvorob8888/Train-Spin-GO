@@ -159,7 +159,7 @@ function GameList({
     <section className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold">Игры</h2>
-        <input type="checkbox" checked={gamesOn} aria-label="Выбрать все игры" onChange={() => setMarked(gamesOn ? [] : gameIds)} />
+        <input type="checkbox" className="h-5 w-5 accent-orange-500" checked={gamesOn} aria-label="Выбрать все игры" onChange={() => setMarked(gamesOn ? [] : gameIds)} />
         <button type="button" disabled={!marked.length} onClick={() => dropGames(marked)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40">
           Удалить игры{marked.length ? ` (${marked.length})` : ""}
         </button>
@@ -178,10 +178,10 @@ function GameList({
             const delta = row.won == null || row.buy == null || row.prize == null ? null : row.won ? row.prize - row.buy : -row.buy;
             return (
               <li key={row.id} className="border-t border-border">
-                <div className="flex items-start gap-2 py-2">
+                <div className="flex items-start gap-3 py-2">
                   <input
                     type="checkbox"
-                    className="mt-1"
+                    className="mt-1 h-5 w-5 shrink-0 accent-orange-500"
                     checked={marked.includes(row.id)}
                     aria-label="Выбрать игру"
                     onChange={() => setMarked((ids) => (ids.includes(row.id) ? ids.filter((id) => id !== row.id) : [...ids, row.id]))}
@@ -199,11 +199,16 @@ function GameList({
                       {row.cash != null ? <span className="mt-0.5 block text-muted">{money(row.cash)}</span> : null}
                     </span>
                   </button>
-                  {row.won == null ? null : (
-                    <button type="button" onClick={() => setEditGame(editGame === row.id ? "" : row.id)} className="shrink-0 text-sm text-muted underline">
-                      Изменить
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {row.won == null ? null : (
+                      <button type="button" onClick={() => setEditGame(editGame === row.id ? "" : row.id)} className="h-7 rounded-full bg-surface-2 px-2 text-xs text-fg">
+                        Изменить
+                      </button>
+                    )}
+                    <button type="button" onClick={() => dropGames([row.id])} className="h-7 rounded-full bg-surface-2 px-2 text-xs text-fg">
+                      Удалить
                     </button>
-                  )}
+                  </div>
                 </div>
                 {editGame === row.id && row.won != null ? (
                   <div className="mb-2 ml-6 flex flex-wrap gap-2">
@@ -226,6 +231,7 @@ function GameList({
                             <th className="w-8 py-1 pr-2 font-medium">
                               <input
                                 type="checkbox"
+                                className="h-4 w-4 accent-orange-500"
                                 checked={allOn}
                                 aria-label="Выбрать все на экране"
                                 onChange={() => setPicked(allOn ? picked.filter((id) => !visibleIds.includes(id)) : [...new Set([...picked, ...visibleIds])])}
@@ -247,6 +253,7 @@ function GameList({
                                 <td className="py-2 pr-2">
                                   <input
                                     type="checkbox"
+                                className="h-4 w-4 accent-orange-500"
                                     checked={picked.includes(hand.id)}
                                     aria-label="Выбрать раздачу"
                                     onChange={() => setPicked((ids) => (ids.includes(hand.id) ? ids.filter((id) => id !== hand.id) : [...ids, hand.id]))}
