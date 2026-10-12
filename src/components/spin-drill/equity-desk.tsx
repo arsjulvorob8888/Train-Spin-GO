@@ -1078,7 +1078,15 @@ function StreetColumns({
                       }}
                       className={cn(
                         "rounded px-1 py-1 text-left text-xs",
-                        on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
+                        on && wanted
+                          ? "bg-fg font-medium text-bg ring-2 ring-ok"
+                          : on
+                            ? "bg-fg font-medium text-bg"
+                            : bluffWanted
+                              ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff"
+                              : wanted
+                                ? "bg-ok/20 font-semibold text-fg ring-2 ring-ok"
+                                : "text-muted",
                       )}
                     >
                       {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, streetBet, hint)}
@@ -1545,11 +1553,12 @@ function suggested(verdict: string, facing: boolean): LineAction | null {
   if (name === "fold" || name === "фолд") return "fold";
   if (name === "call" || name === "колл") return "call";
   if (name === "check" || name === "чек") return "check";
-  if (name.includes("блеф") || name.startsWith("ставь") || name.startsWith("raise 2")) return "bet33";
-  if (name.startsWith("raise 6")) return facing ? "raise" : "betpot";
-  if (name.startsWith("raise 4") || name === "ставка") return facing ? "raise" : "bet66";
-  if (name === "raise" || name === "рейз") return facing ? "raise" : "bet66";
   if (name.startsWith("all-in") || name === "пуш") return "allin";
+  if (facing && (name.startsWith("raise") || name === "рейз" || name === "ставка" || name.includes("блеф") || name.startsWith("ставь"))) return "raise";
+  if (name.includes("блеф") || name.startsWith("ставь") || name.startsWith("raise 2")) return "bet33";
+  if (name.startsWith("raise 6")) return "betpot";
+  if (name.startsWith("raise 4") || name === "ставка") return "bet66";
+  if (name === "raise" || name === "рейз") return "bet66";
   return null;
 }
 
