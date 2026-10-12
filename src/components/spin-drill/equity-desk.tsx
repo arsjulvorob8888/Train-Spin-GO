@@ -442,7 +442,7 @@ export function HandProvider({
   }
 
   function markFate(next: Line) {
-    const fate = potFate(seatsInHand(spot.id, out), next, spot.hero);
+    const fate = potFate(seatsInHand(spot.id, out), next, spot.hero, preflopAllin(spot.id));
     if (fate === "win") setResult("win");
     else if (fate === "loss") setResult("fold");
     else setResult("");
@@ -1302,7 +1302,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
   }, [openBoard, hero, drawKey]);
   if (!openBoard) return null;
   const seats = seatsInHand(spot.id, out);
-  const fate = potFate(seats, line, spot.hero);
+  const fate = potFate(seats, line, spot.hero, preflopAllin(spot.id));
   const showRunout = runout || fate === "runout";
   const fillBoard = () => {
     const slots = (["f0", "f1", "f2", "t", "r"] as const).filter((slot) => !cards[slot]);

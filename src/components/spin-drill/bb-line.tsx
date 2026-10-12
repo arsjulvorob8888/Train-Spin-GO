@@ -37,7 +37,7 @@ export function ActionLine({
   range: MixRange;
   selected: string;
   onSpot: (id: string) => void;
-  onMine: (action: MixAction) => void;
+  onMine: (action: MixAction | "") => void;
   onAdvance: () => void;
 }) {
   const [sbAct, setSbAct] = useState<Blind>("");
@@ -60,13 +60,14 @@ export function ActionLine({
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
-    const key = `${spot.group}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
+    if (/jam|push|reshove/.test(spot.id)) return;
+    const key = `${spot.id}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
     if (stamped.current === key) return;
     const action = playable(spot, primary(mixOf(range, selected)));
     if (!spot.actions.includes(action)) return;
     stamped.current = key;
     if (action !== mine) onMine(action);
-  }, [hero, selected, spot.group, spot.hero, spot.actions, bb, range, board.length, mine, onMine]);
+  }, [hero, selected, spot.id, spot.hero, spot.actions, bb, range, board.length, mine, onMine]);
   useEffect(() => {
     if (mine) setPlayed(mine);
   }, [mine, setPlayed]);
@@ -92,7 +93,7 @@ export function ActionLine({
   const jammed = preflopAllin(spot.id);
   const flopDone = board.length >= 3 && streetStatus(order, line, "flop", jammed).closed;
   const turnDone = board.length >= 4 && streetStatus(order, line, "turn", jammed).closed;
-  const fate = board.length >= 3 ? potFate(order, line, spot.hero) : "play";
+  const fate = board.length >= 3 ? potFate(order, line, spot.hero, jammed) : "play";
   const askFlop = live && board.length < 3 && fate === "play";
   const askTurn = flopDone && fate === "play" && board.length < 4;
   const askRiver = turnDone && fate === "play" && board.length < 5;
@@ -189,11 +190,10 @@ export function ActionLine({
                         else setBbAct(action.blind.act);
                         if (spot.group !== "BTN") return;
                         const chart = blindChart(nextSb, nextBb);
-                        const facing = spot.id === "btn_vs_3bet" || spot.id === "btn_vs_jam";
                         if (chart !== spot.id) {
                           onSpot(chart);
                           if (chart === "btn") onMine("raise");
-                          else if (facing && (mine === "fold" || mine === "call" || mine === "allin")) onMine(mine);
+                          else onMine("");
                         }
                         return;
                       }
@@ -204,6 +204,7 @@ export function ActionLine({
                       if (action.pick.spot && action.pick.spot !== spot.id) {
                         if (spot.group !== "BTN") setBbAct("");
                         onSpot(action.pick.spot);
+                        if (!action.pick.mine) onMine("");
                       }
                       if (action.pick.mine) onMine(action.pick.mine);
                     }}
@@ -346,6 +347,7 @@ function preflopFolded(spot: SpotDef, sbAct: Blind, bbAct: Blind, btnAct: Blind)
 function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): boolean {
   if (mine !== "call" && mine !== "raise" && mine !== "allin") return false;
   if (tookPot(spot, mine, sbAct, bbAct, btnAct)) return false;
+  if (/jam|push|reshove/.test(spot.id)) return mine === "call" || mine === "allin";
   if (spot.group === "BTN" && spot.id === "btn") {
     const sbDone = sbAct === "fold" || sbAct === "call";
     const bbDone = bbAct === "fold" || bbAct === "call";

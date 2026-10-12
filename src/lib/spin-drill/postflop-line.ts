@@ -152,10 +152,10 @@ export function streetStatus(order: Seat[], line: Line, street: StreetId, alread
   return { closed: true, seat: null, facing: false, aggressor, action };
 }
 
-/** The hand is over for the hero, or nobody can bet anymore so the board should run out. */
-export function potFate(order: Seat[], line: Line, hero: Seat): "win" | "loss" | "runout" | "play" {
+/** The hand is over for the hero, or every live player has answered the all-in and the board can run out. */
+export function potFate(order: Seat[], line: Line, hero: Seat, alreadyAllin: Seat[] = []): "win" | "loss" | "runout" | "play" {
   const folded = new Set<Seat>();
-  const allin = new Set<Seat>();
+  const allin = new Set<Seat>(alreadyAllin);
   let acted = 0;
   for (const street of ["flop", "turn", "river"] as const) {
     for (const act of line[street]) {
@@ -165,11 +165,19 @@ export function potFate(order: Seat[], line: Line, hero: Seat): "win" | "loss" |
     }
   }
   if (folded.has(hero)) return "loss";
-  if (acted === 0) return "play";
+  if (acted === 0 && alreadyAllin.length === 0) return "play";
   const live = order.filter((seat) => !folded.has(seat));
   if (live.length <= 1) return live[0] === hero ? "win" : "loss";
-  const canAct = live.filter((seat) => !allin.has(seat));
-  if (allin.size > 0 && canAct.length <= 1) return "runout";
+  if (![...allin].some((seat) => live.includes(seat))) return "play";
+  for (const street of ["flop", "turn", "river"] as const) {
+    const hasLine = line[street].length > 0;
+    const carriesJam = street === "flop" && alreadyAllin.some((seat) => live.includes(seat));
+    if (!hasLine && !carriesJam) break;
+    const status = streetStatus(order, line, street, alreadyAllin);
+    if (!status.closed) return "play";
+    const jammedHere = line[street].some((act) => act.action === "allin") || carriesJam;
+    if (jammedHere) return "runout";
+  }
   return "play";
 }
 
