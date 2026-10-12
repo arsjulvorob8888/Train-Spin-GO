@@ -17,11 +17,16 @@ function when(at: number): { day: string; time: string } {
 
 export function CraftTable() {
   const [hands, setHands] = useState<CraftHand[]>([]);
+  const [spins, setSpins] = useState<BankBook["spins"]>([]);
   const [filter, setFilter] = useState("all");
   const [picked, setPicked] = useState<string[]>([]);
   const [editId, setEditId] = useState("");
   useEffect(() => {
     setHands(readCraft());
+    const sync = () => setSpins(readBank().spins);
+    sync();
+    window.addEventListener("spin-bank", sync);
+    return () => window.removeEventListener("spin-bank", sync);
   }, []);
   function reload(next?: CraftHand[]) {
     const rows = next ?? readCraft();
@@ -37,6 +42,8 @@ export function CraftTable() {
   });
   const slice = filter === "50" ? hands.slice(0, 50) : shown;
   const track = trackHands(slice);
+  const spinWins = spins.filter((spin) => spin.won).length;
+  const spinRate = spins.length ? Math.round((spinWins / spins.length) * 1000) / 10 : null;
   const visibleIds = slice.map((hand) => hand.id);
   const allOn = visibleIds.length > 0 && visibleIds.every((id) => picked.includes(id));
   function drop(ids: string[]) {
@@ -65,7 +72,7 @@ export function CraftTable() {
       {hands.length ? (
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">Трекер</h2>
-        <p className="mt-1 text-sm text-muted">Винрейт и EV — по раздачам, в больших блайндах. Деньги турнира — в банке выше: каждый спин списан по своей стоимости, $5 не равен $0.25.</p>
+        <p className="mt-1 text-sm text-muted">Сначала винрейт спинов: сколько турниров выиграно. Дальше винрейт раздач и EV в больших блайндах. Деньги — в банке выше, каждый спин по своей стоимости.</p>
         <div className="mt-3 flex flex-wrap gap-1">
           {[
             ["all", "Все"],
@@ -82,7 +89,8 @@ export function CraftTable() {
           ))}
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat name="Winrate" value={num(track.winrate, "%")} hint={`${track.wins} из ${track.hands} раздач банк ваш. В спине мало: нужен перевес над соперниками, не 33%.`} />
+          <Stat name="Винрейт спинов" value={num(spinRate, "%")} hint={spins.length ? `${spinWins} из ${spins.length} турниров выиграны. Это победа в спине, не в раздаче. Ноль с рейком около 36%.` : "Закройте спин победой или поражением. Пока считаются только раздачи."} />
+          <Stat name="Винрейт раздач" value={num(track.winrate, "%")} hint={`${track.wins} из ${track.hands} раздач банк ваш. В спине мало: нужен перевес над соперниками, не 33%.`} />
           <Stat name="bb/100" value={signed(track.bb100)} hint={`Факт ${signed(track.net)} bb за выборку. Выигрыш — банк, который уже лежал. Проигрыш вскрытия — цена колла. Фолд — 0.`} />
           <Stat name="EV bb/100" value={signed(track.ev100)} hint={`Матожидание ${signed(track.ev)} bb. Колл заменён на эквити × (банк + колл) − колл. Так трекеры убирают удачу борда.`} />
           <Stat name="По чарту" value={num(track.match, "%")} hint="Доля рук, где ваше действие совпало с тем, что сказал солвер." />
