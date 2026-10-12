@@ -830,7 +830,13 @@ export function EquityDesk() {
                 {shown.verdict}
               </p>
               <p className="mt-2 text-sm text-muted">
-                {shown.label === shown.verdict ? "Совпадает с чартом" : `Чарт на этот размер: ${shown.label}`}
+                {shown.street === "Префлоп"
+                  ? shown.label === shown.verdict
+                    ? "Совпадает с чартом"
+                    : `Чарт на этот размер: ${shown.label}`
+                  : shown.made
+                    ? `Комбинация: ${shown.made}${shown.draw ? `, ${shown.draw}` : ""}. Рамка на кнопке — ход солвера.`
+                    : "Рамка на кнопке — ход солвера."}
               </p>
               <p className="mt-1 text-xs text-muted">
                 {shown.street} · {shown.klass}
@@ -1092,14 +1098,14 @@ function StreetColumns({
     live: false,
   }));
   if (!status.closed && status.seat) cols.push({ seat: status.seat, selected: null, live: true });
-  const suggest = status.seat === hero ? suggested(hint, status.facing) : null;
+  const suggest = hint ? suggested(hint, status.facing) : null;
   const sizeAt = cols.reduce((at, col, index) => (col.seat !== hero && raiseSized(col.selected) ? index : at), -1);
   return (
     <>
       {cols.map((col, index) => {
         const prior: Line = { ...line, [only]: acts.slice(0, index) };
         const faced = col.live ? status.facing : streetStatus(seats, prior, only, jammed).facing;
-        const menu = (faced ? FACING_ACTIONS : OPEN_ACTIONS).filter((item) => item.id !== "bet66" && item.id !== "betpot");
+        const menu = faced ? FACING_ACTIONS : OPEN_ACTIONS;
         return (
           <Fragment key={`${col.seat}-${index}`}>
             <div
@@ -1115,7 +1121,8 @@ function StreetColumns({
               <div className="mt-1 flex flex-col">
                 {menu.map((item) => {
                   const on = col.selected === item.id;
-                  const wanted = col.live && col.seat === hero && (suggest === item.id || (item.id === "bet33" && (suggest === "bet66" || suggest === "betpot")));
+                  const mine = col.seat === hero && Boolean(hint) && (col.live || status.closed);
+                  const wanted = mine && suggest === item.id;
                   const bluffWanted = wanted && hint.toLowerCase().startsWith("ставь");
                   return (
                     <button
@@ -1329,6 +1336,8 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
   const finished = handFinished(spot.id, line, board.length, out);
   const over = fate === "win" || fate === "loss";
   const hint = shown?.verdict ?? "";
+  const focus: StreetId = board.length >= 5 ? "river" : board.length >= 4 ? "turn" : "flop";
+  const streetHint = (street: StreetId) => (street === focus ? hint : "");
   const askFlop = board.length < 3;
   const askTurn = flopClosed && fate === "play" && board.length < 4;
   const askRiver = turnClosed && fate === "play" && board.length < 5;
@@ -1348,7 +1357,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           <DrawMark tags={flopDraw} fx={board.length === 3 && flopDraw.length > 0} />
         </div>
         {board.length >= 3 ? (
-          <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
+          <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={streetHint("flop")} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
         ) : null}
         {flopClosed ? <CycleMark label="флоп" /> : null}
         {turnOpen ? null : <StreetClose onAdvance={onAdvance} />}
@@ -1359,7 +1368,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           <DoneMark label={fate === "win" ? "Победа" : "Фолд"} onAdvance={onAdvance} />
         </div>
       ) : null}
-      {flopClosed && fate === "play" ? (
+      {board.length >= 4 || (flopClosed && fate === "play") ? (
         <div ref={board.length < 5 ? latest : undefined} className="flex flex-wrap items-start gap-1">
           <div className={cn("shrink-0 rounded-lg border p-1", askTurn ? "next-step border-ok bg-ok/10" : "border-border")}>
             <p className={cn("px-1 text-[11px] font-medium", askTurn ? "text-ok" : "")}>{askTurn ? "Дальше · тёрн" : "Тёрн"}</p>
@@ -1371,13 +1380,13 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
             <DrawMark tags={turnDraw} fx={board.length === 4 && turnDraw.length > 0} />
           </div>
           {board.length >= 4 ? (
-            <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
+            <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={streetHint("turn")} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
           ) : null}
           {turnClosed ? <CycleMark label="тёрн" /> : null}
           {riverOpen ? null : <StreetClose onAdvance={onAdvance} />}
         </div>
       ) : null}
-      {turnClosed && fate === "play" ? (
+      {board.length >= 5 || (turnClosed && fate === "play") ? (
         <div ref={latest} className="flex flex-wrap items-start gap-1">
           <div className={cn("shrink-0 rounded-lg border p-1", askRiver ? "next-step border-ok bg-ok/10" : "border-border")}>
             <p className={cn("px-1 text-[11px] font-medium", askRiver ? "text-ok" : "")}>{askRiver ? "Дальше · ривер" : "Ривер"}</p>
@@ -1388,7 +1397,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
             <Holding hole={hole} board={board.length >= 5 ? board.slice(0, 5) : []} fx={fxRiver} />
           </div>
           {board.length >= 5 ? (
-            <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
+            <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={streetHint("river")} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
           ) : null}
           {finished ? <DoneMark label={showdown(hole, board)?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
           <StreetClose onAdvance={onAdvance} />

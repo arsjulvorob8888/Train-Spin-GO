@@ -302,15 +302,9 @@ function advice(opts: {
       text: `${opts.street}: сейчас ходит ${opts.waiting}. Эквити ${pct}%, ${hand}${opts.draw ? `, ${opts.draw}` : ""}. Отметь его действие — совет для тебя пересчитается.`,
     };
   }
-  if (opts.street !== "Префлоп" && opts.phase === "done") {
+  if (opts.street !== "Префлоп" && opts.phase === "done" && opts.street !== "Ривер") {
     const hand = opts.made ?? "старшая карта";
     const bare = hand === "старшая карта";
-    if (opts.street === "Ривер") {
-      return {
-        verdict: bare ? "Нет пары" : hand.charAt(0).toUpperCase() + hand.slice(1),
-        text: `Раздача закрыта. ${bare ? "Пары нет, осталась старшая карта." : `Комбинация: ${hand}.`} Эквити против диапазона было ${pct}%. Это итог, следующий ход уже не нужен.`,
-      };
-    }
     return {
       verdict: "Дальше",
       text: `${opts.street} закрыт. Сейчас ${bare ? "пары нет, старшая карта" : hand}${opts.draw ? `, ${opts.draw}` : ""}. Эквити ${pct}%. Открой следующую карту.`,
