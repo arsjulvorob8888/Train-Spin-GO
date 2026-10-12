@@ -559,6 +559,10 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
   const leaks = useMemo(() => leakHands(st), [st]);
 
   useEffect(() => {
+    if (tab === "table" || tab === "stats") setTab("strategy");
+  }, [tab]);
+
+  useEffect(() => {
     setStore(loadStore());
     setHideRange(localStorage.getItem("spin-hide-range") === "1");
     if (!readLive()) publishLive(microStrategy(), false);
@@ -567,9 +571,11 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     if (!params.has("tab")) {
       const saved = localStorage.getItem("spin-open-tab");
       const savedPane = localStorage.getItem("spin-open-pane");
-      const tabs: Tab[] = ["practice", "strategy", "table", "experiment", "sim", "hands", "math", "stats", "journal", "craft", "sources"];
+      const tabs: Tab[] = ["practice", "strategy", "experiment", "sim", "hands", "math", "journal", "craft", "sources"];
       const nextPane: AppPane = savedPane === "anchors" || savedPane === "drill" ? savedPane : "lesson";
-      if (saved && tabs.includes(saved as Tab) && (saved !== "strategy" || nextPane !== "lesson")) {
+      if (saved === "table" || saved === "stats") {
+        void navigate({ to: "/", search: { tab: "strategy", pane: nextPane }, replace: true });
+      } else if (saved && tabs.includes(saved as Tab) && (saved !== "strategy" || nextPane !== "lesson")) {
         void navigate({ to: "/", search: { tab: saved as Tab, pane: nextPane }, replace: true });
       }
     }
@@ -777,11 +783,9 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     { id: "journal", label: "Журнал" },
     { id: "craft", label: "PokerCraft" },
     { id: "sources", label: "Источники" },
-    { id: "table", label: "Раздача" },
     { id: "experiment", label: "GAME" },
     { id: "hands", label: "Комбинации" },
     { id: "math", label: "Математика" },
-    { id: "stats", label: "Статистика" },
   ];
 
   function saveDoc(path: string, filename: string) {
