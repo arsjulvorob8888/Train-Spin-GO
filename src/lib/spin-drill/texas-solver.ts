@@ -3,7 +3,9 @@ import { cardId, type Card } from "@/lib/poker/cards";
 /** Flip to false to drop the TexasSolver file reader without touching the chart. */
 export const TEXAS_ENABLED = true;
 
-const STORAGE_KEY = "spin-texas-v1";
+const LEGACY_KEY = "spin-texas-v1";
+const DB_NAME = "spin-texas";
+const STORE = "boards";
 
 export type TexNode = {
   actions: string[];
@@ -12,43 +14,97 @@ export type TexNode = {
 };
 
 export type TexBook = {
+  id: string;
   board: string[];
   root: TexNode;
   at: number;
-  kept: "saved" | "session";
+  name: string;
 };
 
-let memory: TexBook | null = null;
+const memory = new Map<string, TexBook>();
+let opening: Promise<void> | null = null;
 
-export function readTexas(): TexBook | null {
-  if (!TEXAS_ENABLED) return null;
-  if (memory) return memory;
+function boardId(board: string[]): string {
+  return [...board].sort().join("|");
+}
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function legacyBook(): TexBook | null {
   if (typeof localStorage === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(LEGACY_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as TexBook;
-    if (!parsed?.root || !Array.isArray(parsed.board)) return null;
-    memory = parsed;
-    return parsed;
+    const parsed = JSON.parse(raw) as { board?: string[]; root?: TexNode; at?: number };
+    if (!parsed.root || !Array.isArray(parsed.board)) return null;
+    return { id: boardId(parsed.board), board: parsed.board, root: parsed.root, at: parsed.at ?? Date.now(), name: "файл" };
   } catch {
     return null;
   }
 }
 
-export function writeTexas(book: TexBook | null) {
-  memory = book;
-  if (typeof localStorage === "undefined") return;
-  if (!book) {
-    localStorage.removeItem(STORAGE_KEY);
-    return;
-  }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...book, kept: "saved" }));
-    memory = { ...book, kept: "saved" };
-  } catch {
-    memory = { ...book, kept: "session" };
-  }
+export function loadTexas(): Promise<void> {
+  if (!TEXAS_ENABLED || typeof indexedDB === "undefined") return Promise.resolve();
+  if (opening) return opening;
+  opening = (async () => {
+    const db = await openDb();
+    const rows = await new Promise<TexBook[]>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      const request = tx.objectStore(STORE).getAll();
+      request.onsuccess = () => resolve((request.result as TexBook[]) ?? []);
+      request.onerror = () => reject(request.error);
+    });
+    memory.clear();
+    for (const row of rows) {
+      if (row?.id && row.root) memory.set(row.id, row);
+    }
+    const old = legacyBook();
+    if (old && !memory.has(old.id)) await rememberTexas(old);
+    if (old) localStorage.removeItem(LEGACY_KEY);
+  })().catch(() => undefined);
+  return opening;
+}
+
+export async function rememberTexas(book: TexBook) {
+  memory.set(book.id, book);
+  if (typeof indexedDB === "undefined") return;
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(book);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function forgetTexas(id: string) {
+  memory.delete(id);
+  if (typeof indexedDB === "undefined") return;
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export function texasBoards(): TexBook[] {
+  return [...memory.values()].sort((a, b) => b.at - a.at);
+}
+
+export function texasFor(board: Card[]): TexBook | null {
+  return memory.get(boardId(boardKey(board))) ?? null;
 }
 
 type Raw = Record<string, unknown>;
@@ -74,11 +130,20 @@ function kidsOf(node: Raw): { label: string; raw: Raw }[] {
   });
 }
 
-function slimTable(table: Raw): Record<string, number[]> {
+function slimTable(table: Raw, actions: string[]): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   for (const [key, value] of Object.entries(table)) {
-    if (key === "actions" || key === "strategy" || !Array.isArray(value)) continue;
-    out[key] = value.map((item) => Math.round(Number(item) * 1000) / 1000);
+    if (key === "actions" || key === "strategy") continue;
+    if (Array.isArray(value)) {
+      out[key] = value.map((item) => Math.round(Number(item) * 1000) / 1000);
+      continue;
+    }
+    const row = asRaw(value);
+    if (!row) continue;
+    out[key] = actions.map((action) => {
+      const hit = Object.entries(row).find(([name]) => name.toUpperCase() === action.toUpperCase());
+      return Math.round(Number(hit?.[1] ?? 0) * 1000) / 1000;
+    });
   }
   return out;
 }
@@ -86,10 +151,11 @@ function slimTable(table: Raw): Record<string, number[]> {
 function readTable(node: Raw): { actions: string[]; table: Record<string, number[]> } {
   const strat = asRaw(node.strategy);
   if (strat && Array.isArray(strat.actions) && asRaw(strat.strategy)) {
-    return { actions: strat.actions.map(String), table: slimTable(asRaw(strat.strategy)!) };
+    const actions = strat.actions.map(String);
+    return { actions, table: slimTable(asRaw(strat.strategy)!, actions) };
   }
   const actions = (Array.isArray(node.actions) ? node.actions : Array.isArray(node.valid_actions) ? node.valid_actions : []).map(String);
-  if (strat) return { actions, table: slimTable(strat) };
+  if (strat) return { actions, table: slimTable(strat, actions) };
   return { actions, table: {} };
 }
 
@@ -97,6 +163,20 @@ function slim(node: Raw, depth: number): TexNode {
   const { actions, table } = readTable(node);
   const kids = depth > 0 ? kidsOf(node).map(({ label, raw }) => ({ label, node: slim(raw, depth - 1) })) : [];
   return { actions, table, kids };
+}
+
+export function boardFromDump(value: unknown): string[] | null {
+  const root = asRaw(value);
+  const raw = root?.board ?? root?.board_cards;
+  if (typeof raw === "string") {
+    const cards = raw.split(/[\s,]+/).filter((card) => card.length >= 2);
+    return cards.length >= 3 ? cards : null;
+  }
+  if (Array.isArray(raw)) {
+    const cards = raw.map(String).filter((card) => card.length >= 2);
+    return cards.length >= 3 ? cards : null;
+  }
+  return null;
 }
 
 export function parseTexasDump(value: unknown): TexNode {
@@ -113,9 +193,7 @@ export function boardKey(cards: Card[]): string[] {
 }
 
 function sameBoard(saved: string[], current: string[]): boolean {
-  if (saved.length !== current.length) return false;
-  const left = [...saved].sort().join("|");
-  return left === [...current].sort().join("|");
+  return boardId(saved) === boardId(current);
 }
 
 function matchCombo(table: Record<string, number[]>, hole: [string, string]): number[] | null {
@@ -168,22 +246,21 @@ export type TexasHit = {
   mix: string;
   where: string;
   board: string;
-  kept: TexBook["kept"];
+  name: string;
 };
 
-export function texasHit(book: TexBook, board: Card[], hole: [Card, Card] | null, toCall: number | null, pot: number | null): TexasHit | { miss: string } | null {
+export function texasHit(book: TexBook, board: Card[], hole: [Card, Card] | null, toCall: number | null, pot: number | null, oop: boolean): TexasHit | { miss: string } | null {
   if (!hole || board.length < 3) return null;
   const current = boardKey(board);
-  if (!sameBoard(book.board, current)) {
-    return { miss: `Файл посчитан на ${book.board.join(" ")}, а сейчас другой борд.` };
-  }
+  if (!sameBoard(book.board, current)) return null;
   const cards: [string, string] = [cardId(hole[0]), cardId(hole[1])];
   const facing = toCall != null && toCall > 0;
+  const boardText = book.board.join(" ");
   if (facing) {
     const rootKinds = book.root.actions.map(kind);
     const rootHit = lineFrom(book.root, cards);
     if (rootHit && (rootKinds.includes("FOLD") || rootKinds.includes("CALL"))) {
-      return { ...rootHit, where: "ответ на ставку", board: book.board.join(" "), kept: book.kept };
+      return { ...rootHit, where: "ответ на ставку", board: boardText, name: book.name };
     }
     const target = pot != null && pot > 0 ? (toCall / pot) * 100 : null;
     let best: TexNode | null = null;
@@ -203,13 +280,16 @@ export function texasHit(book: TexBook, board: Card[], hole: [Card, Card] | null
       }
     }
     const hit = best ? lineFrom(best, cards) : null;
-    if (hit) return { ...hit, where: `после ${label || "ставки"}`, board: book.board.join(" "), kept: book.kept };
-    return { miss: "Этой руки нет в ответе на ставку. Проверьте диапазон, с которым считали файл." };
+    if (hit) return { ...hit, where: `в позиции после ${label || "ставки"}`, board: boardText, name: book.name };
+    return { miss: "Этой руки нет в ответе на ставку. В диапазон файла она не входила." };
   }
-  const own = lineFrom(book.root, cards);
-  if (own) return { ...own, where: "без ставки, первый ход", board: book.board.join(" "), kept: book.kept };
+  if (oop) {
+    const own = lineFrom(book.root, cards);
+    if (own) return { ...own, where: "без позиции, первый ход", board: boardText, name: book.name };
+    return { miss: "Этой руки нет в линии без позиции. В диапазон файла она не входила." };
+  }
   const checked = book.root.kids.find((kid) => kind(kid.label) === "CHECK");
   const after = checked ? lineFrom(checked.node, cards) : null;
-  if (after) return { ...after, where: "после чека", board: book.board.join(" "), kept: book.kept };
-  return { miss: "Этой руки нет в файле. В диапазон TexasSolver она не входила." };
+  if (after) return { ...after, where: "в позиции, после чека", board: boardText, name: book.name };
+  return { miss: "После чека этой руки в файле нет. Линия без позиции для вас уже не ход." };
 }

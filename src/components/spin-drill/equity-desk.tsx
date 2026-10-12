@@ -869,7 +869,7 @@ export function EquityDesk() {
             draw={shown.draw ?? null}
             pot={pot}
           />
-          <TexasPanel board={board} hole={hero} toCall={toCall} pot={pot} />
+          <TexasPanel board={board} hole={hero} toCall={toCall} pot={pot} oop={!line[board.length >= 5 ? "river" : board.length === 4 ? "turn" : "flop"].some((act) => act.action === "check")} />
           </>
         ) : (
           <p className="text-sm text-muted">Отметьте карты слева. Решение, эквити и пот-оддс появятся в этом блоке, рядом с рейнджем.</p>
