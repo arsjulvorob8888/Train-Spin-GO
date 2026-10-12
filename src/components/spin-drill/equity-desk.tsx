@@ -470,18 +470,25 @@ export function HandProvider({
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
 }
 
-export function StartBank({ onStack, onStarted, onSeat }: { onStack: (bb: number) => void; onStarted?: () => void; onSeat?: (seat: "BTN" | "SB" | "BB" | "HU") => void }) {
+export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb: number) => void; onAuto?: (bb: number) => void; onStarted?: () => void; onSeat?: (seat: "BTN" | "SB" | "BB" | "HU") => void }) {
   const [saved, setSaved] = useState(0);
   const [ready, setReady] = useState(false);
   const [ending, setEnding] = useState(false);
   const [later, setLater] = useState(false);
   const [seatAsk, setSeatAsk] = useState(false);
   const [status, setStatus] = useState<ReturnType<typeof blindStatus>>(null);
+  const sent = useRef<number | null>(null);
+  const autoRef = useRef(onAuto);
+  autoRef.current = onAuto;
   useEffect(() => {
     const tick = () => {
       const next = blindStatus();
       setStatus(next);
       setSaved(readPrize()?.prize ?? 0);
+      if (next && next.stack !== sent.current) {
+        sent.current = next.stack;
+        autoRef.current?.(next.stack);
+      }
     };
     tick();
     setReady(true);
@@ -497,7 +504,7 @@ export function StartBank({ onStack, onStarted, onSeat }: { onStack: (bb: number
       window.removeEventListener("spin-blind", tick);
       window.removeEventListener("spin-new-game", reopen);
     };
-  }, [onStack]);
+  }, []);
   function finish(won: boolean) {
     const current = readPrize();
     const item = PRIZES.find((prize) => prize.prize === current?.prize);

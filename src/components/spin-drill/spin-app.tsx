@@ -43,6 +43,7 @@ import {
 } from "@/lib/spin-drill/stats";
 import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
+import { Consultants } from "@/components/spin-drill/consultants";
 import { CraftTable } from "@/components/spin-drill/craft-view";
 import { clearBlind, retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
@@ -53,7 +54,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-export type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft";
+export type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft" | "sources";
 export type AppPane = "lesson" | "anchors" | "drill";
 
 const KEYS: Record<string, MixAction> = {
@@ -282,7 +283,17 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
   );
 }
 
-function SeatStacks({ hero, stacks, onChange }: { hero: "BTN" | "SB" | "BB"; stacks: TableStacks; onChange: (seat: keyof TableStacks, value: number) => void }) {
+function SeatStacks({
+  hero,
+  stacks,
+  pins,
+  onChange,
+}: {
+  hero: "BTN" | "SB" | "BB";
+  stacks: TableStacks;
+  pins: Record<keyof TableStacks, boolean>;
+  onChange: (seat: keyof TableStacks, value: number) => void;
+}) {
   return (
     <div className="flex items-end gap-1">
       {(["BTN", "SB", "BB"] as const).map((seat) => {
@@ -290,6 +301,7 @@ function SeatStacks({ hero, stacks, onChange }: { hero: "BTN" | "SB" | "BB"; sta
         return (
           <label key={seat} className={cn("block text-[10px] font-medium uppercase", mine ? "text-ok" : "text-subtle")}>
             {mine ? "Вы" : seat}
+            {pins[seat] ? " · правка" : ""}
             <input
               inputMode="decimal"
               defaultValue={String(stacks[seat])}
@@ -518,6 +530,8 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
   const [stacks, setStacks] = useState<TableStacks>({ BTN: 15, SB: 14.5, BB: 14 });
+  const pins = useRef<Record<keyof TableStacks, boolean>>({ BTN: false, SB: false, BB: false });
+  const [pinView, setPinView] = useState<Record<keyof TableStacks, boolean>>({ BTN: false, SB: false, BB: false });
   const [live, setLive] = useState<LiveStrategy | null>(null);
   const [cardAsk, setCardAsk] = useState(0);
   const [stackOpen, setStackOpen] = useState(false);
@@ -552,7 +566,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     if (!params.has("tab")) {
       const saved = localStorage.getItem("spin-open-tab");
       const savedPane = localStorage.getItem("spin-open-pane");
-      const tabs: Tab[] = ["practice", "strategy", "table", "experiment", "sim", "hands", "math", "stats", "journal", "craft"];
+      const tabs: Tab[] = ["practice", "strategy", "table", "experiment", "sim", "hands", "math", "stats", "journal", "craft", "sources"];
       const nextPane: AppPane = savedPane === "anchors" || savedPane === "drill" ? savedPane : "lesson";
       if (saved && tabs.includes(saved as Tab) && (saved !== "strategy" || nextPane !== "lesson")) {
         void navigate({ to: "/", search: { tab: saved as Tab, pane: nextPane }, replace: true });
@@ -678,8 +692,29 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
 
   function tuneStack(next: number) {
     setBb(next);
+    pins.current = { BTN: false, SB: false, BB: false };
+    setPinView({ BTN: false, SB: false, BB: false });
     setStacks(splitStacks(next));
     retargetChips(next);
+  }
+
+  function autoStack(next: number) {
+    setBb(next);
+    const lock = pins.current;
+    setStacks((prev) => {
+      const base = splitStacks(next);
+      return {
+        BTN: lock.BTN ? prev.BTN : base.BTN,
+        SB: lock.SB ? prev.SB : base.SB,
+        BB: lock.BB ? prev.BB : base.BB,
+      };
+    });
+  }
+
+  function correctStack(seat: keyof TableStacks, value: number) {
+    pins.current = { ...pins.current, [seat]: true };
+    setPinView({ ...pins.current });
+    setStacks((prev) => ({ ...prev, [seat]: value }));
   }
 
   function takeStack(next: number) {
@@ -740,6 +775,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     { id: "strategy", label: "Стратегия" },
     { id: "journal", label: "Журнал" },
     { id: "craft", label: "PokerCraft" },
+    { id: "sources", label: "Источники" },
     { id: "table", label: "Раздача" },
     { id: "experiment", label: "GAME" },
     { id: "hands", label: "Комбинации" },
@@ -827,6 +863,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
           <section className="rounded-2xl border border-border bg-surface p-4">
               <StartBank
                 onStack={tuneStack}
+                onAuto={autoStack}
                 onSeat={(seat) => {
                   const first = spotsIn(seat)[0];
                   if (first) {
@@ -851,7 +888,11 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                     <>
                       <StackType bb={bb} onChange={tuneStack} />
                       <NewHand onAdvance={advanceSeat} />
-                      <SeatStacks hero={spot.hero} stacks={stacks} onChange={(seat, value) => setStacks((prev) => ({ ...prev, [seat]: value }))} />
+                      <SeatStacks hero={spot.hero} stacks={stacks} pins={pinView} onChange={correctStack} />
+                      <div className="grid h-11 min-w-[4.5rem] place-items-center rounded-xl border-2 border-ok bg-ok/15 px-2" title={depth.why}>
+                        <span className="text-[9px] font-medium uppercase leading-none text-ok">Эфф.</span>
+                        <span className="font-mono text-lg font-semibold leading-none">{depth.bb}</span>
+                      </div>
                       <NewGame onStart={beginSpin} />
                       <PotFields />
                       <button
@@ -911,6 +952,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
         {tab === "sim" && <SimLab />}
         {tab === "journal" && <JournalPanel />}
         {tab === "craft" && <CraftTable />}
+        {tab === "sources" && <Consultants />}
 
         {tab === "practice" && (
           <div className="space-y-4">

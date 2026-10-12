@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SpinApp, type AppPane, type Tab } from "@/components/spin-drill/spin-app";
 
-const TABS: Tab[] = ["practice", "strategy", "table", "experiment", "sim", "hands", "math", "stats", "journal", "craft"];
+const TABS: Tab[] = ["practice", "strategy", "table", "experiment", "sim", "hands", "math", "stats", "journal", "craft", "sources"];
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): { tab?: Tab; pane?: AppPane } => {
