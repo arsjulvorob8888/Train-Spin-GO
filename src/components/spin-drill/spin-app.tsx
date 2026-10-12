@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { MiniCard, PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { StackRail } from "@/components/spin-drill/stack-rail";
 import { ActionLine } from "@/components/spin-drill/bb-line";
-import { EquityDesk, HandProvider, PotFields, QuickLine, StartBank, useHand } from "@/components/spin-drill/equity-desk";
+import { EquityDesk, HandProvider, QuickLine, StartBank, useHand } from "@/components/spin-drill/equity-desk";
 import { HandSim } from "@/components/spin-drill/hand-sim";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { MathDrill } from "@/components/spin-drill/math-drill";
@@ -895,14 +895,6 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                         <span className="font-mono text-lg font-semibold leading-none">{depth.bb}</span>
                       </div>
                       <NewGame onStart={beginSpin} />
-                      <PotFields />
-                      <button
-                        type="button"
-                        onClick={() => setCardAsk((n) => n + 1)}
-                        className="h-11 rounded-full border border-fg bg-fg px-4 text-sm font-semibold text-bg"
-                      >
-                        Карты
-                      </button>
                     </>
                   }
                 />
