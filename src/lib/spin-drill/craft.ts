@@ -16,8 +16,9 @@ export const PRIZES: { prize: number; bb: number; buy: number; note: string }[] 
   { prize: 50, bb: 40, buy: 1, note: "$1 · x100" },
 ];
 
-export const BUYINS = [0.25, 1, 2, 3, 5, 10, 20, 50, 100];
+export const BUYINS = [0.25, 1, 3, 5, 10, 20, 50, 100, 200];
 
+/** PokerOK 3-max Spin & Gold multipliers. The prize in the middle of the table is buy-in × multiplier. */
 const MULTS: { mult: number; bb: number }[] = [
   { mult: 2, bb: 15 },
   { mult: 3, bb: 15 },
@@ -33,16 +34,14 @@ export function money(amount: number): string {
   return `$${text}`;
 }
 
-/** Banks for a buy-in. $0.25 and $1 keep the prizes already used; other stakes use the same multipliers. */
-export function prizesFor(buy: number): { prize: number; bb: number; buy: number; note: string }[] {
-  const known = PRIZES.filter((item) => item.buy === buy);
-  const extra = MULTS.map((row) => ({
+export function prizesFor(buy: number): { prize: number; bb: number; buy: number; mult: number; note: string }[] {
+  return MULTS.map((row) => ({
     prize: Math.round(buy * row.mult * 100) / 100,
     bb: row.bb,
     buy,
-    note: `${money(buy)} · x${row.mult}`,
-  })).filter((row) => !known.some((item) => Math.abs(item.prize - row.prize) < 0.001));
-  return [...known, ...extra];
+    mult: row.mult,
+    note: `${money(buy)} · x${row.mult} · старт ${row.bb}bb`,
+  }));
 }
 
 /** PokerOK Spin & Gold 3-max ladder. The same steps for every multiplier. */

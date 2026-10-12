@@ -589,10 +589,10 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   if (!status && !later) {
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
-          <h2 className="text-lg font-semibold">Новая игра</h2>
+        <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-4">
+          <h2 className="text-lg font-semibold">Какой турнир?</h2>
           {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
-          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-subtle">Стоимость турнира</p>
+          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-subtle">Стоимость</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {BUYINS.map((amount) => (
               <button
@@ -607,12 +607,12 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
           </div>
           <p className="mt-4 text-[11px] font-medium uppercase tracking-wide text-subtle">Банк</p>
           {buy == null ? (
-            <p className="mt-2 text-sm text-muted">Сначала выберите стоимость. Банк откроется под неё.</p>
+            <p className="mt-2 text-sm text-muted">Сначала стоимость. Банк ниже станет в два, три и дальше раз больше неё.</p>
           ) : (
             <div className="mt-2 flex flex-wrap gap-2">
               {prizesFor(buy).map((item) => (
                 <button
-                  key={item.prize}
+                  key={item.mult}
                   type="button"
                   title={item.note}
                   onClick={() => {
@@ -623,9 +623,10 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
                     onStack(startBlind(item.prize, item.buy));
                     setSeatAsk(true);
                   }}
-                  className={cn("h-11 rounded-full px-3 font-mono text-sm", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
+                  className={cn("h-12 min-w-16 rounded-full px-3 text-sm", saved === item.prize && stake === item.buy ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
                 >
-                  {money(item.prize)}
+                  <span className="block font-mono leading-tight">{money(item.prize)}</span>
+                  <span className="block text-[10px] leading-tight opacity-70">x{item.mult}</span>
                 </button>
               ))}
             </div>
