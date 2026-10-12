@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, removeSpins, setBankCash, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
+import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, removeSpins, setBankCash, setBankLine, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -355,6 +355,11 @@ function money(value: number): string {
 function BankRoll() {
   const [book, setBook] = useState<BankBook | null>(null);
   const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [start, setStart] = useState("");
+  const [profitText, setProfitText] = useState("");
+  const [spinsText, setSpinsText] = useState("");
+  const [winsText, setWinsText] = useState("");
   useEffect(() => {
     const sync = () => {
       const next = readBank();
@@ -368,17 +373,75 @@ function BankRoll() {
   if (!book) return null;
   const profit = Math.round((book.cash - book.anchor) * 100) / 100;
   const spent = book.spins.reduce((sum, spin) => sum + spin.buy, 0);
-  const roi = spent > 0 ? Math.round(((book.cash - book.anchor) / spent) * 1000) / 10 : null;
-  const wins = book.spins.filter((spin) => spin.won).length;
+  const roi = spent > 0 ? Math.round((profit / spent) * 1000) / 10 : null;
+  const realWins = book.spins.filter((spin) => spin.won).length;
+  const spins = Math.max(0, book.spins.length + book.spinAdjust);
+  const wins = Math.max(0, realWins + book.winAdjust);
+  function openEdit() {
+    setStart(book!.anchor.toFixed(2).replace(".", ","));
+    setProfitText(profit.toFixed(2).replace(".", ","));
+    setSpinsText(String(spins));
+    setWinsText(String(wins));
+    setEditing(true);
+  }
+  function parseMoney(value: string) {
+    const n = Number(value.replace(",", ".").replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  }
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
       <h2 className="text-lg font-semibold">Банк</h2>
       <p className="mt-1 font-mono text-3xl font-semibold">{money(book.cash)}</p>
-      <p className="mt-1 text-sm text-muted">
-        Старт {money(book.anchor)} · профит {profit > 0 ? "+" : ""}
-        {money(profit)} · спинов {book.spins.length} · побед {wins}
-        {roi == null ? "" : ` · ROI ${roi}%`}
-      </p>
+      {editing ? (
+        <form
+          className="mt-2 flex flex-wrap items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const anchor = parseMoney(start);
+            const nextProfit = parseMoney(profitText);
+            const nextSpins = Number(spinsText.replace(",", "."));
+            const nextWins = Number(winsText.replace(",", "."));
+            if (anchor == null || nextProfit == null || !Number.isFinite(nextSpins) || !Number.isFinite(nextWins)) return;
+            setBankCash(Math.round((anchor + nextProfit) * 100) / 100);
+            setBankLine(anchor, nextSpins, nextWins);
+            setEditing(false);
+          }}
+        >
+          <label className="text-[10px] uppercase tracking-wide text-subtle">
+            Старт
+            <input value={start} onChange={(event) => setStart(event.target.value)} aria-label="Стартовый банк" className="mt-1 block h-8 w-24 rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg normal-case" />
+          </label>
+          <label className="text-[10px] uppercase tracking-wide text-subtle">
+            Профит
+            <input value={profitText} onChange={(event) => setProfitText(event.target.value)} aria-label="Профит" className="mt-1 block h-8 w-24 rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg normal-case" />
+          </label>
+          <label className="text-[10px] uppercase tracking-wide text-subtle">
+            Спинов
+            <input value={spinsText} onChange={(event) => setSpinsText(event.target.value)} aria-label="Число спинов" className="mt-1 block h-8 w-16 rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg normal-case" />
+          </label>
+          <label className="text-[10px] uppercase tracking-wide text-subtle">
+            Побед
+            <input value={winsText} onChange={(event) => setWinsText(event.target.value)} aria-label="Число побед" className="mt-1 block h-8 w-16 rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg normal-case" />
+          </label>
+          <button type="submit" className="h-8 rounded-full bg-fg px-3 text-xs text-bg">
+            Сохранить
+          </button>
+          <button type="button" onClick={() => setEditing(false)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg">
+            Отмена
+          </button>
+        </form>
+      ) : (
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+          <span>
+            Старт {money(book.anchor)} · профит {profit > 0 ? "+" : ""}
+            {money(profit)} · спинов {spins} · побед {wins}
+            {roi == null ? "" : ` · ROI ${roi}%`}
+          </span>
+          <button type="button" onClick={openEdit} className="h-7 rounded-full bg-surface-2 px-2 text-xs text-fg">
+            Изменить
+          </button>
+        </p>
+      )}
       <form
         className="mt-3 flex flex-wrap items-center gap-2"
         onSubmit={(event) => {

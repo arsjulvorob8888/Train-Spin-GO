@@ -148,20 +148,28 @@ export type BankBook = {
   cash: number;
   anchor: number;
   spins: BankSpin[];
+  spinAdjust: number;
+  winAdjust: number;
 };
 
 const BANK_KEY = "spin-bank-v1";
 const BANK_START = 24.41;
 
 export function readBank(): BankBook {
-  const empty = { cash: BANK_START, anchor: BANK_START, spins: [] as BankSpin[] };
+  const empty = { cash: BANK_START, anchor: BANK_START, spins: [] as BankSpin[], spinAdjust: 0, winAdjust: 0 };
   if (typeof localStorage === "undefined") return empty;
   try {
     const raw = localStorage.getItem(BANK_KEY);
     if (!raw) return empty;
     const parsed = JSON.parse(raw) as BankBook;
     if (typeof parsed.cash !== "number") return empty;
-    return { cash: parsed.cash, anchor: typeof parsed.anchor === "number" ? parsed.anchor : BANK_START, spins: Array.isArray(parsed.spins) ? parsed.spins : [] };
+    return {
+      cash: parsed.cash,
+      anchor: typeof parsed.anchor === "number" ? parsed.anchor : BANK_START,
+      spins: Array.isArray(parsed.spins) ? parsed.spins : [],
+      spinAdjust: typeof parsed.spinAdjust === "number" ? parsed.spinAdjust : 0,
+      winAdjust: typeof parsed.winAdjust === "number" ? parsed.winAdjust : 0,
+    };
   } catch {
     return empty;
   }
@@ -200,6 +208,21 @@ export function removeSpins(ids: string[]): BankBook {
 export function setBankCash(cash: number) {
   const book = readBank();
   writeBank({ ...book, cash: Math.round(cash * 100) / 100 });
+}
+
+/** Correct the summary line. Cash stays put: profit and start stay consistent with it. */
+export function setBankLine(anchor: number, spins: number, wins: number) {
+  const book = readBank();
+  const start = Math.round(anchor * 100) / 100;
+  const realWins = book.spins.filter((spin) => spin.won).length;
+  const next = {
+    ...book,
+    anchor: start,
+    spinAdjust: Math.round(spins) - book.spins.length,
+    winAdjust: Math.round(wins) - realWins,
+  };
+  writeBank(next);
+  return next;
 }
 
 /** Winner takes the displayed prize and has already paid the buy-in. A loss costs the buy-in. */
