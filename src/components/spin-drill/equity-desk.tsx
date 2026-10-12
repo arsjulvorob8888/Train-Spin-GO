@@ -363,6 +363,7 @@ export function HandProvider({
       id,
       at: Date.now(),
       prize: prize?.prize ?? null,
+      buy: prize?.buy ?? readBlind()?.buy ?? null,
       bb,
       spotId: spot.id,
       spotTitle: spot.title,

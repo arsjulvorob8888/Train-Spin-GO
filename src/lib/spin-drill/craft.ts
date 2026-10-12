@@ -319,6 +319,7 @@ export type CraftHand = {
   id: string;
   at: number;
   prize: number | null;
+  buy?: number | null;
   bb: number;
   spotId: string;
   spotTitle: string;
@@ -398,6 +399,42 @@ export function findCraft(id: string): CraftHand | null {
   return readCraft().find((item) => item.id === id) ?? null;
 }
 
+export type StakeRow = {
+  buy: number;
+  games: number;
+  wins: number;
+  spent: number;
+  net: number;
+  roi: number | null;
+  win: number | null;
+};
+
+/** Dollar result of closed spins, one row per buy-in. A $5 loss is not a $0.25 loss. */
+export function stakeRows(spins: BankSpin[]): StakeRow[] {
+  const map = new Map<number, StakeRow>();
+  for (const spin of spins) {
+    const row = map.get(spin.buy) ?? { buy: spin.buy, games: 0, wins: 0, spent: 0, net: 0, roi: null, win: null };
+    row.games += 1;
+    if (spin.won) row.wins += 1;
+    row.spent += spin.buy;
+    row.net += spin.won ? spin.prize - spin.buy : -spin.buy;
+    map.set(spin.buy, row);
+  }
+  return [...map.values()]
+    .map((row) => {
+      const spent = Math.round(row.spent * 100) / 100;
+      const net = Math.round(row.net * 100) / 100;
+      return {
+        ...row,
+        spent,
+        net,
+        roi: spent > 0 ? Math.round((net / spent) * 1000) / 10 : null,
+        win: row.games > 0 ? Math.round((row.wins / row.games) * 1000) / 10 : null,
+      };
+    })
+    .sort((a, b) => a.buy - b.buy);
+}
+
 export type GameGroup = {
   id: string;
   at: number;
@@ -444,11 +481,12 @@ export function groupGames(hands: CraftHand[], spins: BankSpin[]): GameGroup[] {
       hands: (buckets.get(spin.id) ?? []).sort((a, b) => b.at - a.at),
     }));
   if (rest.length) {
+    const tagged = rest.find((hand) => hand.buy != null || hand.prize != null);
     rows.unshift({
       id: "open",
       at: Math.max(...rest.map((hand) => hand.at)),
-      buy: null,
-      prize: null,
+      buy: tagged?.buy ?? null,
+      prize: tagged?.prize ?? null,
       won: null,
       cash: null,
       hands: rest.sort((a, b) => b.at - a.at),

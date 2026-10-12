@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, removeSpins, setBankCash, setBankLine, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
+import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, removeSpins, setBankCash, setBankLine, stakeRows, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -65,7 +65,7 @@ export function CraftTable() {
       {hands.length ? (
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">Трекер</h2>
-        <p className="mt-1 text-sm text-muted">Как PokerTracker по вашим раздачам: винрейт, фактические фишки и EV решения. ROI спина в долларах здесь нет — в архиве руки, а не финиш турнира.</p>
+        <p className="mt-1 text-sm text-muted">Винрейт и EV — по раздачам, в больших блайндах. Деньги турнира — в банке выше: каждый спин списан по своей стоимости, $5 не равен $0.25.</p>
         <div className="mt-3 flex flex-wrap gap-1">
           {[
             ["all", "Все"],
@@ -460,6 +460,7 @@ function BankRoll() {
         </button>
       </form>
       <SampleBar spins={book.spins} />
+      <StakeTable spins={book.spins} />
     </section>
   );
 }
@@ -499,10 +500,44 @@ function SampleBar({ spins }: { spins: BankBook["spins"] }) {
         <p className="mt-2 text-sm">
           Побед {wins} из {n}, {Math.round(rate * 1000) / 10}%. Ноль с учётом рейка около 36%.
           {error != null ? ` Коридор ${Math.max(0, Math.round((rate - error) * 1000) / 10)}–${Math.min(100, Math.round((rate + error) * 1000) / 10)}%.` : ""}
-          {roi != null ? ` ROI ${roi >= 0 ? "+" : ""}${Math.round(roi * 1000) / 10}% на $${Math.round(spent * 100) / 100} бай-инов.` : ""}
+          {roi != null ? ` Профит ${net >= 0 ? "+" : ""}${money(net)}. ROI ${roi >= 0 ? "+" : ""}${Math.round(roi * 1000) / 10}% на вложенные ${money(spent)}.` : ""}
         </p>
       ) : null}
-      <p className="mt-1 text-xs text-subtle">Считаются только закрытые спины, не ручная правка строки банка. 50 игр для этого мало, сто — первая отсечка, не приговор.</p>
+      <p className="mt-1 text-xs text-subtle">Считаются только закрытые спины. ROI — доллары профита на доллары бай-инов, поэтому дорогой турнир весит больше дешёвого. Разбивка по стоимости ниже.</p>
+    </div>
+  );
+}
+
+function StakeTable({ spins }: { spins: BankBook["spins"] }) {
+  const rows = stakeRows(spins);
+  if (!rows.length) return null;
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <p className="text-xs font-medium uppercase tracking-wide text-subtle">По стоимости турнира</p>
+      <table className="mt-1 w-full text-left text-sm">
+        <thead className="text-[10px] uppercase tracking-wide text-subtle">
+          <tr>
+            <th className="py-1 pr-3 font-medium">Бай-ин</th>
+            <th className="py-1 pr-3 font-medium">Игр</th>
+            <th className="py-1 pr-3 font-medium">Побед</th>
+            <th className="py-1 pr-3 font-medium">Вложено</th>
+            <th className="py-1 pr-3 font-medium">Профит</th>
+            <th className="py-1 font-medium">ROI</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.buy} className="border-t border-border">
+              <td className="py-1 pr-3 font-mono">{money(row.buy)}</td>
+              <td className="py-1 pr-3 font-mono">{row.games}</td>
+              <td className="py-1 pr-3 font-mono">{row.wins}{row.win != null ? ` · ${row.win}%` : ""}</td>
+              <td className="py-1 pr-3 font-mono">{money(row.spent)}</td>
+              <td className={row.net >= 0 ? "py-1 pr-3 font-mono text-ok" : "py-1 pr-3 font-mono text-bad"}>{row.net > 0 ? "+" : ""}{money(row.net)}</td>
+              <td className={row.roi != null && row.roi >= 0 ? "py-1 font-mono text-ok" : "py-1 font-mono text-bad"}>{row.roi == null ? "—" : `${row.roi > 0 ? "+" : ""}${row.roi}%`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -619,7 +654,8 @@ function Report({ hand }: { hand: CraftHand }) {
       <header>
         <p className="font-mono text-xs text-subtle">
           {stamp.day} · {stamp.time}
-          {hand.prize != null ? ` · банк спина $${hand.prize}` : ""} · старт {hand.bb}bb
+          {hand.buy != null ? ` · бай-ин $${hand.buy}` : ""}
+          {hand.prize != null ? ` · банк $${hand.prize}` : ""} · старт {hand.bb}bb
         </p>
         <h1 className="mt-1 text-2xl font-semibold">
           {hand.heroSeat} · {hand.hole || hand.klass || "без карт"} · {placeText(hand.result)}

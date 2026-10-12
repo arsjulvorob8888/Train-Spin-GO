@@ -1,3 +1,4 @@
+import { BUYINS } from "@/lib/spin-drill/craft";
 import { journalSummary, readJournal, writeJournal, type SeatMark, type SessionLog } from "@/lib/spin-drill/journal";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
@@ -10,7 +11,7 @@ const MARKS: { id: SeatMark; label: string }[] = [
 
 export function JournalPanel() {
   const [rows, setRows] = useState<SessionLog[]>(() => readJournal());
-  const [stake, setStake] = useState<0.25 | 1>(0.25);
+  const [stake, setStake] = useState(1);
   const [games, setGames] = useState("20");
   const [profit, setProfit] = useState("0");
   const [note, setNote] = useState("");
@@ -46,7 +47,7 @@ export function JournalPanel() {
           Сюда пишется то, что случилось за столом. Солвер сам рейндж не переписывает: сначала выборка, потом одна правка в симуляторе.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {([0.25, 1] as const).map((value) => (
+          {BUYINS.map((value) => (
             <button key={value} type="button" onClick={() => setStake(value)} className={cn("h-10 rounded-md px-3 text-sm", stake === value ? "bg-fg text-bg" : "border border-border")}>
               ${value}
             </button>
@@ -78,9 +79,8 @@ export function JournalPanel() {
       <section className="rounded-2xl border border-border bg-surface p-4">
         <div className="flex flex-wrap gap-6 font-mono text-sm">
           <p>Игр {summary.games}</p>
-          <p className={summary.profit >= 0 ? "text-ok" : "text-bad"}>
-            {summary.profit >= 0 ? "+" : ""}
-            {summary.profit.toFixed(1)} бай-инов
+          <p className={summary.dollars >= 0 ? "text-ok" : "text-bad"}>
+            {summary.dollars >= 0 ? "+" : ""}${summary.dollars.toFixed(2)}
           </p>
           <p className={summary.roi >= 0 ? "text-ok" : "text-bad"}>ROI {summary.roi.toFixed(1)}%</p>
           <p className="text-muted">рейк поля {summary.field}%</p>

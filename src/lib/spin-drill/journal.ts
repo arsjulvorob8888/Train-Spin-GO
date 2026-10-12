@@ -3,7 +3,7 @@ export type SeatMark = "nit" | "station" | "lag";
 export type SessionLog = {
   id: string;
   at: string;
-  stake: 0.25 | 1;
+  stake: number;
   games: number;
   profit: number;
   saw: Record<SeatMark, number>;
@@ -31,7 +31,9 @@ export function writeJournal(rows: SessionLog[]) {
 export function journalSummary(rows: SessionLog[]) {
   const games = rows.reduce((sum, row) => sum + row.games, 0);
   const profit = rows.reduce((sum, row) => sum + row.profit, 0);
-  const roi = games ? (profit / games) * 100 : 0;
+  const spent = rows.reduce((sum, row) => sum + row.games * (row.stake || 0), 0);
+  const dollars = rows.reduce((sum, row) => sum + row.profit * (row.stake || 0), 0);
+  const roi = spent ? (dollars / spent) * 100 : games ? (profit / games) * 100 : 0;
   const saw = { nit: 0, station: 0, lag: 0 };
   for (const row of rows) {
     saw.nit += row.saw?.nit ?? 0;
@@ -47,5 +49,5 @@ export function journalSummary(rows: SessionLog[]) {
   if (saw.station > saw.nit && saw.station > saw.lag && saw.station >= 3) text += " Пометки — колл-станции: блеф остаётся выключенным, ставите велью.";
   else if (saw.nit > saw.station && saw.nit > saw.lag && saw.nit >= 3) text += " Пометки — ниты: стил только по клетке, их пуш не коллировать шире.";
   else if (saw.lag > saw.nit && saw.lag > saw.station && saw.lag >= 3) text += " Пометки — агрессивные: не раздувайте банк без руки, их рейз чаще сила.";
-  return { games, profit, roi, saw, text, field };
+  return { games, profit, spent, dollars, roi, saw, text, field };
 }
