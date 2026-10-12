@@ -320,6 +320,21 @@
   animation: next-step 1.15s ease-in-out infinite;
 }
 
+@keyframes street-float {
+  from {
+    transform: translateY(-1.25rem);
+    opacity: 0.35;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.street-float {
+  animation: street-float 0.28s ease-out;
+}
+
 @keyframes hand-pop {
   0% {
     transform: scale(0.9);
