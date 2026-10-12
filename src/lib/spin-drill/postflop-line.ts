@@ -264,9 +264,10 @@ export function facingPrice(
   hero: Seat,
   bb: number,
   typedPot: number | null,
+  stacks?: Partial<Record<Seat, number>>,
 ): { toCall: number; pot: number } {
-  const heroLeft = seatStack(hero, bb);
-  const oppLeft = seatStack(facing.seat, bb);
+  const heroLeft = stacks?.[hero] ?? seatStack(hero, bb);
+  const oppLeft = stacks?.[facing.seat] ?? seatStack(facing.seat, bb);
   if (facing.action === "allin") {
     const toCall = Math.min(heroLeft, oppLeft);
     const pot = typedPot != null && typedPot > 0 ? typedPot : roundBb(1.5 + oppLeft);

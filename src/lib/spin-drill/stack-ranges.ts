@@ -222,6 +222,40 @@ export function stackNote(bb: number): string {
   return "Глубже 25bb пуш с баттона почти пропадает. Открытие — минрейз, чуть аккуратнее.";
 }
 
+export type TableStacks = { BTN: number; SB: number; BB: number };
+
+function rivalSeats(spotId: string): ("BTN" | "SB" | "BB")[] {
+  if (spotId.startsWith("hu_")) return spotId === "hu_sb" ? ["BB"] : ["SB"];
+  if (spotId === "btn" || spotId === "btn_vs_3bet" || spotId === "btn_vs_jam") return ["SB", "BB"];
+  if (spotId === "sb_fold" || spotId === "sb_iso" || spotId === "sb_vs_bb_jam") return ["BB"];
+  if (spotId.startsWith("sb_")) return ["BTN", "BB"];
+  if (spotId.startsWith("bb_vs_btn")) return ["BTN"];
+  if (spotId.startsWith("bb_vs_sb")) return ["SB"];
+  return ["BTN", "SB"];
+}
+
+/** Which chart depth this decision uses, and why. */
+export function chartDepth(spotId: string, hero: "BTN" | "SB" | "BB", stacks: TableStacks): { bb: number; why: string } {
+  const rivals = rivalSeats(spotId);
+  const mine = stacks[hero];
+  const opp = rivals.map((seat) => stacks[seat]);
+  const sitting = [stacks.BTN, stacks.SB, stacks.BB];
+  const spread = Math.max(...sitting) - Math.min(...sitting);
+  const even = spread <= 1.5;
+  const raw = even ? Math.max(mine, ...opp) : Math.min(mine, ...opp);
+  const bb = Math.max(1, Math.min(30, Math.round(raw)));
+  const who = rivals.map((seat) => `${seat} ${stacks[seat]}`).join(", ");
+  const why = even
+    ? `Стеки почти равны: BTN ${stacks.BTN}, SB ${stacks.SB}, BB ${stacks.BB}. Разница — только блайнды, они уже заложены в чарт. Поэтому берётся стартовая глубина ${bb}bb, а не укороченный большой блайнд.`
+    : `В раздаче вы ${hero} ${mine}bb и ${who}. Эффективный стек ${bb}bb — меньший из них. Больше этих фишек выиграть или проиграть нельзя, глубокий чарт здесь завышает рейз.`;
+  return { bb, why: `${why} ${stackNote(bb)}${bb === 15 ? "" : " Точная сетка снята на 15bb и сдвинута под эту глубину."}` };
+}
+
+export function splitStacks(start: number): TableStacks {
+  const n = Math.max(1, start);
+  return { BTN: n, SB: Math.round((n - 0.5) * 10) / 10, BB: Math.max(0.5, n - 1) };
+}
+
 /**
  * 15bb is the app chart, unchanged.
  * Other depths are a study model: the same hands breathe with stack size,

@@ -18,6 +18,7 @@ type Slot = (typeof SLOTS)[number];
 type HandApi = {
   spot: SpotDef;
   bb: number;
+  stacks: Partial<Record<Seat, number>>;
   cards: Partial<Record<Slot, Card>>;
   queue: Slot[];
   potText: string;
@@ -97,6 +98,7 @@ export function HandProvider({
   spot,
   range,
   bb,
+  stacks = {},
   labels,
   onHand,
   onReset,
@@ -106,6 +108,7 @@ export function HandProvider({
   spot: SpotDef;
   range: MixRange;
   bb: number;
+  stacks?: Partial<Record<Seat, number>>;
   labels: SpotDef["labels"];
   onHand: (hand: string) => void;
   onReset?: () => void;
@@ -305,7 +308,7 @@ export function HandProvider({
       setStreetBetState("");
       return;
     }
-    const priced = facingPrice(face, spot.hero, bb, pot);
+    const priced = facingPrice(face, spot.hero, bb, pot, stacks);
     setStreetBetState(trimNum(priced.toCall));
   }
 
@@ -422,6 +425,7 @@ export function HandProvider({
   const api: HandApi = {
     spot,
     bb,
+    stacks,
     cards,
     queue,
     potText,
@@ -478,7 +482,6 @@ export function StartBank({ onStack, onStarted, onSeat }: { onStack: (bb: number
       const next = blindStatus();
       setStatus(next);
       setSaved(readPrize()?.prize ?? 0);
-      if (next) onStack(next.stack);
     };
     tick();
     setReady(true);
@@ -988,7 +991,7 @@ function StreetColumns({
   const jammed = preflopAllin(spotId);
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
-  const { potText, setStreetBet, streetBet } = useHand();
+  const { potText, setStreetBet, streetBet, stacks } = useHand();
   const raiseSized = (action: LineAction | null) => action === "bet33" || action === "bet66" || action === "betpot" || action === "raise";
   const cols: { seat: Seat; selected: LineAction | null; live: boolean }[] = acts.map((act) => ({
     seat: act.seat,
@@ -1014,7 +1017,7 @@ function StreetColumns({
             >
               <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.seat === hero ? "bg-ok text-bg" : seatHead(col.seat))}>
                 <span className="font-medium">{col.seat === hero ? "Вы · ваш ход" : col.seat}</span>
-                <span className="font-mono">{seatStack(col.seat, bb)}</span>
+                <span className="font-mono">{stacks[col.seat] ?? seatStack(col.seat, bb)}</span>
               </div>
               <div className="mt-1 flex flex-col">
                 {menu.map((item) => {
@@ -1108,7 +1111,7 @@ function CycleMark({ label }: { label: string }) {
 }
 
 export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard: boolean; onAdvance?: () => void; runout?: boolean }) {
-  const { spot, bb, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out, setQueue, queueRef } = useHand();
+  const { spot, bb, stacks, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out, setQueue, queueRef } = useHand();
   const latest = useRef<HTMLDivElement>(null);
   const heard = useRef(0);
   const holeNow = hero ? [hero[0], hero[1]] : [];

@@ -54,7 +54,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -160,7 +160,7 @@ export function ActionLine({
           >
             <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.hero ? "bg-ok text-bg" : head(col.seat))}>
               <span className="font-medium">{col.hero ? "Вы · ваш ход" : (col.title ?? col.seat)}</span>
-              <span className="font-mono">{trim(col.stack)}</span>
+              <span className="font-mono">{trim(stacks[col.seat as "BTN" | "SB" | "BB"] ?? col.stack)}</span>
             </div>
             <div className="mt-1 flex flex-col">
               {col.actions.map((action) => {

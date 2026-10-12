@@ -47,8 +47,8 @@ import { CraftTable } from "@/components/spin-drill/craft-view";
 import { clearBlind, retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
-import { MICRO_NAME, microStrategy, spotTip } from "@/lib/spin-drill/micro-plan";
-import { rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
+import { MICRO_NAME, microStrategy } from "@/lib/spin-drill/micro-plan";
+import { chartDepth, rangeAtStack, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -282,6 +282,32 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
   );
 }
 
+function SeatStacks({ hero, stacks, onChange }: { hero: "BTN" | "SB" | "BB"; stacks: TableStacks; onChange: (seat: keyof TableStacks, value: number) => void }) {
+  return (
+    <div className="flex items-end gap-1">
+      {(["BTN", "SB", "BB"] as const).map((seat) => {
+        const mine = seat === hero;
+        return (
+          <label key={seat} className={cn("block text-[10px] font-medium uppercase", mine ? "text-ok" : "text-subtle")}>
+            {mine ? "Вы" : seat}
+            <input
+              inputMode="decimal"
+              defaultValue={String(stacks[seat])}
+              key={`${seat}-${stacks[seat]}`}
+              aria-label={`Стек ${seat}`}
+              onBlur={(event) => {
+                const n = Number(event.target.value.replace(",", "."));
+                if (n >= 0.5 && n <= 80) onChange(seat, Math.round(n * 10) / 10);
+              }}
+              className={cn("mt-0.5 h-11 w-14 rounded-md border bg-surface px-1.5 font-mono text-sm text-fg normal-case", mine ? "border-ok ring-2 ring-ok/60" : "border-border")}
+            />
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function NewGame({ onStart }: { onStart: () => void }) {
   const { resetHand } = useHand();
   return (
@@ -491,20 +517,22 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
+  const [stacks, setStacks] = useState<TableStacks>({ BTN: 15, SB: 14.5, BB: 14 });
   const [live, setLive] = useState<LiveStrategy | null>(null);
   const [cardAsk, setCardAsk] = useState(0);
   const [stackOpen, setStackOpen] = useState(false);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
-  const range = useMemo(() => rangeAtStack(live?.ranges[spot.id] ?? spot.range, spot.id, live?.adaptStack === false ? 15 : bb), [spot, bb, live]);
+  const depth = useMemo(() => chartDepth(spot.id, spot.hero, stacks), [spot.id, spot.hero, stacks]);
+  const range = useMemo(() => rangeAtStack(live?.ranges[spot.id] ?? spot.range, spot.id, live?.adaptStack === false ? 15 : depth.bb), [spot, depth.bb, live]);
   const paint = useMemo(() => {
     if (live?.ranges[spot.id]) return null;
-    if (spot.id === "hu_bb_limp") return huBbLimpPaint(bb);
-    if (spot.id === "hu_bb_raise") return huBbRaisePaint(bb);
+    if (spot.id === "hu_bb_limp") return huBbLimpPaint(depth.bb);
+    if (spot.id === "hu_bb_raise") return huBbRaisePaint(depth.bb);
     return null;
-  }, [spot.id, bb]);
-  const labels = useMemo(() => labelsAt(spot, bb), [spot, bb]);
+  }, [spot.id, depth.bb, live]);
+  const labels = useMemo(() => labelsAt(spot, depth.bb), [spot, depth.bb]);
   const statId = bb === 15 ? spot.id : `${spot.id}@${bb}`;
   const st = spotStat(store, spot.id);
   const drillStat = spotStat(store, statId);
@@ -601,7 +629,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     setLocked(false);
     setLastGrade(null);
     setQuiz(null);
-    const nextRange = rangeAtStack(live?.ranges[s.id] ?? s.range, s.id, live?.adaptStack === false ? 15 : bb);
+    const nextRange = rangeAtStack(live?.ranges[s.id] ?? s.range, s.id, live?.adaptStack === false ? 15 : chartDepth(s.id, s.hero, stacks).bb);
     const nextId = bb === 15 ? s.id : `${s.id}@${bb}`;
     const picked = pickHand(nextRange, nextId, store, includeFolds);
     setReview(picked.review);
@@ -650,6 +678,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
 
   function tuneStack(next: number) {
     setBb(next);
+    setStacks(splitStacks(next));
     retargetChips(next);
   }
 
@@ -794,10 +823,10 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
         {tab === "table" && <HandSim />}
 
         {tab === "strategy" && (
-          <HandProvider spot={spot} range={range} bb={bb} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
+          <HandProvider spot={spot} range={range} bb={depth.bb} stacks={stacks} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
               <StartBank
-                onStack={setBb}
+                onStack={tuneStack}
                 onSeat={(seat) => {
                   const first = spotsIn(seat)[0];
                   if (first) {
@@ -822,6 +851,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                     <>
                       <StackType bb={bb} onChange={tuneStack} />
                       <NewHand onAdvance={advanceSeat} />
+                      <SeatStacks hero={spot.hero} stacks={stacks} onChange={(seat, value) => setStacks((prev) => ({ ...prev, [seat]: value }))} />
                       <NewGame onStart={beginSpin} />
                       <PotFields />
                       <button
@@ -837,7 +867,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
               </div>
               <ActionLine
                 spot={spot}
-                bb={bb}
+                bb={depth.bb}
                 mine={mine}
                 range={range}
                 selected={selected}
@@ -849,7 +879,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
               <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
                 <div className="flex w-full max-w-[440px] items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
-                    <MixGrid compact range={range} paint={paint} bb={bb} selected={selected} onPick={setSelected} />
+                    <MixGrid compact range={range} paint={paint} bb={depth.bb} selected={selected} onPick={setSelected} />
                   </div>
                   <StackRail bb={bb} onChange={tuneStack} />
                 </div>
@@ -858,7 +888,9 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                   <PreflopNote mine={mine} selected={selected} range={range} labels={labels} />
                 </div>
               </div>
-              <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">{spotTip(spot.id)}</p>
+              <p className="mt-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+                <span className="font-medium">Чарт {depth.bb}bb.</span> {depth.why}
+              </p>
               {live?.name === MICRO_NAME ? (
                 <p className="mt-2 text-sm text-muted">Постфлоп без блефа: воздух чек, пара и сильнее — ставка, если пот-оддс не велят сбрасывать.</p>
               ) : null}
