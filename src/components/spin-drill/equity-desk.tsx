@@ -84,6 +84,7 @@ type HandApi = {
   holdGuard: () => void;
   guard: boolean;
   setQueue: (queue: Slot[]) => void;
+  openHole: () => void;
   queueRef: MutableRefObject<Slot[]>;
 };
 
@@ -277,6 +278,11 @@ export function HandProvider({
     setHandNonce((n) => n + 1);
     setOutState([]);
     onReset?.();
+  }
+
+  function openHole() {
+    queueRef.current = ["h0", "h1"];
+    setQueue(["h0", "h1"]);
   }
 
   function open(slot: Slot) {
@@ -493,6 +499,7 @@ export function HandProvider({
     holdGuard,
     guard,
     setQueue,
+    openHole,
     queueRef,
   };
 
@@ -1456,14 +1463,14 @@ export function ResultBanner({ kind, detail }: { kind: "win" | "loss" | "split";
 
 function DoneMark({ label, onAdvance }: { label: string; onAdvance?: () => void }) {
   return (
-    <button type="button" onClick={onAdvance} className="grid w-24 shrink-0 place-items-center self-center text-center text-ok" title="Следующая позиция">
-      <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+    <button type="button" onClick={onAdvance} className="grid w-36 shrink-0 place-items-center self-center rounded-2xl border-2 border-orange-500 bg-orange-500/20 px-2 py-3 text-center text-orange-400" title="Следующая раздача">
+      <svg viewBox="0 0 24 24" className="h-16 w-16" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
         <circle cx="12" cy="12" r="9" />
         <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span className="text-[11px] font-semibold leading-tight">Раздача закрыта</span>
+      <span className="text-sm font-semibold leading-tight text-orange-300">Раздача закрыта</span>
       <span className="mt-0.5 text-[11px] font-medium leading-tight text-fg">{label}</span>
-      <span className="text-[10px] leading-tight text-fg">Нажмите — дальше</span>
+      <span className="text-[10px] leading-tight text-orange-200">Нажмите — карты</span>
     </button>
   );
 }

@@ -56,7 +56,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -101,6 +101,7 @@ export function ActionLine({
     archiveHand(mine);
     resetHand();
     onAdvance();
+    openHole();
   }
   const runout =
     result !== "win" &&
@@ -259,22 +260,22 @@ export function ActionLine({
           </div>
         ) : null}
         {won ? (
-          <button type="button" onClick={goNext} className="grid w-28 shrink-0 place-items-center self-center text-center text-ok" title="Следующая позиция">
-            <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+          <button type="button" onClick={goNext} className="grid w-36 shrink-0 place-items-center self-center rounded-2xl border-2 border-orange-500 bg-orange-500/20 px-2 py-3 text-center text-orange-400" title="Следующая раздача">
+            <svg viewBox="0 0 24 24" className="h-16 w-16" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
               <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="text-sm font-semibold">Вы выиграли</span>
-            <span className="text-[10px] leading-tight text-fg">Нажмите — следующая позиция</span>
+            <span className="text-sm font-semibold text-orange-300">Вы выиграли</span>
+            <span className="text-[10px] leading-tight text-orange-200">Нажмите — карты</span>
           </button>
         ) : folded ? (
-          <button type="button" onClick={goNext} className="grid w-28 shrink-0 place-items-center self-center text-center text-ok" title="Следующая позиция">
-            <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+          <button type="button" onClick={goNext} className="grid w-36 shrink-0 place-items-center self-center rounded-2xl border-2 border-orange-500 bg-orange-500/20 px-2 py-3 text-center text-orange-400" title="Следующая раздача">
+            <svg viewBox="0 0 24 24" className="h-16 w-16" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
               <path d="M7.5 12.5 10.5 15.5 16.5 8.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="text-sm font-semibold text-fg">Раздача закрыта</span>
-            <span className="text-[10px] leading-tight">Нажмите — следующая позиция</span>
+            <span className="text-sm font-semibold text-orange-300">Раздача закрыта</span>
+            <span className="text-[10px] leading-tight text-orange-200">Нажмите — карты</span>
           </button>
         ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
