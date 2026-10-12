@@ -1204,10 +1204,10 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
   const latest = useRef<HTMLDivElement>(null);
   const heard = useRef(0);
   const holeNow = hero ? [hero[0], hero[1]] : [];
-  const flopHand = showdown(board.length >= 3 ? [...holeNow, ...board.slice(0, 3)] : []);
-  const turnHand = showdown(board.length >= 4 ? [...holeNow, ...board.slice(0, 4)] : []);
-  const riverHand = showdown(board.length >= 5 ? [...holeNow, ...board.slice(0, 5)] : []);
-  const madeRank = (hand: { category: number; bare: boolean } | null) => (hand && !hand.bare ? hand.category : 0);
+  const flopHand = board.length >= 3 ? showdown(holeNow, board.slice(0, 3)) : null;
+  const turnHand = board.length >= 4 ? showdown(holeNow, board.slice(0, 4)) : null;
+  const riverHand = board.length >= 5 ? showdown(holeNow, board) : null;
+  const madeRank = (hand: { category: number; bare: boolean; shared: boolean } | null) => (hand && !hand.bare && !hand.shared ? hand.category : 0);
   const flopRank = madeRank(flopHand);
   const turnRank = madeRank(turnHand);
   const riverRank = madeRank(riverHand);
@@ -1261,11 +1261,11 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
                 <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} cue={ask} small onClick={fillBoard} />
               ))}
             </div>
-            <Holding cards={board.length >= 5 ? [...(hero ?? []), ...board] : []} fx={board.length >= 5} />
+            <Holding hole={hero ?? []} board={board.length >= 5 ? board : []} fx={board.length >= 5} />
           </div>
         </div>
         <ShowdownPanel />
-        {board.length >= 5 ? <DoneMark label={showdown([...(hero ?? []), ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
+        {board.length >= 5 ? <DoneMark label={showdown(hero ?? [], board)?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
       </div>
     );
   }
@@ -1289,7 +1289,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
               <CardSlot key={slot} card={cards[slot] ?? null} active={queue[0] === slot} cue={askFlop} small onClick={() => open(slot)} />
             ))}
           </div>
-          <Holding cards={board.length >= 3 ? [...hole, ...board.slice(0, 3)] : []} fx={fxFlop} />
+          <Holding hole={hole} board={board.length >= 3 ? board.slice(0, 3) : []} fx={fxFlop} />
           <DrawMark tags={flopDraw} fx={board.length === 3 && flopDraw.length > 0} />
         </div>
         {board.length >= 3 ? (
@@ -1312,7 +1312,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
               <CardSlot card={cards.t ?? null} active={queue[0] === "t"} cue={askTurn} small onClick={() => open("t")} />
             </div>
             {askTurn ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
-            <Holding cards={board.length >= 4 ? [...hole, ...board.slice(0, 4)] : []} fx={fxTurn} />
+            <Holding hole={hole} board={board.length >= 4 ? board.slice(0, 4) : []} fx={fxTurn} />
             <DrawMark tags={turnDraw} fx={board.length === 4 && turnDraw.length > 0} />
           </div>
           {board.length >= 4 ? (
@@ -1330,12 +1330,12 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
               <CardSlot card={cards.r ?? null} active={queue[0] === "r"} cue={askRiver} small onClick={() => open("r")} />
             </div>
             {askRiver ? <p className="mt-1 px-1 text-[10px] font-medium text-ok">Откройте карту</p> : null}
-            <Holding cards={board.length >= 5 ? [...hole, ...board.slice(0, 5)] : []} fx={fxRiver} />
+            <Holding hole={hole} board={board.length >= 5 ? board.slice(0, 5) : []} fx={fxRiver} />
           </div>
           {board.length >= 5 ? (
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
           ) : null}
-          {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
+          {finished ? <DoneMark label={showdown(hole, board)?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
           <StreetClose onAdvance={onAdvance} />
         </div>
       ) : null}
@@ -1394,13 +1394,14 @@ function ShowdownPanel() {
   );
 }
 
-function Holding({ cards, fx }: { cards: Card[]; fx?: boolean }) {
-  const made = showdown(cards);
+function Holding({ hole, board, fx }: { hole: Card[]; board: Card[]; fx?: boolean }) {
+  const made = showdown(hole, board);
   if (!made) return null;
-  const rare = made.category >= 4;
+  const rare = made.category >= 4 && !made.shared;
+  const hit = fx && !made.bare && !made.shared;
   return (
-    <p className={cn("relative mt-1 overflow-hidden rounded px-1.5 py-1 text-xs font-semibold leading-tight", made.bare ? "bg-zinc-700 text-zinc-50" : rare ? "bg-bluff text-bg" : "bg-ok text-bg", fx && !made.bare ? (rare ? "hand-rare" : "hand-hit") : "")}>
-      {fx && !made.bare ? <span className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent" /> : null}
+    <p className={cn("relative mt-1 overflow-hidden rounded px-1.5 py-1 text-xs font-semibold leading-tight", made.shared ? "bg-zinc-600 text-zinc-50" : made.bare ? "bg-zinc-700 text-zinc-50" : rare ? "bg-bluff text-bg" : "bg-ok text-bg", hit ? (rare ? "hand-rare" : "hand-hit") : "")}>
+      {hit ? <span className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/50 to-transparent" /> : null}
       {made.label}
     </p>
   );
@@ -1418,18 +1419,25 @@ function DrawMark({ tags, fx }: { tags: string[]; fx: boolean }) {
 
 function drawTags(hero: Card[], board: Card[]): string[] {
   if (hero.length < 2 || board.length < 3 || board.length >= 5) return [];
-  const info = analyzeDraws(hero, board);
+  const mine = analyzeDraws(hero, board);
+  const table = analyzeDraws([], board);
   const tags: string[] = [];
-  if (info.flushDraw) tags.push("Флеш-дро");
-  if (info.oesd) tags.push("Стрит-дро");
-  else if (info.gutshot) tags.push("Гатшот");
-  if (!info.flushDraw && board.length === 3) {
-    const suits = [0, 0, 0, 0];
-    for (const card of [...hero, ...board]) suits[card.suit] += 1;
-    if (suits.some((count) => count === 3)) tags.push("Флеш с двух карт");
+  if (table.flushDraw) tags.push("Флеш-дро у всех");
+  else if (mine.flushDraw) tags.push("Флеш-дро");
+  if (table.oesd) tags.push("Стрит-дро у всех");
+  else if (mine.oesd) tags.push("Стрит-дро");
+  else if (table.gutshot) tags.push("Гатшот у всех");
+  else if (mine.gutshot) tags.push("Гатшот");
+  if (!mine.flushDraw && !table.flushDraw && board.length === 3) {
+    const boardSuits = [0, 0, 0, 0];
+    const allSuits = [0, 0, 0, 0];
+    for (const card of board) boardSuits[card.suit] += 1;
+    for (const card of [...hero, ...board]) allSuits[card.suit] += 1;
+    if (boardSuits.some((count) => count === 3)) tags.push("Флеш с двух карт у всех");
+    else if (allSuits.some((count) => count === 3)) tags.push("Флеш с двух карт");
   }
-  if (info.overcards === 2) tags.push("Две оверкарты");
-  else if (info.overcards === 1) tags.push("Оверкарта");
+  if (mine.overcards === 2) tags.push("Две оверкарты");
+  else if (mine.overcards === 1) tags.push("Оверкарта");
   return tags;
 }
 
@@ -1475,18 +1483,49 @@ function DoneMark({ label, onAdvance }: { label: string; onAdvance?: () => void 
   );
 }
 
-function showdown(cards: Card[]): { label: string; bare: boolean; category: number } | null {
-  if (cards.length < 5 || cards.some((card) => !card)) return null;
+function showdown(hole: Card[], board: Card[]): { label: string; bare: boolean; category: number; shared: boolean } | null {
+  const cards = [...hole, ...board];
+  if (cards.length < 5 || cards.some((card) => !card) || hole.length < 2) return null;
   const hand = evaluateBest(cards);
   const { category, values } = unpack(hand.score);
   const rank = RANK_CHARS[values[0] ?? 0] ?? "";
   const second = RANK_CHARS[values[1] ?? 0] ?? "";
-  if (category <= 0) return { label: `Нет пары · старшая ${rank}`, bare: true, category: 0 };
-  if (category === 1) return { label: `Пара ${rank}`, bare: false, category };
-  if (category === 2) return { label: `Две пары ${rank} и ${second}`, bare: false, category };
-  if (category === 3) return { label: `Сет ${rank}`, bare: false, category };
+  const shared = boardOwns(board, category, values[0] ?? 0, values[1] ?? 0);
+  const mark = shared ? " у всех" : "";
+  if (category <= 0) return { label: `Нет пары · старшая ${rank}`, bare: true, category: 0, shared: false };
+  if (category === 1) return { label: `Пара ${rank}${mark}`, bare: false, category, shared };
+  if (category === 2) return { label: `Две пары ${rank} и ${second}${mark}`, bare: false, category, shared };
+  if (category === 3) return { label: `Сет ${rank}${mark}`, bare: false, category, shared };
   const names = ["", "", "", "", "Стрит", "Флеш", "Фулл-хаус", "Каре", "Стрит-флеш"];
-  return { label: names[category] ?? "Комбинация", bare: false, category };
+  return { label: `${names[category] ?? "Комбинация"}${mark}`, bare: false, category, shared };
+}
+
+function boardOwns(board: Card[], category: number, top: number, second: number): boolean {
+  if (category <= 0 || board.length < 3) return false;
+  const pattern = boardPattern(board);
+  if (!pattern || pattern.category !== category || pattern.top !== top) return false;
+  if (category === 2 || category === 6) return pattern.second === second;
+  return true;
+}
+
+function boardPattern(board: Card[]): { category: number; top: number; second: number } | null {
+  if (board.length >= 5) {
+    const hand = evaluateBest(board);
+    if (hand.category <= 0) return null;
+    const { values } = unpack(hand.score);
+    return { category: hand.category, top: values[0] ?? 0, second: values[1] ?? 0 };
+  }
+  const counts = new Map<number, number>();
+  for (const card of board) counts.set(card.rank, (counts.get(card.rank) ?? 0) + 1);
+  const groups = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+  const best = groups[0];
+  if (!best || best[1] < 2) return null;
+  if (best[1] >= 4) return { category: 7, top: best[0], second: 0 };
+  const pair = groups.find((item) => item[0] !== best[0] && item[1] >= 2);
+  if (best[1] >= 3 && pair) return { category: 6, top: best[0], second: pair[0] };
+  if (best[1] >= 3) return { category: 3, top: best[0], second: 0 };
+  if (pair) return { category: 2, top: Math.max(best[0], pair[0]), second: Math.min(best[0], pair[0]) };
+  return { category: 1, top: best[0], second: 0 };
 }
 
 function handFinished(spotId: string, line: Line, boardLength: number, out: Seat[]): boolean {
