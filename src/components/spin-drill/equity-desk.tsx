@@ -8,6 +8,7 @@ import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingP
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import { HuAdvisor } from "@/components/spin-drill/hu-advisor";
+import { TexasPanel } from "@/components/spin-drill/texas-panel";
 import { cn } from "@/lib/utils";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -845,6 +846,7 @@ export function EquityDesk() {
             draw={shown.draw ?? null}
             pot={pot}
           />
+          <TexasPanel board={board} hole={hero} toCall={toCall} pot={pot} />
           </>
         ) : (
           <p className="text-sm text-muted">Отметьте карты слева. Решение, эквити и пот-оддс появятся в этом блоке, рядом с рейнджем.</p>
