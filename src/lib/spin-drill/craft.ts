@@ -169,6 +169,32 @@ export function readBank(): BankBook {
 
 function writeBank(book: BankBook) {
   localStorage.setItem(BANK_KEY, JSON.stringify(book));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("spin-bank"));
+}
+
+function spinDelta(spin: Pick<BankSpin, "won" | "prize" | "buy">) {
+  return spin.won ? spin.prize - spin.buy : -spin.buy;
+}
+
+export function updateSpin(id: string, won: boolean): BankBook {
+  const book = readBank();
+  const prev = book.spins.find((spin) => spin.id === id);
+  if (!prev || prev.won === won) return book;
+  const shift = Math.round((spinDelta({ ...prev, won }) - spinDelta(prev)) * 100) / 100;
+  const spins = book.spins.map((spin) => (spin.id === id ? { ...spin, won, cash: Math.round((spin.cash + shift) * 100) / 100 } : spin));
+  const next = { ...book, cash: Math.round((book.cash + shift) * 100) / 100, spins };
+  writeBank(next);
+  return next;
+}
+
+export function removeSpins(ids: string[]): BankBook {
+  const drop = new Set(ids);
+  const book = readBank();
+  const gone = book.spins.filter((spin) => drop.has(spin.id));
+  const shift = gone.reduce((sum, spin) => sum + spinDelta(spin), 0);
+  const next = { ...book, cash: Math.round((book.cash - shift) * 100) / 100, spins: book.spins.filter((spin) => !drop.has(spin.id)) };
+  writeBank(next);
+  return next;
 }
 
 export function setBankCash(cash: number) {

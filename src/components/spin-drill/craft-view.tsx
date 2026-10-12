@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, setBankCash, trackHands, updateCraft, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
+import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, removeSpins, setBankCash, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -126,17 +126,45 @@ function GameList({
 }) {
   const [rows, setRows] = useState<GameGroup[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [marked, setMarked] = useState<string[]>([]);
+  const [editGame, setEditGame] = useState("");
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     const book = readBank();
     const grouped = groupGames(hands, book.spins);
-    setRows(showEmpty ? grouped : grouped.filter((row) => row.hands.length > 0));
-  }, [hands, showEmpty]);
+    const next = showEmpty ? grouped : grouped.filter((row) => row.hands.length > 0);
+    setRows(next);
+    setMarked((ids) => ids.filter((id) => next.some((row) => row.id === id)));
+  }, [hands, showEmpty, tick]);
+  const gameIds = rows.map((row) => row.id);
+  const gamesOn = gameIds.length > 0 && gameIds.every((id) => marked.includes(id));
+  function dropGames(ids: string[]) {
+    if (!ids.length) return;
+    const word = ids.length === 1 ? "эту игру" : `${ids.length} игр`;
+    if (!window.confirm(`Удалить ${word} из журнала? Деньги банка пересчитаются. Раздачи внутри закрытого спина тоже пропадут.`)) return;
+    const open = rows.find((row) => row.id === "open");
+    const spinIds = ids.filter((id) => id !== "open");
+    if (spinIds.length) {
+      const handIds = rows.filter((row) => spinIds.includes(row.id)).flatMap((row) => row.hands.map((hand) => hand.id));
+      if (handIds.length) removeCraft(handIds);
+      removeSpins(spinIds);
+    }
+    if (ids.includes("open") && open?.hands.length) removeCraft(open.hands.map((hand) => hand.id));
+    setMarked([]);
+    setEditGame("");
+    setTick((value) => value + 1);
+    onReload();
+  }
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold">Игры</h2>
+        <input type="checkbox" checked={gamesOn} aria-label="Выбрать все игры" onChange={() => setMarked(gamesOn ? [] : gameIds)} />
+        <button type="button" disabled={!marked.length} onClick={() => dropGames(marked)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40">
+          Удалить игры{marked.length ? ` (${marked.length})` : ""}
+        </button>
         <button type="button" disabled={!picked.length} onClick={() => onDrop(picked)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40">
-          Удалить выбранные{picked.length ? ` (${picked.length})` : ""}
+          Удалить раздачи{picked.length ? ` (${picked.length})` : ""}
         </button>
       </div>
       {rows.length === 0 ? (
@@ -150,19 +178,43 @@ function GameList({
             const delta = row.won == null || row.buy == null || row.prize == null ? null : row.won ? row.prize - row.buy : -row.buy;
             return (
               <li key={row.id} className="border-t border-border">
-                <button type="button" onClick={() => setOpenId(open ? null : row.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left text-sm">
-                  <span>
-                    {stamp.day} {stamp.time}
-                    {row.won == null ? " · спин не закрыт" : ` · ${row.won ? "выигрыш" : "проигрыш"}`}
-                    {multiple != null ? ` · x${multiple}` : ""}
-                    {row.buy != null ? ` · бай-ин $${row.buy}` : ""}
-                    <span className="mt-0.5 block text-xs text-muted">{row.hands.length} раздач · нажмите, чтобы разобрать</span>
-                  </span>
-                  <span className="shrink-0 text-right font-mono text-xs">
-                    {delta == null ? "—" : `${delta > 0 ? "+" : ""}$${delta}`}
-                    {row.cash != null ? <span className="mt-0.5 block text-muted">{money(row.cash)}</span> : null}
-                  </span>
-                </button>
+                <div className="flex items-start gap-2 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={marked.includes(row.id)}
+                    aria-label="Выбрать игру"
+                    onChange={() => setMarked((ids) => (ids.includes(row.id) ? ids.filter((id) => id !== row.id) : [...ids, row.id]))}
+                  />
+                  <button type="button" onClick={() => setOpenId(open ? null : row.id)} className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left text-sm">
+                    <span>
+                      {stamp.day} {stamp.time}
+                      {row.won == null ? " · спин не закрыт" : ` · ${row.won ? "выигрыш" : "проигрыш"}`}
+                      {multiple != null ? ` · x${multiple}` : ""}
+                      {row.buy != null ? ` · бай-ин $${row.buy}` : ""}
+                      <span className="mt-0.5 block text-xs text-muted">{row.hands.length} раздач · нажмите, чтобы разобрать</span>
+                    </span>
+                    <span className="shrink-0 text-right font-mono text-xs">
+                      {delta == null ? "—" : `${delta > 0 ? "+" : ""}$${delta}`}
+                      {row.cash != null ? <span className="mt-0.5 block text-muted">{money(row.cash)}</span> : null}
+                    </span>
+                  </button>
+                  {row.won == null ? null : (
+                    <button type="button" onClick={() => setEditGame(editGame === row.id ? "" : row.id)} className="shrink-0 text-sm text-muted underline">
+                      Изменить
+                    </button>
+                  )}
+                </div>
+                {editGame === row.id && row.won != null ? (
+                  <div className="mb-2 ml-6 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => { updateSpin(row.id, true); setEditGame(""); setTick((value) => value + 1); }} className="h-8 rounded-full bg-fg px-3 text-xs text-bg">
+                      Это выигрыш
+                    </button>
+                    <button type="button" onClick={() => { updateSpin(row.id, false); setEditGame(""); setTick((value) => value + 1); }} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg">
+                      Это проигрыш
+                    </button>
+                  </div>
+                ) : null}
                 {open ? (
                   row.hands.length === 0 ? (
                     <p className="pb-2 text-xs text-muted">В этом спине раздачи не записаны.</p>
@@ -297,9 +349,14 @@ function BankRoll() {
   const [book, setBook] = useState<BankBook | null>(null);
   const [draft, setDraft] = useState("");
   useEffect(() => {
-    const next = readBank();
-    setBook(next);
-    setDraft(next.cash.toFixed(2).replace(".", ","));
+    const sync = () => {
+      const next = readBank();
+      setBook(next);
+      setDraft(next.cash.toFixed(2).replace(".", ","));
+    };
+    sync();
+    window.addEventListener("spin-bank", sync);
+    return () => window.removeEventListener("spin-bank", sync);
   }, []);
   if (!book) return null;
   const profit = Math.round((book.cash - book.anchor) * 100) / 100;
