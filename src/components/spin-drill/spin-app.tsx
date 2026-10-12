@@ -49,6 +49,7 @@ import { clearBlind, retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, microStrategy } from "@/lib/spin-drill/micro-plan";
+import { sizedRaise } from "@/lib/spin-drill/equity-calc";
 import { chartDepth, rangeAtStack, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -126,11 +127,11 @@ function pickHand(range: MixRange, statId: string, store: Store, includeFolds: b
   return chooseHand(pool, st, reps, avoid);
 }
 
-function labelsAt(spot: SpotDef, bb: number): SpotDef["labels"] {
+function labelsAt(spot: SpotDef, bb: number, hand: string, paint: Record<string, string> | null): SpotDef["labels"] {
   return {
     ...spot.labels,
     allin: `All-in ${bb}`,
-    raise: bb >= 20 ? "Raise 2.5" : spot.labels.raise,
+    raise: sizedRaise(spot.id, spot.labels.raise ?? "Raise", bb, hand ? paint?.[hand] : null),
     call: spot.id === "sb_fold" || spot.id === "hu_sb" ? "Limp" : spot.labels.call,
   };
 }
@@ -546,7 +547,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     if (spot.id === "hu_bb_raise") return huBbRaisePaint(depth.bb);
     return null;
   }, [spot.id, depth.bb, live]);
-  const labels = useMemo(() => labelsAt(spot, depth.bb), [spot, depth.bb]);
+  const labels = useMemo(() => labelsAt(spot, depth.bb, selected, paint), [spot, depth.bb, selected, paint]);
   const statId = bb === 15 ? spot.id : `${spot.id}@${bb}`;
   const st = spotStat(store, spot.id);
   const drillStat = spotStat(store, statId);
@@ -909,6 +910,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
               <ActionLine
                 spot={spot}
                 bb={depth.bb}
+                labels={labels}
                 mine={mine}
                 range={range}
                 selected={selected}

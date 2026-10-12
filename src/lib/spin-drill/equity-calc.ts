@@ -194,6 +194,20 @@ export function chartRaiseTo(spotId: string, bb: number): number | null {
   return null;
 }
 
+/** The raise written on the button and in the solver. Same number in both places. */
+export function sizedRaise(spotId: string, fallback: string, bb: number, paintSize?: string | null): string {
+  if (paintSize && /^\d+(?:\.\d+)?$/.test(paintSize)) return `Raise ${paintSize}`;
+  if (spotId === "btn" || spotId === "hu_sb" || spotId === "sb_raise" || spotId === "bb_vs_btn_raise") {
+    return bb >= 20 ? "Raise 2.5" : "Raise 2";
+  }
+  const found = fallback.match(/(\d+(?:\.\d+)?)/);
+  if (found) return `Raise ${found[1]}`;
+  if (spotId === "sb_iso" || spotId === "bb_vs_limp_iso") return "Raise 4";
+  if (spotId === "hu_bb_raise" || spotId === "btn_vs_3bet") return bb >= 18 ? "Raise 6" : "Raise 5";
+  if (spotId === "hu_bb_limp") return "Raise 2.5";
+  return "Raise 2";
+}
+
 /** Pot and the amount left to call when the opponent raised to `raiseTo` instead of the chart size. */
 export function priceFromRaise(spotId: string, raiseTo: number): { toCall: number; pot: number } | null {
   const to = Math.round(raiseTo * 10) / 10;
@@ -312,7 +326,7 @@ function advice(opts: {
       const need = opts.need == null ? null : Math.round(opts.need * 100);
       if (opts.facing !== "allin" && opts.need != null && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55) {
         return {
-          verdict: "Raise",
+          verdict: "Raise 2",
           text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} Нужно ${need}% на колл, у руки ${pct}%. Рейз вэлью.`,
         };
       }

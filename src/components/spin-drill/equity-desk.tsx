@@ -1045,7 +1045,7 @@ function StreetColumns({
                         on ? "bg-fg font-medium text-bg" : bluffWanted ? "bluff-card bg-bluff/25 font-semibold text-bluff ring-2 ring-bluff" : wanted ? "bg-ok/20 font-semibold text-fg ring-1 ring-ok" : "text-muted",
                       )}
                     >
-                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, streetBet)}
+                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, streetBet, hint)}
                       {bluffWanted ? "" : wanted && !on ? " · солвер" : ""}
                     </button>
                   );
@@ -1093,14 +1093,15 @@ function StreetColumns({
   );
 }
 
-function streetActionLabel(action: LineAction, ownsSize: boolean, callText: string): string {
+function streetActionLabel(action: LineAction, ownsSize: boolean, callText: string, hint: string): string {
   if (action === "check") return "Check";
   if (action === "fold") return "Fold";
   if (action === "call") return "Call";
   if (action === "allin") return "All-in";
-  if (!ownsSize || !callText.trim()) return "Raise";
-  const size = Number(callText.replace(",", "."));
-  if (!Number.isFinite(size) || size <= 0) return "Raise";
+  const hinted = hint.match(/Raise\s+(\d+(?:\.\d+)?)/i);
+  const raw = (ownsSize && callText.trim()) || hinted?.[1] || "2";
+  const size = Number(raw.replace(",", "."));
+  if (!Number.isFinite(size) || size <= 0) return "Raise 2";
   const text = Number.isInteger(size) ? String(size) : String(Math.round(size * 10) / 10);
   return `Raise ${text}`;
 }

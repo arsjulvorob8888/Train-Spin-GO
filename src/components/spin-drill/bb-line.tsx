@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SpotDef } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
-import { chartRaiseTo } from "@/lib/spin-drill/equity-calc";
+import { chartRaiseTo, sizedRaise } from "@/lib/spin-drill/equity-calc";
 import { potFate, preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
 import { BoardLine, Hole, ResultBanner, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ type Column = {
 export function ActionLine({
   spot,
   bb,
+  labels,
   mine,
   range,
   selected,
@@ -31,6 +32,7 @@ export function ActionLine({
 }: {
   spot: SpotDef;
   bb: number;
+  labels: SpotDef["labels"];
   mine: MixAction | "";
   range: MixRange;
   selected: string;
@@ -53,7 +55,7 @@ export function ActionLine({
     setBack("");
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
-  const cols = columns(spot, bb, mine, sbAct, bbAct, btnAct, back);
+  const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
   const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks } = useHand();
   const stamped = useRef("");
   useEffect(() => {
@@ -94,7 +96,7 @@ export function ActionLine({
   const askFlop = live && board.length < 3 && fate === "play";
   const askTurn = flopDone && fate === "play" && board.length < 4;
   const askRiver = turnDone && fate === "play" && board.length < 5;
-  const expectedLabel = expected ? (expected === "allin" ? `All-in ${bb}` : spot.labels[expected]) : "";
+  const expectedLabel = expected ? labels[expected] : "";
   function goNext() {
     archiveHand(mine);
     resetHand();
@@ -308,7 +310,7 @@ export function ActionLine({
               : expected
               ? `Солвер ждёт: ${expectedLabel}. Эта кнопка подсвечена в колонке «ваш ход».`
               : mine
-                ? `Вы отметили ${heroLabel(spot, bb, mine)}. Выберите руку в рейндже — солвер скажет, верно ли это.`
+                ? `Вы отметили ${labels[mine]}. Выберите руку в рейндже — солвер скажет, верно ли это.`
                 : "Слева ваши карты, потом ваш ход, потом оппоненты. Галочка — цикл закрыт."}
       </p>
     </div>
@@ -399,11 +401,11 @@ function actionMatches(spot: SpotDef, mine: MixAction | "", hand: string, range:
   return wantedAction(spot, hand, range, sizeText, verdict) === mine;
 }
 
-function columns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): Column[] {
-  if (spot.group === "BTN") return btnColumns(spot, bb, mine, sbAct, bbAct);
-  if (spot.group === "SB") return sbColumns(spot, bb, mine, btnAct, bbAct, back);
-  if (spot.group === "HU") return huColumns(spot, bb, mine, sbAct, bbAct, back);
-  return bbColumns(spot, bb, mine);
+function columns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): Column[] {
+  if (spot.group === "BTN") return btnColumns(spot, bb, labels, mine, sbAct, bbAct);
+  if (spot.group === "SB") return sbColumns(spot, bb, labels, mine, btnAct, bbAct, back);
+  if (spot.group === "HU") return huColumns(spot, bb, labels, mine, sbAct, bbAct, back);
+  return bbColumns(spot, bb, labels, mine);
 }
 
 function blindChart(sb: Blind, bb: Blind): string {
@@ -420,11 +422,12 @@ function blindLabel(act: Blind, stack: number): string {
   return "";
 }
 
-function btnColumns(spot: SpotDef, stack: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind): Column[] {
+function btnColumns(spot: SpotDef, stack: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind): Column[] {
   const open = spot.id === "btn";
   const vs3 = spot.id === "btn_vs_3bet";
   const vsJam = spot.id === "btn_vs_jam";
   const raised = vs3 || vsJam || (open && (mine === "raise" || mine === "allin"));
+  const openRaise = open ? labels.raise : sizedRaise("btn", "Raise 2", stack);
   const cols: Column[] = [
     {
       seat: "BTN",
@@ -432,10 +435,10 @@ function btnColumns(spot: SpotDef, stack: number, mine: MixAction | "", sbAct: B
       hero: open && !vs3 && !vsJam,
       actions: [
         { label: "Fold", pick: { spot: "btn", mine: "fold" } },
-        { label: "Raise 2", pick: { spot: "btn", mine: "raise" } },
+        { label: openRaise, pick: { spot: "btn", mine: "raise" } },
         { label: `All-in ${stack}`, pick: { spot: "btn", mine: "allin" } },
       ],
-      selected: open ? chosen(spot, stack, mine) : "Raise 2",
+      selected: open ? chosen(labels, mine) : openRaise,
     },
   ];
   if (!raised) return cols;
@@ -453,7 +456,7 @@ function btnColumns(spot: SpotDef, stack: number, mine: MixAction | "", sbAct: B
     actions: bbButtons.map((act) => ({ label: blindLabel(act, stack), pick: {}, blind: { seat: "BB", act } })),
     selected: blindLabel(bbAct, stack),
   });
-  if (vs3 || vsJam) cols.push(heroColumn(spot, stack, mine));
+  if (vs3 || vsJam) cols.push(heroColumn(spot, stack, labels, mine));
   return cols;
 }
 
@@ -516,8 +519,10 @@ function replyColumn(seat: "BTN" | "BB", stack: number, menu: Blind[], selected:
   };
 }
 
-function sbColumns(spot: SpotDef, stack: number, mine: MixAction | "", btnAct: Blind, bbAct: Blind, back: Blind): Column[] {
+function sbColumns(spot: SpotDef, stack: number, labels: SpotDef["labels"], mine: MixAction | "", btnAct: Blind, bbAct: Blind, back: Blind): Column[] {
   const open = sbOpener(spot.id);
+  const btnRaise = sizedRaise("btn", "Raise 2", stack);
+  const isoRaise = sizedRaise("sb_iso", "Raise 4", stack);
   const cols: Column[] = [
     {
       seat: "BTN",
@@ -525,10 +530,10 @@ function sbColumns(spot: SpotDef, stack: number, mine: MixAction | "", btnAct: B
       actions: [
         { label: "Fold", pick: { spot: "sb_fold" } },
         { label: "Limp", pick: { spot: "sb_limp" } },
-        { label: "Raise 2", pick: { spot: "sb_raise" } },
+        { label: btnRaise, pick: { spot: "sb_raise" } },
         { label: `All-in ${stack}`, pick: { spot: "sb_push" } },
       ],
-      selected: open === "limp" ? "Limp" : open === "raise" ? "Raise 2" : open === "jam" ? `All-in ${stack}` : "Fold",
+      selected: open === "limp" ? "Limp" : open === "raise" ? btnRaise : open === "jam" ? `All-in ${stack}` : "Fold",
     },
   ];
   if (spot.id === "sb_iso" || spot.id === "sb_vs_bb_jam") {
@@ -542,16 +547,16 @@ function sbColumns(spot: SpotDef, stack: number, mine: MixAction | "", btnAct: B
       seat: "BB",
       stack: stack - 1,
       actions: [
-        { label: "Raise", pick: { spot: "sb_iso" } },
+        { label: isoRaise, pick: { spot: "sb_iso" } },
         { label: `All-in ${stack}`, pick: { spot: "sb_vs_bb_jam" } },
       ],
-      selected: spot.id === "sb_iso" ? "Raise" : `All-in ${stack}`,
+      selected: spot.id === "sb_iso" ? isoRaise : `All-in ${stack}`,
     });
-    cols.push(heroColumn(spot, stack, mine));
+    cols.push(heroColumn(spot, stack, labels, mine));
     if (spot.id === "sb_iso" && mine === "allin") cols.push(replyColumn("BB", stack - 1, ["fold", "call"], bbAct, stack, "BB · на пуш"));
     return cols;
   }
-  cols.push(heroColumn(spot, stack, mine));
+  cols.push(heroColumn(spot, stack, labels, mine));
   const plan = sbReplies(spot.id, mine);
   if (!plan) return cols;
   if (plan.btn) cols.push(replyColumn("BTN", stack, plan.menu, btnAct, stack, "BTN · ответ"));
@@ -582,16 +587,17 @@ function huFlop(mine: MixAction | "", bbAct: Blind, back: Blind): boolean {
   return false;
 }
 
-function huColumns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind, bbAct: Blind, back: Blind): Column[] {
+function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, back: Blind): Column[] {
   const heroSb = spot.id === "hu_sb";
+  const huOpen = sizedRaise("hu_sb", "Raise 2", bb);
   const sbSelected = heroSb
-    ? chosen(spot, bb, mine)
+    ? chosen(labels, mine)
     : sbAct === "fold"
       ? "Fold"
       : spot.id === "hu_bb_limp"
         ? "Limp"
         : spot.id === "hu_bb_raise"
-          ? "Raise 2"
+          ? huOpen
           : `All-in ${bb}`;
   const cols: Column[] = [
     {
@@ -599,23 +605,24 @@ function huColumns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind
       stack: bb - 0.5,
       hero: heroSb,
       actions: heroSb
-        ? heroButtons(spot, bb)
+        ? heroButtons(spot, labels)
         : [
             { label: "Fold", pick: {}, blind: { seat: "SB", act: "fold" } },
             { label: "Limp", pick: { spot: "hu_bb_limp" } },
-            { label: "Raise 2", pick: { spot: "hu_bb_raise" } },
+            { label: huOpen, pick: { spot: "hu_bb_raise" } },
             { label: `All-in ${bb}`, pick: { spot: "hu_bb_jam" } },
           ],
       selected: sbSelected,
     },
   ];
   if (!heroSb) {
-    cols.push(heroColumn(spot, bb, mine));
+    cols.push(heroColumn(spot, bb, labels, mine));
     return cols;
   }
   if (mine !== "call" && mine !== "raise" && mine !== "allin") return cols;
   const vsJam = mine === "allin";
   const vsLimp = mine === "call";
+  const threeBet = sizedRaise(vsLimp ? "hu_bb_limp" : "hu_bb_raise", "Raise", bb);
   cols.push({
     seat: "BB",
     stack: bb - 1,
@@ -627,10 +634,10 @@ function huColumns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind
       : [
           { label: "Fold", pick: {}, blind: { seat: "BB", act: "fold" } },
           { label: vsLimp ? "Check|FOLD" : "Call", pick: {}, blind: { seat: "BB", act: "call" } },
-          { label: "Raise", pick: {}, blind: { seat: "BB", act: "3bet" } },
+          { label: threeBet, pick: {}, blind: { seat: "BB", act: "3bet" } },
           { label: `All-in ${bb}`, pick: {}, blind: { seat: "BB", act: "allin" } },
         ],
-    selected: huBbSelected(bbAct, bb, vsLimp),
+    selected: huBbSelected(bbAct, bb, vsLimp, threeBet),
   });
   if (!vsJam && (bbAct === "3bet" || bbAct === "allin")) {
     cols.push({
@@ -649,10 +656,10 @@ function huColumns(spot: SpotDef, bb: number, mine: MixAction | "", sbAct: Blind
   return cols;
 }
 
-function huBbSelected(act: Blind, stack: number, vsLimp: boolean): string {
+function huBbSelected(act: Blind, stack: number, vsLimp: boolean, threeBet: string): string {
   if (act === "fold") return "Fold";
   if (act === "call") return vsLimp ? "Check|FOLD" : "Call";
-  if (act === "3bet") return "Raise";
+  if (act === "3bet") return threeBet;
   if (act === "allin") return `All-in ${stack}`;
   return "";
 }
@@ -696,56 +703,58 @@ const BB_BTN: { label: string; spot: string; sb: { label: string; spot: string }
   },
 ];
 
-function bbColumns(spot: SpotDef, bb: number, mine: MixAction | ""): Column[] {
+function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | ""): Column[] {
   const branch = BB_BTN.find((item) => item.sb.some((leaf) => leaf.spot === spot.id)) ?? BB_BTN[2]!;
   const leaf = branch.sb.find((item) => item.spot === spot.id) ?? branch.sb[0]!;
+  const dress = (label: string, kind: "btn" | "sb") => {
+    if (label === "All-in") return `All-in ${bb}`;
+    if (label === "Raise 2") return kind === "sb" ? sizedRaise("sb_fold", "Raise 2.5", bb) : sizedRaise("btn", "Raise 2", bb);
+    if (label === "Raise 4") return sizedRaise("bb_vs_limp_iso", "Raise 4", bb);
+    return label;
+  };
   return [
     {
       seat: "BTN",
       stack: bb,
       actions: BB_BTN.map((item) => ({
-        label: item.label === "All-in" ? `All-in ${bb}` : item.label,
+        label: dress(item.label, "btn"),
         pick: { spot: item.sb[0]!.spot },
       })),
-      selected: branch.label === "All-in" ? `All-in ${bb}` : branch.label,
+      selected: dress(branch.label, "btn"),
     },
     {
       seat: "SB",
       stack: bb - 0.5,
       actions: branch.sb.map((item) => ({
-        label: item.label === "All-in" ? `All-in ${bb}` : item.label,
+        label: dress(item.label, "sb"),
         pick: { spot: item.spot },
       })),
-      selected: leaf.label === "All-in" ? `All-in ${bb}` : leaf.label,
+      selected: dress(leaf.label, "sb"),
     },
-    heroColumn(spot, bb, mine),
+    heroColumn(spot, bb, labels, mine),
   ];
 }
 
-function heroColumn(spot: SpotDef, bb: number, mine: MixAction | ""): Column {
+function heroColumn(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | ""): Column {
   return {
     seat: spot.hero,
     stack: spot.hero === "SB" ? bb - 0.5 : spot.hero === "BB" ? bb - 1 : bb,
     hero: true,
-    actions: heroButtons(spot, bb),
-    selected: chosen(spot, bb, mine),
+    actions: heroButtons(spot, labels),
+    selected: chosen(labels, mine),
   };
 }
 
-function heroButtons(spot: SpotDef, bb: number): { label: string; pick: Pick }[] {
+function heroButtons(spot: SpotDef, labels: SpotDef["labels"]): { label: string; pick: Pick }[] {
   return spot.actions.map((action) => ({
-    label: action === "allin" ? `All-in ${bb}` : spot.labels[action],
+    label: labels[action],
     pick: { mine: action },
   }));
 }
 
-function chosen(spot: SpotDef, bb: number, mine: MixAction | ""): string {
+function chosen(labels: SpotDef["labels"], mine: MixAction | ""): string {
   if (!mine) return "";
-  return mine === "allin" ? `All-in ${bb}` : spot.labels[mine] ?? "";
-}
-
-function heroLabel(spot: SpotDef, bb: number, mine: MixAction): string {
-  return chosen(spot, bb, mine);
+  return labels[mine] ?? "";
 }
 
 function head(seat: string): string {
