@@ -538,29 +538,58 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
       setSeatAsk(false);
     };
     window.addEventListener("spin-new-game", reopen);
+    const askEnd = () => setEnding(true);
+    window.addEventListener("spin-end-ask", askEnd);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("spin-blind", tick);
       window.removeEventListener("spin-new-game", reopen);
+      window.removeEventListener("spin-end-ask", askEnd);
     };
   }, []);
   function finish(won: boolean) {
     const current = readPrize();
     const session = readBlind();
     const item = PRIZES.find((prize) => prize.prize === current?.prize);
-    if (item) settleSpin(item.prize, item.buy, won, session?.gameId);
+    if (item) {
+      settleSpin(item.prize, item.buy, won, session?.gameId);
+      sessionStorage.setItem("spin-settled-note", won ? `Выигрыш $${item.prize} записан` : `Проигрыш бай-ина $${item.buy} записан`);
+    }
     clearBlind();
     setEnding(false);
     setSeatAsk(false);
+    setLater(false);
     setStatus(null);
   }
   if (!ready) return null;
-  const clock = status ? <BlindClock status={status} saved={saved} ending={ending} onToggle={() => setEnding(true)} onWin={() => finish(true)} onLose={() => finish(false)} onShift={shiftBlind} /> : null;
+  const buy = PRIZES.find((prize) => prize.prize === saved)?.buy ?? null;
+  const note = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("spin-settled-note") : null;
+  const clock = status ? <BlindClock status={status} onShift={shiftBlind} onToggle={() => setEnding(true)} /> : null;
+  const endModal = ending && status ? (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
+        <h2 className="text-lg font-semibold">Игра окончена</h2>
+        <p className="mt-1 text-sm text-muted">Один спин — одна запись в деньги. Раздачи этого спина останутся внутри.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => finish(true)} className="h-11 rounded-full bg-fg px-4 text-sm font-semibold text-bg">
+            Выиграл ${saved}
+          </button>
+          <button type="button" onClick={() => finish(false)} className="h-11 rounded-full bg-surface-2 px-4 text-sm font-semibold text-fg">
+            Проиграл {buy != null ? `$${buy}` : ""}
+          </button>
+        </div>
+        <button type="button" onClick={() => setEnding(false)} className="mt-3 text-xs text-muted underline">
+          Ещё играю
+        </button>
+      </div>
+    </div>
+  ) : null;
   if (!status && !later) {
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
           <h2 className="text-lg font-semibold">Какой банк?</h2>
+          {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {PRIZES.map((item) => (
               <button
@@ -568,6 +597,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
                 type="button"
                 title={item.note}
                 onClick={() => {
+                  sessionStorage.removeItem("spin-settled-note");
                   rememberPrize(item.prize, item.bb);
                   setSaved(item.prize);
                   setLater(false);
@@ -591,6 +621,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     return (
       <>
         {clock}
+        {endModal}
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
             <h2 className="text-lg font-semibold">Ваша позиция?</h2>
@@ -615,24 +646,21 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
       </>
     );
   }
-  return clock;
+  return (
+    <>
+      {clock}
+      {endModal}
+    </>
+  );
 }
 
 function BlindClock({
   status,
-  saved,
-  ending,
   onToggle,
-  onWin,
-  onLose,
   onShift,
 }: {
   status: NonNullable<ReturnType<typeof blindStatus>>;
-  saved: number;
-  ending: boolean;
   onToggle: () => void;
-  onWin: () => void;
-  onLose: () => void;
   onShift: (delta: number) => void;
 }) {
   const heard = useRef("");
@@ -657,20 +685,9 @@ function BlindClock({
         <p className="mt-1 text-xs">
           {status.sb}/{status.bb} · ур. {status.level}
         </p>
-        {ending ? (
-          <div className="mt-2 grid gap-1">
-            <button type="button" onClick={onWin} className="h-8 rounded-md bg-fg text-xs text-bg">
-              Выиграл ${saved}
-            </button>
-            <button type="button" onClick={onLose} className="h-8 rounded-md bg-surface-2 text-xs text-fg">
-              Проиграл
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={onToggle} className="mt-2 text-xs underline">
-            Спин окончен
-          </button>
-        )}
+        <button type="button" onClick={onToggle} className="mt-2 text-xs underline">
+          Спин окончен
+        </button>
       </div>
     </div>
   );

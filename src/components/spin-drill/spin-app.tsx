@@ -45,7 +45,7 @@ import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
 import { Consultants } from "@/components/spin-drill/consultants";
 import { CraftTable } from "@/components/spin-drill/craft-view";
-import { clearBlind, retargetChips } from "@/lib/spin-drill/craft";
+import { clearBlind, readBlind, retargetChips } from "@/lib/spin-drill/craft";
 import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, microStrategy } from "@/lib/spin-drill/micro-plan";
@@ -321,12 +321,36 @@ function SeatStacks({
   );
 }
 
+function EndSpin() {
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    const sync = () => setLive(Boolean(readBlind()));
+    sync();
+    window.addEventListener("spin-blind", sync);
+    return () => window.removeEventListener("spin-blind", sync);
+  }, []);
+  if (!live) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event("spin-end-ask"))}
+      className="h-11 shrink-0 rounded-full border-2 border-orange-500 bg-orange-500/20 px-3 text-sm font-semibold text-orange-300"
+    >
+      Спин окончен
+    </button>
+  );
+}
+
 function NewGame({ onStart }: { onStart: () => void }) {
   const { resetHand } = useHand();
   return (
     <button
       type="button"
       onClick={() => {
+        if (readBlind()) {
+          window.dispatchEvent(new Event("spin-end-ask"));
+          return;
+        }
         resetHand();
         clearBlind();
         window.dispatchEvent(new Event("spin-new-game"));
@@ -899,6 +923,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                         <span className="font-mono text-lg font-semibold leading-none">{depth.bb}</span>
                       </div>
                       <NewGame onStart={beginSpin} />
+                      <EndSpin />
                     </>
                   }
                 />
