@@ -1155,17 +1155,12 @@ function CycleMark({ label }: { label: string }) {
 }
 
 export function StreetClose({ onAdvance }: { onAdvance?: () => void }) {
-  const { award, setAward, spot, out, line, shown } = useHand();
-  const folded = new Set<Seat>(out);
-  for (const street of ["flop", "turn", "river"] as const) {
-    for (const act of line[street]) if (act.action === "fold") folded.add(act.seat);
-  }
-  const live = seatsInHand(spot.id, out).filter((seat) => !folded.has(seat));
-  const villains = live.filter((seat) => seat !== spot.hero);
-  const names = ["hero", ...villains, "split"];
+  const { award, setAward, spot, shown } = useHand();
+  const rivals = seatsInHand(spot.id).filter((seat) => seat !== spot.hero);
+  const names = ["hero", ...rivals, "split"];
   const label = (id: string) => (id === "hero" ? "Я выиграл" : id === "split" ? "Ничья" : id);
   const winner = award === "hero" || award === spot.hero ? "Вы" : award === "split" ? "Ничья" : award;
-  const lost = award === "hero" || award === spot.hero ? villains : award && award !== "split" ? ["Вы", ...villains.filter((seat) => seat !== award)] : [];
+  const lost = award === "split" ? [] : award === "hero" || award === spot.hero ? rivals : award ? ["Вы", ...rivals.filter((seat) => seat !== award)] : [];
   const eq = shown?.equity != null ? `${Math.round(shown.equity * 100)}%` : "считается по рейнджу";
   return (
     <div className="ml-auto w-[16rem] shrink-0 self-start rounded-lg border border-border bg-surface p-2 shadow-lg">
@@ -1186,7 +1181,7 @@ export function StreetClose({ onAdvance }: { onAdvance?: () => void }) {
       {award ? (
         <div className="mt-2 text-xs">
           <p className="font-medium">Победитель: {winner}</p>
-          {lost.length ? <p className="text-muted">Проиграли: {lost.join(", ")}</p> : <p className="text-muted">Банк делится.</p>}
+          {award === "split" ? <p className="text-muted">Банк делится.</p> : <p className="text-muted">Проиграли: {lost.join(", ")}</p>}
           <p className="mt-1 text-muted">Эквити на этот момент: {eq}. Оно и запишется в разбор.</p>
           {onAdvance ? (
             <button type="button" onClick={onAdvance} className="mt-2 h-8 rounded-full bg-ok px-3 text-xs font-semibold text-bg">
