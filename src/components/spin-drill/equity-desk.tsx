@@ -1197,10 +1197,13 @@ function streetActionLabel(action: LineAction, ownsSize: boolean, callText: stri
   if (action === "fold") return "Fold";
   if (action === "call") return "Call";
   if (action === "allin") return "All-in";
+  if (action === "bet33") return "Raise 2";
+  if (action === "bet66") return "Raise 4";
+  if (action === "betpot") return "Raise 6";
   const hinted = hint.match(/Raise\s+(\d+(?:\.\d+)?)/i);
-  const raw = (ownsSize && callText.trim()) || hinted?.[1] || "2";
+  const raw = (ownsSize && callText.trim()) || hinted?.[1] || "";
   const size = Number(raw.replace(",", "."));
-  if (!Number.isFinite(size) || size <= 0) return "Raise 2";
+  if (!Number.isFinite(size) || size <= 0) return "Raise";
   const text = Number.isInteger(size) ? String(size) : String(Math.round(size * 10) / 10);
   return `Raise ${text}`;
 }
