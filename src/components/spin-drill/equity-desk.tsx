@@ -781,6 +781,7 @@ export function EquityDesk() {
     guard,
     setQueue,
     queueRef,
+    out,
   } = useHand();
   const cardOpened = useRef(0);
   const pickerWasOpen = useRef(false);
@@ -829,7 +830,19 @@ export function EquityDesk() {
               )}
             </div>
           </div>
-          <HuAdvisor spotId={spot.id} bb={bb} klass={shown.klass} street={shown.street} chart={shown.verdict} />
+          <HuAdvisor
+            spotId={spot.id}
+            bb={bb}
+            klass={shown.klass}
+            street={shown.street}
+            chart={shown.verdict}
+            players={seatsInHand(spot.id, out).length}
+            equity={shown.equity}
+            need={shown.need}
+            made={shown.made ?? null}
+            draw={shown.draw ?? null}
+            pot={pot}
+          />
           </>
         ) : (
           <p className="text-sm text-muted">Отметьте карты слева. Решение, эквити и пот-оддс появятся в этом блоке, рядом с рейнджем.</p>
