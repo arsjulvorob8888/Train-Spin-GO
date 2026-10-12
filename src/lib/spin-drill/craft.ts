@@ -113,6 +113,21 @@ export function noteBlindHand() {
   writeBlind({ ...session, hands: session.hands + 1 });
 }
 
+/** Move one blind level up or down and start that level's clock from zero. */
+export function shiftBlind(delta: number) {
+  const session = readBlind();
+  if (!session || typeof sessionStorage === "undefined" || !delta) return;
+  const spec = SPIN_CLOCK[session.prize];
+  if (!spec) return;
+  const now = Date.now();
+  const next = Math.max(0, Math.min(BLIND_LEVELS.length - 1, blindLevel(session, now) + delta));
+  if (spec.clock.kind === "time") {
+    writeBlind({ ...session, startedAt: now - next * spec.clock.seconds * 1000 });
+    return;
+  }
+  writeBlind({ ...session, hands: next * spec.clock.hands });
+}
+
 export function clearBlind() {
   if (typeof sessionStorage === "undefined") return;
   sessionStorage.removeItem(BLIND_KEY);

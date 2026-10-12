@@ -3,7 +3,7 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, settleSpin, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
+import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -551,7 +551,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     setStatus(null);
   }
   if (!ready) return null;
-  const clock = status ? <BlindClock status={status} saved={saved} ending={ending} onToggle={() => setEnding(true)} onWin={() => finish(true)} onLose={() => finish(false)} /> : null;
+  const clock = status ? <BlindClock status={status} saved={saved} ending={ending} onToggle={() => setEnding(true)} onWin={() => finish(true)} onLose={() => finish(false)} onShift={shiftBlind} /> : null;
   if (!status && !later) {
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
@@ -621,6 +621,7 @@ function BlindClock({
   onToggle,
   onWin,
   onLose,
+  onShift,
 }: {
   status: NonNullable<ReturnType<typeof blindStatus>>;
   saved: number;
@@ -628,6 +629,7 @@ function BlindClock({
   onToggle: () => void;
   onWin: () => void;
   onLose: () => void;
+  onShift: (delta: number) => void;
 }) {
   const heard = useRef("");
   useEffect(() => {
@@ -637,25 +639,35 @@ function BlindClock({
     playBlindWarn();
   }, [status.level, status.soon]);
   return (
-    <div className={cn("fixed top-3 right-3 z-[60] w-36 rounded-xl border-2 bg-black/80 p-2 shadow-lg", status.soon ? "blind-hot border-red-500 text-red-400" : "border-emerald-400 text-emerald-400")}>
-      <p className="font-mono text-2xl font-semibold leading-none">{status.left.replace(/^ещё /, "")}</p>
-      <p className="mt-1 text-xs">
-        {status.sb}/{status.bb} · ур. {status.level}
-      </p>
-      {ending ? (
-        <div className="mt-2 grid gap-1">
-          <button type="button" onClick={onWin} className="h-8 rounded-md bg-fg text-xs text-bg">
-            Выиграл ${saved}
-          </button>
-          <button type="button" onClick={onLose} className="h-8 rounded-md bg-surface-2 text-xs text-fg">
-            Проиграл
-          </button>
-        </div>
-      ) : (
-        <button type="button" onClick={onToggle} className="mt-2 text-xs underline">
-          Спин окончен
+    <div className={cn("fixed top-3 right-3 z-[60] flex w-44 items-stretch gap-1 rounded-xl border-2 bg-black/80 p-2 shadow-lg", status.soon ? "blind-hot border-red-500 text-red-400" : "border-emerald-400 text-emerald-400")}>
+      <div className="flex flex-col justify-center">
+        <button type="button" onClick={() => onShift(1)} aria-label="Блайнды выше, таймер сначала" title="Блайнды выше. Таймер начнётся заново" className="grid h-7 w-7 place-items-center rounded-md bg-white/10 text-sm leading-none">
+          ▲
         </button>
-      )}
+        <button type="button" onClick={() => onShift(-1)} aria-label="Блайнды ниже, таймер сначала" title="Блайнды ниже. Таймер начнётся заново" className="mt-1 grid h-7 w-7 place-items-center rounded-md bg-white/10 text-sm leading-none">
+          ▼
+        </button>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-2xl font-semibold leading-none">{status.left.replace(/^ещё /, "")}</p>
+        <p className="mt-1 text-xs">
+          {status.sb}/{status.bb} · ур. {status.level}
+        </p>
+        {ending ? (
+          <div className="mt-2 grid gap-1">
+            <button type="button" onClick={onWin} className="h-8 rounded-md bg-fg text-xs text-bg">
+              Выиграл ${saved}
+            </button>
+            <button type="button" onClick={onLose} className="h-8 rounded-md bg-surface-2 text-xs text-fg">
+              Проиграл
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={onToggle} className="mt-2 text-xs underline">
+            Спин окончен
+          </button>
+        )}
+      </div>
     </div>
   );
 }
