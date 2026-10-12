@@ -3,7 +3,7 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
+import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -383,6 +383,7 @@ export function HandProvider({
       result: settled,
       villains: villains.map((pair) => pair.map(cardLabel).join(" ")).join(" · "),
       played: acted || played,
+      gameId: readBlind()?.gameId,
     };
     kept.current = id;
     setSavedId(id);
@@ -544,8 +545,9 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   }, []);
   function finish(won: boolean) {
     const current = readPrize();
+    const session = readBlind();
     const item = PRIZES.find((prize) => prize.prize === current?.prize);
-    if (item) settleSpin(item.prize, item.buy, won);
+    if (item) settleSpin(item.prize, item.buy, won, session?.gameId);
     clearBlind();
     setEnding(false);
     setSeatAsk(false);

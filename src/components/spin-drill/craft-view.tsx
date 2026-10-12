@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, handMoney, placeText, readBank, readCraft, removeCraft, setBankCash, trackHands, updateCraft, type BankBook, type CraftHand } from "@/lib/spin-drill/craft";
+import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, setBankCash, trackHands, updateCraft, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -47,20 +47,22 @@ export function CraftTable() {
     if (ids.includes(editId)) setEditId("");
     reload();
   }
-  if (!hands.length) {
-    return (
-      <div className="space-y-4">
-        <BankRoll />
-        <section className="rounded-2xl border border-border bg-surface p-4">
-          <h2 className="text-lg font-semibold">PokerCraft</h2>
-          <p className="mt-2 text-sm text-muted">Раздач пока нет. Сыграйте руку в Стратегии и нажмите галочку или «Новая раздача» — разбор и трекер сохранятся сюда.</p>
-        </section>
-      </div>
-    );
-  }
   return (
     <div className="space-y-4">
       <BankRoll />
+      <GameList
+        hands={slice}
+        showEmpty={filter === "all"}
+        picked={picked}
+        setPicked={setPicked}
+        allOn={allOn}
+        visibleIds={visibleIds}
+        editId={editId}
+        setEditId={setEditId}
+        onDrop={drop}
+        onReload={reload}
+      />
+      {hands.length ? (
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">Трекер</h2>
         <p className="mt-1 text-sm text-muted">Как PokerTracker по вашим раздачам: винрейт, фактические фишки и EV решения. ROI спина в долларах здесь нет — в архиве руки, а не финиш турнира.</p>
@@ -94,83 +96,158 @@ export function CraftTable() {
         {track.bySeat.length ? <Split title="По позиции" rows={track.bySeat} /> : null}
         {track.byStack.length ? <Split title="По стеку" rows={track.byStack} /> : null}
       </section>
-      <section className="rounded-2xl border border-border bg-surface p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-semibold">Раздачи</h2>
-          <button type="button" disabled={!picked.length} onClick={() => drop(picked)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40">
-            Удалить выбранные{picked.length ? ` (${picked.length})` : ""}
-          </button>
-        </div>
-        <p className="mt-1 text-xs text-muted">Галочка отмечает руку. Результат можно поправить: винрейт и bb пересчитаются. Заметка остаётся только в журнале.</p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-subtle">
-              <tr>
-                <th className="w-8 py-2 pr-2 font-medium">
-                  <input type="checkbox" checked={allOn} aria-label="Выбрать все на экране" onChange={() => setPicked(allOn ? picked.filter((id) => !visibleIds.includes(id)) : [...new Set([...picked, ...visibleIds])])} />
-                </th>
-                <th className="py-2 pr-3 font-medium">Дата</th>
-                <th className="py-2 pr-3 font-medium">Время</th>
-                <th className="py-2 pr-3 font-medium">Раздача</th>
-                <th className="py-2 pr-3 font-medium">bb</th>
-                <th className="py-2 pr-3 font-medium">EV</th>
-                <th className="py-2 font-medium">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {slice.map((hand) => {
-                const stamp = when(hand.at);
-                const money = handMoney(hand);
-                const open = editId === hand.id;
-                return (
-                  <tr key={hand.id} className="border-t border-border align-top">
-                    <td className="py-2 pr-2">
-                      <input type="checkbox" checked={picked.includes(hand.id)} aria-label="Выбрать раздачу" onChange={() => setPicked((ids) => (ids.includes(hand.id) ? ids.filter((id) => id !== hand.id) : [...ids, hand.id]))} />
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-xs">{stamp.day}</td>
-                    <td className="py-2 pr-3 font-mono text-xs">{stamp.time}</td>
-                    <td className="py-2 pr-3">
-                      {hand.heroSeat} · {hand.klass || hand.hole} · {hand.bb}bb
-                      <span className="mt-0.5 block text-xs text-muted">
-                        {hand.spotTitle} · {placeText(hand.result)}
-                        {hand.verdict ? ` · ${hand.verdict}` : ""}
-                      </span>
-                      {hand.note ? <span className="mt-0.5 block text-xs text-fg">{hand.note}</span> : null}
-                      {open ? (
-                        <HandEdit
-                          hand={hand}
-                          onCancel={() => setEditId("")}
-                          onSave={(result, note) => {
-                            updateCraft(hand.id, { result, note });
-                            setEditId("");
-                            reload();
-                          }}
-                        />
-                      ) : null}
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-xs">{signed(money.net)}</td>
-                    <td className="py-2 pr-3 font-mono text-xs">{signed(money.ev)}</td>
-                    <td className="py-2">
-                      <div className="flex flex-col items-start gap-1">
-                        <Link to="/pokercraft/$id" params={{ id: hand.id }} className="text-sm underline">
-                          Открыть
-                        </Link>
-                        <button type="button" onClick={() => setEditId(open ? "" : hand.id)} className="text-sm text-muted underline">
-                          Изменить
-                        </button>
-                        <button type="button" onClick={() => drop([hand.id])} className="text-sm text-muted underline">
-                          Удалить
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      ) : null}
     </div>
+  );
+}
+
+function GameList({
+  hands,
+  showEmpty,
+  picked,
+  setPicked,
+  allOn,
+  visibleIds,
+  editId,
+  setEditId,
+  onDrop,
+  onReload,
+}: {
+  hands: CraftHand[];
+  showEmpty: boolean;
+  picked: string[];
+  setPicked: (ids: string[] | ((ids: string[]) => string[])) => void;
+  allOn: boolean;
+  visibleIds: string[];
+  editId: string;
+  setEditId: (id: string) => void;
+  onDrop: (ids: string[]) => void;
+  onReload: () => void;
+}) {
+  const [rows, setRows] = useState<GameGroup[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => {
+    const book = readBank();
+    const grouped = groupGames(hands, book.spins);
+    setRows(showEmpty ? grouped : grouped.filter((row) => row.hands.length > 0));
+  }, [hands, showEmpty]);
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold">Игры</h2>
+        <button type="button" disabled={!picked.length} onClick={() => onDrop(picked)} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40">
+          Удалить выбранные{picked.length ? ` (${picked.length})` : ""}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">Спинов пока нет. Закройте игру победой или поражением — она появится одной строкой, а раздачи откроются внутри.</p>
+      ) : (
+        <ul className="mt-3">
+          {rows.map((row) => {
+            const stamp = when(row.at);
+            const open = openId === row.id;
+            const multiple = row.buy != null && row.buy > 0 && row.prize != null ? Math.round(row.prize / row.buy) : null;
+            const delta = row.won == null || row.buy == null || row.prize == null ? null : row.won ? row.prize - row.buy : -row.buy;
+            return (
+              <li key={row.id} className="border-t border-border">
+                <button type="button" onClick={() => setOpenId(open ? null : row.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left text-sm">
+                  <span>
+                    {stamp.day} {stamp.time}
+                    {row.won == null ? " · спин не закрыт" : ` · ${row.won ? "выигрыш" : "проигрыш"}`}
+                    {multiple != null ? ` · x${multiple}` : ""}
+                    {row.buy != null ? ` · бай-ин $${row.buy}` : ""}
+                    <span className="mt-0.5 block text-xs text-muted">{row.hands.length} раздач · нажмите, чтобы разобрать</span>
+                  </span>
+                  <span className="shrink-0 text-right font-mono text-xs">
+                    {delta == null ? "—" : `${delta > 0 ? "+" : ""}$${delta}`}
+                    {row.cash != null ? <span className="mt-0.5 block text-muted">{money(row.cash)}</span> : null}
+                  </span>
+                </button>
+                {open ? (
+                  row.hands.length === 0 ? (
+                    <p className="pb-2 text-xs text-muted">В этом спине раздачи не записаны.</p>
+                  ) : (
+                    <div className="overflow-x-auto pb-2">
+                      <table className="w-full min-w-[720px] text-left text-sm">
+                        <thead className="text-xs uppercase tracking-wide text-subtle">
+                          <tr>
+                            <th className="w-8 py-1 pr-2 font-medium">
+                              <input
+                                type="checkbox"
+                                checked={allOn}
+                                aria-label="Выбрать все на экране"
+                                onChange={() => setPicked(allOn ? picked.filter((id) => !visibleIds.includes(id)) : [...new Set([...picked, ...visibleIds])])}
+                              />
+                            </th>
+                            <th className="py-1 pr-3 font-medium">Раздача</th>
+                            <th className="py-1 pr-3 font-medium">bb</th>
+                            <th className="py-1 pr-3 font-medium">EV</th>
+                            <th className="py-1 font-medium">Разбор</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {row.hands.map((hand) => {
+                            const handStamp = when(hand.at);
+                            const chips = handMoney(hand);
+                            const editing = editId === hand.id;
+                            return (
+                              <tr key={hand.id} className="border-t border-border align-top">
+                                <td className="py-2 pr-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={picked.includes(hand.id)}
+                                    aria-label="Выбрать раздачу"
+                                    onChange={() => setPicked((ids) => (ids.includes(hand.id) ? ids.filter((id) => id !== hand.id) : [...ids, hand.id]))}
+                                  />
+                                </td>
+                                <td className="py-2 pr-3">
+                                  {handStamp.time} · {hand.heroSeat} · {hand.klass || hand.hole} · {hand.bb}bb
+                                  <span className="mt-0.5 block text-xs text-muted">
+                                    {hand.spotTitle} · {placeText(hand.result)}
+                                    {hand.verdict ? ` · ${hand.verdict}` : ""}
+                                  </span>
+                                  {hand.note ? <span className="mt-0.5 block text-xs text-fg">{hand.note}</span> : null}
+                                  {editing ? (
+                                    <HandEdit
+                                      hand={hand}
+                                      onCancel={() => setEditId("")}
+                                      onSave={(result, note) => {
+                                        updateCraft(hand.id, { result, note });
+                                        setEditId("");
+                                        onReload();
+                                      }}
+                                    />
+                                  ) : null}
+                                </td>
+                                <td className="py-2 pr-3 font-mono text-xs">{signed(chips.net)}</td>
+                                <td className="py-2 pr-3 font-mono text-xs">{signed(chips.ev)}</td>
+                                <td className="py-2">
+                                  <div className="flex flex-col items-start gap-1">
+                                    <Link to="/pokercraft/$id" params={{ id: hand.id }} className="text-sm underline">
+                                      Открыть
+                                    </Link>
+                                    <button type="button" onClick={() => setEditId(editing ? "" : hand.id)} className="text-sm text-muted underline">
+                                      Изменить
+                                    </button>
+                                    <button type="button" onClick={() => onDrop([hand.id])} className="text-sm text-muted underline">
+                                      Удалить
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -255,18 +332,6 @@ function BankRoll() {
           Записать банк
         </button>
       </form>
-      {book.spins.length ? (
-        <ul className="mt-3 space-y-1 text-sm">
-          {book.spins.slice(0, 8).map((spin) => (
-            <li key={spin.id} className="flex justify-between gap-3 border-t border-border py-1">
-              <span>
-                {spin.won ? "Выигрыш" : "Проигрыш"} ${spin.prize} · бай-ин ${spin.buy}
-              </span>
-              <span className="font-mono text-xs">{money(spin.cash)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </section>
   );
 }

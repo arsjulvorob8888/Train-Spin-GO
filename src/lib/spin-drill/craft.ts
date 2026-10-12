@@ -56,6 +56,7 @@ export type BlindSession = {
   chips: number;
   startedAt: number;
   hands: number;
+  gameId?: string;
 };
 
 const BLIND_KEY = "spin-blind-session";
@@ -92,7 +93,7 @@ export function stackFromBlinds(session: BlindSession, now = Date.now()): number
 
 export function startBlind(prize: number): number {
   const spec = SPIN_CLOCK[prize] ?? { chips: prize >= 10 ? 500 : 300, clock: { kind: "time" as const, seconds: 60 } };
-  const session = { prize, chips: spec.chips, startedAt: Date.now(), hands: 0 };
+  const session = { prize, chips: spec.chips, startedAt: Date.now(), hands: 0, gameId: `${Date.now()}` };
   if (typeof sessionStorage !== "undefined") writeBlind(session);
   return stackFromBlinds(session);
 }
@@ -176,12 +177,13 @@ export function setBankCash(cash: number) {
 }
 
 /** Winner takes the displayed prize and has already paid the buy-in. A loss costs the buy-in. */
-export function settleSpin(prize: number, buy: number, won: boolean): BankBook {
+export function settleSpin(prize: number, buy: number, won: boolean, gameId?: string): BankBook {
   const book = readBank();
   const delta = won ? prize - buy : -buy;
   const cash = Math.round((book.cash + delta) * 100) / 100;
-  const spin: BankSpin = { id: `${Date.now()}`, at: Date.now(), buy, prize, won, cash };
-  const next = { ...book, cash, spins: [spin, ...book.spins].slice(0, 500) };
+  const id = gameId || `${Date.now()}`;
+  const spin: BankSpin = { id, at: Date.now(), buy, prize, won, cash };
+  const next = { ...book, cash, spins: [spin, ...book.spins.filter((item) => item.id !== id)].slice(0, 500) };
   writeBank(next);
   return next;
 }
@@ -244,6 +246,8 @@ export type CraftHand = {
   bluff: CraftBluff | null;
   result: "" | "win" | "fold" | "hero" | "villain" | "split";
   villains: string;
+  /** The spin this hand belongs to. Money is settled on the spin, not the hand. */
+  gameId?: string;
   /** What the hero actually did, when the line recorded it. */
   played?: string;
   /** A correction written later from the journal. */
@@ -299,6 +303,65 @@ export function removeCraft(ids: string[]) {
 
 export function findCraft(id: string): CraftHand | null {
   return readCraft().find((item) => item.id === id) ?? null;
+}
+
+export type GameGroup = {
+  id: string;
+  at: number;
+  buy: number | null;
+  prize: number | null;
+  won: boolean | null;
+  cash: number | null;
+  hands: CraftHand[];
+};
+
+/** One closed spin is one row. Hands inside it stay available for review. */
+export function groupGames(hands: CraftHand[], spins: BankSpin[]): GameGroup[] {
+  const ids = new Set(spins.map((spin) => spin.id));
+  const buckets = new Map<string, CraftHand[]>();
+  const loose: CraftHand[] = [];
+  for (const hand of hands) {
+    if (hand.gameId && ids.has(hand.gameId)) {
+      const list = buckets.get(hand.gameId) ?? [];
+      list.push(hand);
+      buckets.set(hand.gameId, list);
+    } else loose.push(hand);
+  }
+  const ordered = [...spins].sort((a, b) => a.at - b.at);
+  const rest: CraftHand[] = [];
+  for (const hand of loose) {
+    const spin = ordered.find((item, index) => hand.at <= item.at + 2000 && (index === 0 || hand.at > ordered[index - 1]!.at));
+    if (!spin) {
+      rest.push(hand);
+      continue;
+    }
+    const list = buckets.get(spin.id) ?? [];
+    list.push(hand);
+    buckets.set(spin.id, list);
+  }
+  const rows: GameGroup[] = [...spins]
+    .sort((a, b) => b.at - a.at)
+    .map((spin) => ({
+      id: spin.id,
+      at: spin.at,
+      buy: spin.buy,
+      prize: spin.prize,
+      won: spin.won,
+      cash: spin.cash,
+      hands: (buckets.get(spin.id) ?? []).sort((a, b) => b.at - a.at),
+    }));
+  if (rest.length) {
+    rows.unshift({
+      id: "open",
+      at: Math.max(...rest.map((hand) => hand.at)),
+      buy: null,
+      prize: null,
+      won: null,
+      cash: null,
+      hands: rest.sort((a, b) => b.at - a.at),
+    });
+  }
+  return rows;
 }
 
 function round(value: number): number {
