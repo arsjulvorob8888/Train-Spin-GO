@@ -7,6 +7,7 @@ import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, 
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
+import { HuAdvisor } from "@/components/spin-drill/hu-advisor";
 import { cn } from "@/lib/utils";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -798,6 +799,7 @@ export function EquityDesk() {
             <p className="mt-1 text-xs text-muted">Префлоп закрыт. Карт дальше нет.</p>
           </div>
         ) : shown ? (
+          <>
           <div className="flex w-full flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
@@ -827,6 +829,8 @@ export function EquityDesk() {
               )}
             </div>
           </div>
+          <HuAdvisor spotId={spot.id} bb={bb} klass={shown.klass} street={shown.street} chart={shown.verdict} />
+          </>
         ) : (
           <p className="text-sm text-muted">Отметьте карты слева. Решение, эквити и пот-оддс появятся в этом блоке, рядом с рейнджем.</p>
         )}
