@@ -459,7 +459,51 @@ function BankRoll() {
           Записать банк
         </button>
       </form>
+      <SampleBar spins={book.spins} />
     </section>
+  );
+}
+
+const SAMPLE = 100;
+
+function SampleBar({ spins }: { spins: BankBook["spins"] }) {
+  const n = spins.length;
+  const wins = spins.filter((spin) => spin.won).length;
+  const spent = spins.reduce((sum, spin) => sum + spin.buy, 0);
+  const net = spins.reduce((sum, spin) => sum + (spin.won ? spin.prize - spin.buy : -spin.buy), 0);
+  const rate = n > 0 ? wins / n : 0;
+  const roi = spent > 0 ? net / spent : null;
+  const error = n > 0 ? 1.96 * Math.sqrt((rate * (1 - rate)) / n) : null;
+  const left = Math.max(0, SAMPLE - n);
+  const done = n >= SAMPLE;
+  const width = Math.min(100, Math.round((n / SAMPLE) * 100));
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-bg p-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold">Выборка</p>
+        <p className="font-mono text-sm">
+          {n}/{SAMPLE}
+        </p>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full bg-fg" style={{ width: `${width}%` }} />
+      </div>
+      <p className="mt-2 text-sm text-muted">
+        {n === 0
+          ? "Пока нет ни одного закрытого спина. После каждой игры нажимайте «Спин окончен» — иначе она не попадёт в расчёт."
+          : done
+            ? "Первая сотня записана. Лимит сам не меняется: цифры ниже только для решения, подниматься или нет."
+            : `Лимит не трогаем. До первого вывода осталось ${left} спинов.`}
+      </p>
+      {n > 0 ? (
+        <p className="mt-2 text-sm">
+          Побед {wins} из {n}, {Math.round(rate * 1000) / 10}%. Ноль с учётом рейка около 36%.
+          {error != null ? ` Коридор ${Math.max(0, Math.round((rate - error) * 1000) / 10)}–${Math.min(100, Math.round((rate + error) * 1000) / 10)}%.` : ""}
+          {roi != null ? ` ROI ${roi >= 0 ? "+" : ""}${Math.round(roi * 1000) / 10}% на $${Math.round(spent * 100) / 100} бай-инов.` : ""}
+        </p>
+      ) : null}
+      <p className="mt-1 text-xs text-subtle">Считаются только закрытые спины, не ручная правка строки банка. 50 игр для этого мало, сто — первая отсечка, не приговор.</p>
+    </div>
   );
 }
 
