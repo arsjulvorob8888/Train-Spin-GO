@@ -255,7 +255,6 @@ function BankRoll() {
           Записать банк
         </button>
       </form>
-      <p className="mt-2 text-[11px] text-muted">Спин в Стратегии закрывается кнопкой «Спин окончен». Выигрыш добавляет банк минус бай-ин, проигрыш списывает бай-ин. Число можно поправить вручную.</p>
       {book.spins.length ? (
         <ul className="mt-3 space-y-1 text-sm">
           {book.spins.slice(0, 8).map((spin) => (
