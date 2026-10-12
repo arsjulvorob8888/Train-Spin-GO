@@ -300,9 +300,9 @@ function SeatStacks({
       {(["BTN", "SB", "BB"] as const).map((seat) => {
         const mine = seat === hero;
         return (
-          <label key={seat} className={cn("block text-[10px] font-medium uppercase", mine ? "text-ok" : "text-subtle")}>
-            {mine ? "Вы" : seat}
-            {pins[seat] ? " · правка" : ""}
+          <label key={seat} className="block w-14 text-center">
+            <span className={cn("block text-[11px] font-semibold leading-none tracking-wide", mine ? "text-ok" : "text-fg")} title={pins[seat] ? "Стек поправлен вручную" : seat}>{seat}</span>
+            <span className={cn("mt-0.5 block h-3 text-[10px] font-medium leading-none", mine ? "text-ok" : "text-transparent")}>{mine ? "Вы" : "·"}</span>
             <input
               inputMode="decimal"
               defaultValue={String(stacks[seat])}
@@ -312,7 +312,7 @@ function SeatStacks({
                 const n = Number(event.target.value.replace(",", "."));
                 if (n >= 0.5 && n <= 80) onChange(seat, Math.round(n * 10) / 10);
               }}
-              className={cn("mt-0.5 h-11 w-14 rounded-md border bg-surface px-1.5 font-mono text-sm text-fg normal-case", mine ? "border-ok ring-2 ring-ok/60" : "border-border")}
+              className={cn("mt-1 h-11 w-14 rounded-md border bg-surface px-1.5 text-center font-mono text-sm text-fg normal-case", mine ? "border-ok ring-2 ring-ok/60" : "border-border")}
             />
           </label>
         );
