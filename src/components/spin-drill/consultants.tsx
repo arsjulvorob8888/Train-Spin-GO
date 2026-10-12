@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { checkDeepsolver } from "@/lib/spin-drill/deepsolver";
 import { readSources, writeSources, type SourceConfig, type SourceId } from "@/lib/spin-drill/sources";
 
 const CARDS: {
@@ -41,6 +42,8 @@ const CARDS: {
 
 export function Consultants() {
   const [sources, setSources] = useState<Record<SourceId, SourceConfig> | null>(null);
+  const [check, setCheck] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     setSources(readSources());
   }, []);
@@ -92,6 +95,26 @@ export function Consultants() {
                 className="mt-1 h-10 w-full rounded-md border border-border bg-bg px-2 font-mono text-sm text-fg normal-case"
               />
             </label>
+            {card.id === "deepsolver" ? (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  disabled={busy || !item.token.trim()}
+                  onClick={() => {
+                    setBusy(true);
+                    setCheck("");
+                    void checkDeepsolver({ data: { token: item.token } })
+                      .then((result) => setCheck(result.text))
+                      .catch((reason: unknown) => setCheck(reason instanceof Error ? reason.message : "Запрос не ушёл."))
+                      .finally(() => setBusy(false));
+                  }}
+                  className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg disabled:opacity-40"
+                >
+                  {busy ? "Проверяю ключ" : "Проверить ключ"}
+                </button>
+                {check ? <p className="mt-2 text-sm">{check}</p> : null}
+              </div>
+            ) : null}
           </section>
         );
       })}
