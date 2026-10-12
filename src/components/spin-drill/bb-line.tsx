@@ -4,7 +4,7 @@ import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo, sizedRaise } from "@/lib/spin-drill/equity-calc";
 import { potFate, preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
-import { BoardLine, Hole, ResultBanner, useHand } from "@/components/spin-drill/equity-desk";
+import { BoardLine, Hole, ResultBanner, StreetClose, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
 type Pick = { spot?: string; mine?: MixAction };
@@ -279,6 +279,7 @@ export function ActionLine({
         ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
+        <StreetClose onAdvance={goNext} />
       </div>
       {live ? <BoardLine openBoard onAdvance={goNext} runout={runout} /> : null}
       {won ? <ResultBanner kind="win" detail="Все сбросили. Банк ваш, флопа нет." /> : null}

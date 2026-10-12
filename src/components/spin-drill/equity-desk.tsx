@@ -29,6 +29,8 @@ type HandApi = {
   setStreetBet: (value: string) => void;
   place: "" | "hero" | "villain" | "split";
   setPlace: (value: "" | "hero" | "villain" | "split") => void;
+  award: string;
+  setAward: (value: string) => void;
   archiveHand: (played?: string) => void;
   savedId: string;
   setPlayed: (value: string) => void;
@@ -123,6 +125,7 @@ export function HandProvider({
   const [callText, setCallTextState] = useState("");
   const [streetBet, setStreetBetState] = useState("");
   const [place, setPlace] = useState<"" | "hero" | "villain" | "split">("");
+  const [award, setAwardState] = useState("");
   const [played, setPlayed] = useState("");
   const [savedId, setSavedId] = useState("");
   const kept = useRef("");
@@ -263,6 +266,7 @@ export function HandProvider({
     setCallTextState("");
     setStreetBetState("");
     setPlace("");
+    setAwardState("");
     setPlayed("");
     setSavedId("");
     kept.current = "";
@@ -298,6 +302,29 @@ export function HandProvider({
     queueRef.current = [...next];
     setQueue([...next]);
   }
+
+  const placeRef = useRef(place);
+  placeRef.current = place;
+  const awardHeard = useRef("");
+  function setAward(next: string) {
+    setAwardState(next);
+    if (!next) setPlace("");
+    else if (next === "split") setPlace("split");
+    else if (next === "hero" || next === spot.hero) setPlace("hero");
+    else setPlace("villain");
+  }
+  useEffect(() => {
+    if (!award) {
+      awardHeard.current = "";
+      return;
+    }
+    if (awardHeard.current === award) return;
+    awardHeard.current = award;
+    archiveHand();
+    const kind = placeRef.current;
+    if (kind === "hero") playWinSting();
+    else if (kind === "villain") playLossSting();
+  }, [award]);
 
   function syncPrice(next: Line) {
     manual.current = false;
@@ -436,6 +463,8 @@ export function HandProvider({
     setStreetBet,
     place,
     setPlace,
+    award,
+    setAward,
     archiveHand,
     savedId,
     setPlayed,
@@ -1118,6 +1147,51 @@ function CycleMark({ label }: { label: string }) {
   );
 }
 
+export function StreetClose({ onAdvance }: { onAdvance?: () => void }) {
+  const { award, setAward, spot, out, line, shown } = useHand();
+  const folded = new Set<Seat>(out);
+  for (const street of ["flop", "turn", "river"] as const) {
+    for (const act of line[street]) if (act.action === "fold") folded.add(act.seat);
+  }
+  const live = seatsInHand(spot.id, out).filter((seat) => !folded.has(seat));
+  const villains = live.filter((seat) => seat !== spot.hero);
+  const names = ["hero", ...villains, "split"];
+  const label = (id: string) => (id === "hero" ? "Я выиграл" : id === "split" ? "Ничья" : id);
+  const winner = award === "hero" || award === spot.hero ? "Вы" : award === "split" ? "Ничья" : award;
+  const lost = award === "hero" || award === spot.hero ? villains : award && award !== "split" ? ["Вы", ...villains.filter((seat) => seat !== award)] : [];
+  const eq = shown?.equity != null ? `${Math.round(shown.equity * 100)}%` : "считается по рейнджу";
+  return (
+    <div className="ml-auto w-[16rem] shrink-0 self-start rounded-lg border border-border bg-surface p-2 shadow-lg">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Итог этой улицы</p>
+      <p className="mt-0.5 text-[11px] leading-snug text-muted">Рука уже кончилась — отметьте, кто забрал банк. Дальше можно не вводить.</p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {names.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setAward(award === id ? "" : id)}
+            className={cn("h-8 rounded px-2 text-xs", award === id ? "bg-fg font-medium text-bg" : "bg-surface-2 text-muted")}
+          >
+            {label(id)}
+          </button>
+        ))}
+      </div>
+      {award ? (
+        <div className="mt-2 text-xs">
+          <p className="font-medium">Победитель: {winner}</p>
+          {lost.length ? <p className="text-muted">Проиграли: {lost.join(", ")}</p> : <p className="text-muted">Банк делится.</p>}
+          <p className="mt-1 text-muted">Эквити на этот момент: {eq}. Оно и запишется в разбор.</p>
+          {onAdvance ? (
+            <button type="button" onClick={onAdvance} className="mt-2 h-8 rounded-full bg-ok px-3 text-xs font-semibold text-bg">
+              Дальше, следующая раздача
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard: boolean; onAdvance?: () => void; runout?: boolean }) {
   const { spot, bb, stacks, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out, setQueue, queueRef } = useHand();
   const latest = useRef<HTMLDivElement>(null);
@@ -1215,6 +1289,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={hint} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
         ) : null}
         {flopClosed ? <CycleMark label="флоп" /> : null}
+        <StreetClose onAdvance={onAdvance} />
       </div>
       {over ? (
         <div>
@@ -1237,6 +1312,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={hint} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
           ) : null}
           {turnClosed ? <CycleMark label="тёрн" /> : null}
+          <StreetClose onAdvance={onAdvance} />
         </div>
       ) : null}
       {turnClosed && fate === "play" ? (
@@ -1253,6 +1329,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={hint} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
           ) : null}
           {finished ? <DoneMark label={showdown([...hole, ...board])?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
+          <StreetClose onAdvance={onAdvance} />
         </div>
       ) : null}
       {board.length >= 5 || (finished && !over) ? <ShowdownPanel /> : null}
