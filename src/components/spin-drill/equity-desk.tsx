@@ -3,7 +3,7 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, noteBlindHand, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
+import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, prizesFor, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -510,6 +510,7 @@ export function HandProvider({
 
 export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb: number) => void; onAuto?: (bb: number) => void; onStarted?: () => void; onSeat?: (seat: "BTN" | "SB" | "BB" | "HU") => void }) {
   const [saved, setSaved] = useState(0);
+  const [buy, setBuy] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [ending, setEnding] = useState(false);
   const [later, setLater] = useState(false);
@@ -522,13 +523,14 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     const tick = () => {
       const next = blindStatus();
       setStatus(next);
-      setSaved(readPrize()?.prize ?? 0);
+      if (next) setSaved(readPrize()?.prize ?? 0);
       if (next && next.stack !== sent.current) {
         sent.current = next.stack;
         autoRef.current?.(next.stack);
       }
     };
     tick();
+    setBuy(readPrize()?.buy ?? null);
     setReady(true);
     const id = window.setInterval(tick, 1000);
     window.addEventListener("spin-blind", tick);
@@ -549,10 +551,10 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   function finish(won: boolean) {
     const current = readPrize();
     const session = readBlind();
-    const item = PRIZES.find((prize) => prize.prize === current?.prize);
-    if (item) {
-      settleSpin(item.prize, item.buy, won, session?.gameId);
-      sessionStorage.setItem("spin-settled-note", won ? `Выигрыш $${item.prize} записан` : `Проигрыш бай-ина $${item.buy} записан`);
+    const stake = current?.buy ?? session?.buy ?? PRIZES.find((prize) => prize.prize === current?.prize)?.buy ?? null;
+    if (current && stake != null) {
+      settleSpin(current.prize, stake, won, session?.gameId);
+      sessionStorage.setItem("spin-settled-note", won ? `Выигрыш ${money(current.prize)} записан` : `Проигрыш бай-ина ${money(stake)} записан`);
     }
     clearBlind();
     setEnding(false);
@@ -561,7 +563,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     setStatus(null);
   }
   if (!ready) return null;
-  const buy = PRIZES.find((prize) => prize.prize === saved)?.buy ?? null;
+  const stake = buy ?? PRIZES.find((prize) => prize.prize === saved)?.buy ?? null;
   const note = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("spin-settled-note") : null;
   const clock = status ? <BlindClock status={status} onShift={shiftBlind} onToggle={() => setEnding(true)} /> : null;
   const endModal = ending && status ? (
@@ -571,10 +573,10 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
         <p className="mt-1 text-sm text-muted">Один спин — одна запись в деньги. Раздачи этого спина останутся внутри.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" onClick={() => finish(true)} className="h-11 rounded-full bg-fg px-4 text-sm font-semibold text-bg">
-            Выиграл ${saved}
+            Выиграл {money(saved)}
           </button>
           <button type="button" onClick={() => finish(false)} className="h-11 rounded-full bg-surface-2 px-4 text-sm font-semibold text-fg">
-            Проиграл {buy != null ? `$${buy}` : ""}
+            Проиграл {stake != null ? money(stake) : ""}
           </button>
         </div>
         <button type="button" onClick={() => setEnding(false)} className="mt-3 text-xs text-muted underline">
@@ -587,28 +589,46 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
-          <h2 className="text-lg font-semibold">Какой банк?</h2>
+          <h2 className="text-lg font-semibold">Новая игра</h2>
           {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {PRIZES.map((item) => (
+          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-subtle">Стоимость турнира</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {BUYINS.map((amount) => (
               <button
-                key={item.prize}
+                key={amount}
                 type="button"
-                title={item.note}
-                onClick={() => {
-                  sessionStorage.removeItem("spin-settled-note");
-                  rememberPrize(item.prize, item.bb);
-                  setSaved(item.prize);
-                  setLater(false);
-                  onStack(startBlind(item.prize));
-                  setSeatAsk(true);
-                }}
-                className={cn("h-11 rounded-full px-3 font-mono text-sm", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
+                onClick={() => setBuy(amount)}
+                className={cn("h-11 rounded-full px-3 font-mono text-sm", buy === amount ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
               >
-                ${item.prize}
+                {money(amount)}
               </button>
             ))}
           </div>
+          <p className="mt-4 text-[11px] font-medium uppercase tracking-wide text-subtle">Банк</p>
+          {buy == null ? (
+            <p className="mt-2 text-sm text-muted">Сначала выберите стоимость. Банк откроется под неё.</p>
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {prizesFor(buy).map((item) => (
+                <button
+                  key={item.prize}
+                  type="button"
+                  title={item.note}
+                  onClick={() => {
+                    sessionStorage.removeItem("spin-settled-note");
+                    rememberPrize(item.prize, item.bb, item.buy);
+                    setSaved(item.prize);
+                    setLater(false);
+                    onStack(startBlind(item.prize, item.buy));
+                    setSeatAsk(true);
+                  }}
+                  className={cn("h-11 rounded-full px-3 font-mono text-sm", saved === item.prize ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
+                >
+                  {money(item.prize)}
+                </button>
+              ))}
+            </div>
+          )}
           <button type="button" onClick={() => setLater(true)} className="mt-3 text-xs text-muted underline">
             Позже
           </button>
@@ -624,6 +644,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
             <h2 className="text-lg font-semibold">Ваша позиция?</h2>
+            {stake != null ? <p className="mt-1 text-sm text-muted">Турнир {money(stake)} · банк {money(saved)}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {(["BTN", "SB", "BB", "HU"] as const).map((seat) => (
                 <button

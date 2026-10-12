@@ -16,6 +16,35 @@ export const PRIZES: { prize: number; bb: number; buy: number; note: string }[] 
   { prize: 50, bb: 40, buy: 1, note: "$1 · x100" },
 ];
 
+export const BUYINS = [0.25, 1, 2, 3, 5, 10, 20, 50, 100];
+
+const MULTS: { mult: number; bb: number }[] = [
+  { mult: 2, bb: 15 },
+  { mult: 3, bb: 15 },
+  { mult: 4, bb: 25 },
+  { mult: 5, bb: 25 },
+  { mult: 10, bb: 25 },
+  { mult: 50, bb: 40 },
+  { mult: 100, bb: 40 },
+];
+
+export function money(amount: number): string {
+  const text = Number.isInteger(amount) ? String(amount) : amount.toFixed(2).replace(/0$/, "");
+  return `$${text}`;
+}
+
+/** Banks for a buy-in. $0.25 and $1 keep the prizes already used; other stakes use the same multipliers. */
+export function prizesFor(buy: number): { prize: number; bb: number; buy: number; note: string }[] {
+  const known = PRIZES.filter((item) => item.buy === buy);
+  const extra = MULTS.map((row) => ({
+    prize: Math.round(buy * row.mult * 100) / 100,
+    bb: row.bb,
+    buy,
+    note: `${money(buy)} · x${row.mult}`,
+  })).filter((row) => !known.some((item) => Math.abs(item.prize - row.prize) < 0.001));
+  return [...known, ...extra];
+}
+
 /** PokerOK Spin & Gold 3-max ladder. The same steps for every multiplier. */
 export const BLIND_LEVELS: [number, number][] = [
   [10, 20],
@@ -57,6 +86,7 @@ export type BlindSession = {
   startedAt: number;
   hands: number;
   gameId?: string;
+  buy?: number;
 };
 
 const BLIND_KEY = "spin-blind-session";
@@ -79,8 +109,21 @@ export function readBlind(): BlindSession | null {
   }
 }
 
+function clockFor(prize: number, buy?: number): { chips: number; clock: SpinClock } {
+  const stake = buy ?? PRIZES.find((item) => item.prize === prize)?.buy;
+  const listed = stake != null && PRIZES.some((item) => item.prize === prize && item.buy === stake);
+  if (listed && SPIN_CLOCK[prize]) return SPIN_CLOCK[prize];
+  const mult = stake && stake > 0 ? prize / stake : 2;
+  if (mult < 2.5) return { chips: 300, clock: { kind: "time", seconds: 60 } };
+  if (mult < 3.5) return { chips: 300, clock: { kind: "time", seconds: 120 } };
+  if (mult < 4.5) return { chips: 500, clock: { kind: "time", seconds: 120 } };
+  if (mult < 8) return { chips: 500, clock: { kind: "time", seconds: 180 } };
+  if (mult < 25) return { chips: 500, clock: { kind: "hands", hands: 10 } };
+  return { chips: 800, clock: { kind: "hands", hands: 15 } };
+}
+
 export function blindLevel(session: BlindSession, now = Date.now()): number {
-  const spec = SPIN_CLOCK[session.prize];
+  const spec = clockFor(session.prize, session.buy);
   if (!spec) return 0;
   const raw = spec.clock.kind === "time" ? Math.floor((now - session.startedAt) / 1000 / spec.clock.seconds) : Math.floor(session.hands / spec.clock.hands);
   return Math.max(0, Math.min(BLIND_LEVELS.length - 1, raw));
@@ -91,9 +134,9 @@ export function stackFromBlinds(session: BlindSession, now = Date.now()): number
   return Math.max(1, Math.round(session.chips / bb));
 }
 
-export function startBlind(prize: number): number {
-  const spec = SPIN_CLOCK[prize] ?? { chips: prize >= 10 ? 500 : 300, clock: { kind: "time" as const, seconds: 60 } };
-  const session = { prize, chips: spec.chips, startedAt: Date.now(), hands: 0, gameId: `${Date.now()}` };
+export function startBlind(prize: number, buy = 1): number {
+  const spec = clockFor(prize, buy);
+  const session: BlindSession = { prize, buy, chips: spec.chips, startedAt: Date.now(), hands: 0, gameId: `${Date.now()}` };
   if (typeof sessionStorage !== "undefined") writeBlind(session);
   return stackFromBlinds(session);
 }
@@ -118,7 +161,7 @@ export function noteBlindHand() {
 export function shiftBlind(delta: number) {
   const session = readBlind();
   if (!session || typeof sessionStorage === "undefined" || !delta) return;
-  const spec = SPIN_CLOCK[session.prize];
+  const spec = clockFor(session.prize, session.buy);
   if (!spec) return;
   const now = Date.now();
   const next = Math.max(0, Math.min(BLIND_LEVELS.length - 1, blindLevel(session, now) + delta));
@@ -240,7 +283,7 @@ export function settleSpin(prize: number, buy: number, won: boolean, gameId?: st
 export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number; soon: boolean } | null {
   const session = readBlind();
   if (!session) return null;
-  const spec = SPIN_CLOCK[session.prize];
+  const spec = clockFor(session.prize, session.buy);
   const level = blindLevel(session, now);
   const pair = BLIND_LEVELS[level] ?? BLIND_LEVELS[0]!;
   let left = "";
@@ -306,19 +349,20 @@ export type CraftHand = {
 const KEY = "spin-craft-v1";
 const PRIZE_KEY = "spin-craft-prize";
 
-export function rememberPrize(prize: number, bb: number) {
+export function rememberPrize(prize: number, bb: number, buy?: number) {
   if (typeof sessionStorage === "undefined") return;
-  sessionStorage.setItem(PRIZE_KEY, JSON.stringify({ prize, bb }));
+  sessionStorage.setItem(PRIZE_KEY, JSON.stringify({ prize, bb, buy }));
 }
 
-export function readPrize(): { prize: number; bb: number } | null {
+export function readPrize(): { prize: number; bb: number; buy: number | null } | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(PRIZE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { prize?: number; bb?: number };
+    const parsed = JSON.parse(raw) as { prize?: number; bb?: number; buy?: number };
     if (typeof parsed.prize !== "number" || typeof parsed.bb !== "number") return null;
-    return { prize: parsed.prize, bb: parsed.bb };
+    const buy = typeof parsed.buy === "number" ? parsed.buy : (PRIZES.find((item) => item.prize === parsed.prize)?.buy ?? null);
+    return { prize: parsed.prize, bb: parsed.bb, buy };
   } catch {
     return null;
   }
