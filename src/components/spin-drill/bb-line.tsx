@@ -84,7 +84,7 @@ export function ActionLine({
   useEffect(() => {
     setOut(preflopFolded(spot, sbAct, bbAct, btnAct));
   }, [spot.id, spot.group, sbAct, bbAct, btnAct, setOut]);
-  const won = tookPot(spot, mine, sbAct, bbAct, btnAct);
+  const won = tookPot(spot, mine, sbAct, bbAct, btnAct, back);
   const folded = mine === "fold" || back === "fold";
   const live = flopOpen(spot, mine, sbAct, bbAct, btnAct, back);
   const answerCol = cols.find((col) => col.hero && !col.selected && col.actions.some((action) => action.back));
@@ -392,7 +392,7 @@ function faceReply(equity: number, need: number | null, canJam: boolean): "" | "
 
 function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): boolean {
   if (mine !== "call" && mine !== "raise" && mine !== "allin") return false;
-  if (tookPot(spot, mine, sbAct, bbAct, btnAct)) return false;
+  if (tookPot(spot, mine, sbAct, bbAct, btnAct, back)) return false;
   if (/jam|push|reshove/.test(spot.id)) return mine === "call" || mine === "allin";
   if (spot.group === "BTN" && spot.id === "btn") {
     const sbDone = sbAct === "fold" || sbAct === "call";
@@ -406,7 +406,7 @@ function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blin
   return true;
 }
 
-function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind): boolean {
+function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): boolean {
   if (spot.group === "BB" && sbAct === "fold" && spot.id.startsWith("bb_vs_sb")) return true;
   if (mine !== "raise" && mine !== "allin" && mine !== "call") return false;
   if (spot.group === "BTN" && spot.id === "btn") return sbAct === "fold" && bbAct === "fold";
