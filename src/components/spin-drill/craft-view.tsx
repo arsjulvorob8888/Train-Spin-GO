@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HandReview } from "@/components/spin-drill/review-range";
 import { handClass, tryParseCard } from "@/lib/poker/cards";
-import { findCraft, groupGames, handMoney, placeText, readBank, readCraft, removeCraft, removeSpins, setBankCash, setBankLine, stakeRows, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup } from "@/lib/spin-drill/craft";
+import { findCraft, groupGames, handMoney, placeText, placesFor, readBank, readCraft, removeCraft, removeSpins, setBankCash, setBankLine, spinNet, spinPayout, stakeRows, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup, type Place } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
 import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
@@ -182,8 +182,11 @@ function GameList({
           {rows.map((row) => {
             const stamp = when(row.at);
             const open = openId === row.id;
+            const place = row.place;
             const multiple = row.buy != null && row.buy > 0 && row.prize != null ? Math.round(row.prize / row.buy) : null;
-            const delta = row.won == null || row.buy == null || row.prize == null ? null : row.won ? row.prize - row.buy : -row.buy;
+            const delta = row.buy != null && row.prize != null && place != null ? spinNet({ buy: row.buy, prize: row.prize, place, won: place === 1 }) : null;
+            const payout = row.buy != null && row.prize != null && place != null ? spinPayout(row.buy, row.prize, place) : null;
+            const placeName = place === 1 ? "1 место" : place === 2 ? "2 место" : place === 3 ? "3 место" : "";
             return (
               <li key={row.id} className="border-t border-border">
                 <div className="flex items-start gap-3 py-2">
@@ -197,9 +200,10 @@ function GameList({
                   <button type="button" onClick={() => setOpenId(open ? null : row.id)} className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left text-sm">
                     <span>
                       {stamp.day} {stamp.time}
-                      {row.won == null ? " · спин не закрыт" : ` · ${row.won ? "выигрыш" : "проигрыш"}`}
+                      {row.won == null ? " · спин не закрыт" : ` · ${placeName}`}
                       {multiple != null ? ` · x${multiple}` : ""}
                       {row.buy != null ? ` · бай-ин $${row.buy}` : ""}
+                      {payout != null && place !== 3 ? ` · приз $${payout}` : ""}
                       <span className="mt-0.5 block text-xs text-muted">{row.hands.length} раздач · нажмите, чтобы разобрать</span>
                     </span>
                     <span className="shrink-0 text-right font-mono text-xs">
@@ -218,14 +222,13 @@ function GameList({
                     </button>
                   </div>
                 </div>
-                {editGame === row.id && row.won != null ? (
+                {editGame === row.id && row.buy != null && row.prize != null ? (
                   <div className="mb-2 ml-6 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => { updateSpin(row.id, true); setEditGame(""); setTick((value) => value + 1); }} className="h-8 rounded-full bg-fg px-3 text-xs text-bg">
-                      Это выигрыш
-                    </button>
-                    <button type="button" onClick={() => { updateSpin(row.id, false); setEditGame(""); setTick((value) => value + 1); }} className="h-8 rounded-full bg-surface-2 px-3 text-xs text-fg">
-                      Это проигрыш
-                    </button>
+                    {placesFor(row.buy, row.prize).map((item) => (
+                      <button key={item.place} type="button" onClick={() => { updateSpin(row.id, item.place as Place); setEditGame(""); setTick((value) => value + 1); }} className={item.place === place ? "h-8 rounded-full bg-fg px-3 text-xs text-bg" : "h-8 rounded-full bg-surface-2 px-3 text-xs text-fg"}>
+                        {item.place} место · {item.net > 0 ? "+" : ""}{money(item.net)}
+                      </button>
+                    ))}
                   </div>
                 ) : null}
                 {open ? (
@@ -479,7 +482,7 @@ function SampleBar({ spins }: { spins: BankBook["spins"] }) {
   const n = spins.length;
   const wins = spins.filter((spin) => spin.won).length;
   const spent = spins.reduce((sum, spin) => sum + spin.buy, 0);
-  const net = spins.reduce((sum, spin) => sum + (spin.won ? spin.prize - spin.buy : -spin.buy), 0);
+  const net = spins.reduce((sum, spin) => sum + spinNet(spin), 0);
   const rate = n > 0 ? wins / n : 0;
   const roi = spent > 0 ? net / spent : null;
   const error = n > 0 ? 1.96 * Math.sqrt((rate * (1 - rate)) / n) : null;

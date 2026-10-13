@@ -177,6 +177,39 @@ export function clearBlind() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("spin-blind"));
 }
 
+export type Place = 1 | 2 | 3;
+
+/** PokerOK 3-max: the table shows the whole pool, but from x10 it is split. Shares are in buy-ins. */
+const PAYOUTS: Record<number, [number, number, number]> = {
+  2: [2, 0, 0],
+  3: [3, 0, 0],
+  4: [4, 0, 0],
+  5: [5, 0, 0],
+  10: [8, 2, 0],
+  50: [30, 15, 5],
+  100: [60, 30, 10],
+};
+
+export function prizeShares(buy: number, prize: number): [number, number, number] {
+  if (!(buy > 0)) return [0, 0, 0];
+  const mult = Math.round((prize / buy) * 100) / 100;
+  return PAYOUTS[mult] ?? [mult, 0, 0];
+}
+
+export function spinPayout(buy: number, prize: number, place: Place): number {
+  const share = prizeShares(buy, prize)[place - 1] ?? 0;
+  return Math.round(share * buy * 100) / 100;
+}
+
+export function placesFor(buy: number, prize: number): { place: Place; payout: number; net: number }[] {
+  return ([1, 2, 3] as const)
+    .map((place) => {
+      const payout = spinPayout(buy, prize, place);
+      return { place, payout, net: Math.round((payout - buy) * 100) / 100 };
+    })
+    .filter((row) => row.place === 1 || row.place === 3 || row.payout > 0);
+}
+
 export type BankSpin = {
   id: string;
   at: number;
@@ -184,6 +217,8 @@ export type BankSpin = {
   prize: number;
   won: boolean;
   cash: number;
+  /** 1 takes the top share. 2 and 3 are paid only on the bigger multipliers. */
+  place?: Place;
 };
 
 export type BankBook = {
@@ -205,16 +240,34 @@ export function readBank(): BankBook {
     if (!raw) return empty;
     const parsed = JSON.parse(raw) as BankBook;
     if (typeof parsed.cash !== "number") return empty;
-    return {
+    const book = {
       cash: parsed.cash,
       anchor: typeof parsed.anchor === "number" ? parsed.anchor : BANK_START,
       spins: Array.isArray(parsed.spins) ? parsed.spins : [],
       spinAdjust: typeof parsed.spinAdjust === "number" ? parsed.spinAdjust : 0,
       winAdjust: typeof parsed.winAdjust === "number" ? parsed.winAdjust : 0,
     };
+    return withPlaces(book);
   } catch {
     return empty;
   }
+}
+
+function withPlaces(book: BankBook): BankBook {
+  if (book.spins.every((spin) => spin.place === 1 || spin.place === 2 || spin.place === 3)) return book;
+  const ordered = [...book.spins].sort((a, b) => a.at - b.at);
+  let run = 0;
+  const fixed = new Map<string, BankSpin>();
+  for (const spin of ordered) {
+    const place: Place = spin.place === 1 || spin.place === 2 || spin.place === 3 ? spin.place : spin.won ? 1 : 3;
+    const before = Math.round((spin.won ? spin.prize - spin.buy : -spin.buy) * 100) / 100;
+    const after = spinNet({ ...spin, place });
+    run = Math.round((run + after - before) * 100) / 100;
+    fixed.set(spin.id, { ...spin, place, won: place === 1, cash: Math.round((spin.cash + run) * 100) / 100 });
+  }
+  const next = { ...book, cash: Math.round((book.cash + run) * 100) / 100, spins: book.spins.map((spin) => fixed.get(spin.id) ?? spin) };
+  writeBank(next);
+  return next;
 }
 
 function writeBank(book: BankBook) {
@@ -222,16 +275,21 @@ function writeBank(book: BankBook) {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("spin-bank"));
 }
 
-function spinDelta(spin: Pick<BankSpin, "won" | "prize" | "buy">) {
-  return spin.won ? spin.prize - spin.buy : -spin.buy;
+export function spinNet(spin: Pick<BankSpin, "won" | "prize" | "buy" | "place">): number {
+  const place: Place = spin.place === 1 || spin.place === 2 || spin.place === 3 ? spin.place : spin.won ? 1 : 3;
+  return Math.round((spinPayout(spin.buy, spin.prize, place) - spin.buy) * 100) / 100;
 }
 
-export function updateSpin(id: string, won: boolean): BankBook {
+export function updateSpin(id: string, place: Place): BankBook {
   const book = readBank();
   const prev = book.spins.find((spin) => spin.id === id);
-  if (!prev || prev.won === won) return book;
-  const shift = Math.round((spinDelta({ ...prev, won }) - spinDelta(prev)) * 100) / 100;
-  const spins = book.spins.map((spin) => (spin.id === id ? { ...spin, won, cash: Math.round((spin.cash + shift) * 100) / 100 } : spin));
+  const had: Place = prev?.place === 1 || prev?.place === 2 || prev?.place === 3 ? prev.place : prev?.won ? 1 : 3;
+  if (!prev || had === place) return book;
+  const shift = Math.round((spinNet({ ...prev, place }) - spinNet(prev)) * 100) / 100;
+  const spins = book.spins.map((spin) => {
+    const cash = spin.at >= prev.at ? Math.round((spin.cash + shift) * 100) / 100 : spin.cash;
+    return spin.id === id ? { ...spin, place, won: place === 1, cash } : { ...spin, cash };
+  });
   const next = { ...book, cash: Math.round((book.cash + shift) * 100) / 100, spins };
   writeBank(next);
   return next;
@@ -241,7 +299,7 @@ export function removeSpins(ids: string[]): BankBook {
   const drop = new Set(ids);
   const book = readBank();
   const gone = book.spins.filter((spin) => drop.has(spin.id));
-  const shift = gone.reduce((sum, spin) => sum + spinDelta(spin), 0);
+  const shift = gone.reduce((sum, spin) => sum + spinNet(spin), 0);
   const next = { ...book, cash: Math.round((book.cash - shift) * 100) / 100, spins: book.spins.filter((spin) => !drop.has(spin.id)) };
   writeBank(next);
   return next;
@@ -268,12 +326,12 @@ export function setBankLine(anchor: number, spins: number, wins: number) {
 }
 
 /** Winner takes the displayed prize and has already paid the buy-in. A loss costs the buy-in. */
-export function settleSpin(prize: number, buy: number, won: boolean, gameId?: string): BankBook {
+export function settleSpin(prize: number, buy: number, place: Place, gameId?: string): BankBook {
   const book = readBank();
-  const delta = won ? prize - buy : -buy;
+  const delta = spinNet({ buy, prize, place, won: place === 1 });
   const cash = Math.round((book.cash + delta) * 100) / 100;
   const id = gameId || `${Date.now()}`;
-  const spin: BankSpin = { id, at: Date.now(), buy, prize, won, cash };
+  const spin: BankSpin = { id, at: Date.now(), buy, prize, place, won: place === 1, cash };
   const next = { ...book, cash, spins: [spin, ...book.spins.filter((item) => item.id !== id)].slice(0, 500) };
   writeBank(next);
   return next;
@@ -416,7 +474,7 @@ export function stakeRows(spins: BankSpin[]): StakeRow[] {
     row.games += 1;
     if (spin.won) row.wins += 1;
     row.spent += spin.buy;
-    row.net += spin.won ? spin.prize - spin.buy : -spin.buy;
+    row.net += spinNet(spin);
     map.set(spin.buy, row);
   }
   return [...map.values()]
@@ -440,6 +498,7 @@ export type GameGroup = {
   buy: number | null;
   prize: number | null;
   won: boolean | null;
+  place: Place | null;
   cash: number | null;
   hands: CraftHand[];
 };
@@ -476,6 +535,7 @@ export function groupGames(hands: CraftHand[], spins: BankSpin[]): GameGroup[] {
       buy: spin.buy,
       prize: spin.prize,
       won: spin.won,
+      place: spin.place ?? (spin.won ? 1 : 3),
       cash: spin.cash,
       hands: (buckets.get(spin.id) ?? []).sort((a, b) => b.at - a.at),
     }));
@@ -487,6 +547,7 @@ export function groupGames(hands: CraftHand[], spins: BankSpin[]): GameGroup[] {
       buy: tagged?.buy ?? null,
       prize: tagged?.prize ?? null,
       won: null,
+      place: null,
       cash: null,
       hands: rest.sort((a, b) => b.at - a.at),
     });

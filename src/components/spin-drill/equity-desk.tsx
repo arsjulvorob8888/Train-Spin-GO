@@ -3,7 +3,7 @@ import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, prizesFor, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand } from "@/lib/spin-drill/craft";
+import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, placesFor, prizesFor, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand, type Place } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -549,13 +549,16 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
       window.removeEventListener("spin-end-ask", askEnd);
     };
   }, []);
-  function finish(won: boolean) {
+  function finish(place: Place) {
     const current = readPrize();
     const session = readBlind();
     const stake = current?.buy ?? session?.buy ?? PRIZES.find((prize) => prize.prize === current?.prize)?.buy ?? null;
     if (current && stake != null) {
-      settleSpin(current.prize, stake, won, session?.gameId);
-      sessionStorage.setItem("spin-settled-note", won ? `Выигрыш ${money(current.prize)} записан` : `Проигрыш бай-ина ${money(stake)} записан`);
+      const row = placesFor(stake, current.prize).find((item) => item.place === place);
+      settleSpin(current.prize, stake, place, session?.gameId);
+      const got = row ? money(row.payout) : "";
+      const net = row ? `${row.net > 0 ? "+" : ""}${money(row.net)}` : "";
+      sessionStorage.setItem("spin-settled-note", `${place} место записано: приз ${got}, в банк ${net}`);
     }
     clearBlind();
     setEnding(false);
@@ -571,14 +574,14 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">Игра окончена</h2>
-        <p className="mt-1 text-sm text-muted">Один спин — одна запись в деньги. Раздачи этого спина останутся внутри.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => finish(true)} className="h-11 rounded-full bg-fg px-4 text-sm font-semibold text-bg">
-            Выиграл {money(saved)}
-          </button>
-          <button type="button" onClick={() => finish(false)} className="h-11 rounded-full bg-surface-2 px-4 text-sm font-semibold text-fg">
-            Проиграл {stake != null ? money(stake) : ""}
-          </button>
+        <p className="mt-1 text-sm text-muted">Банк на столе — весь приз. На PokerOK с x10 его делят, второе место тоже получает деньги. В банк пишется приз минус бай-ин.</p>
+        <div className="mt-3 flex flex-col gap-2">
+          {(stake != null ? placesFor(stake, saved) : []).map((row) => (
+            <button key={row.place} type="button" onClick={() => finish(row.place)} className={cn("h-11 rounded-full px-4 text-left text-sm font-semibold", row.place === 1 ? "bg-fg text-bg" : "bg-surface-2 text-fg")}>
+              {row.place} место · приз {money(row.payout)} · {row.net > 0 ? "+" : ""}
+              {money(row.net)}
+            </button>
+          ))}
         </div>
         <button type="button" onClick={() => setEnding(false)} className="mt-3 text-xs text-muted underline">
           Ещё играю
