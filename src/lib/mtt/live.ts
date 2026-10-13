@@ -143,8 +143,8 @@ export function resolveLive(opts: {
   cold: boolean;
 }): LiveNode {
   const { pack, spots, stack, hero, opener, limp, three, cold } = opts;
-  if (cold && (hero === "BTN" || hero === "BB")) {
-    const found = lookup(pack, spots, stack, `vs-open:cold-${hero}`);
+  if (cold) {
+    const found = hero === "BTN" || hero === "BB" ? lookup(pack, spots, stack, `vs-open:cold-${hero}`) : null;
     if (found) {
       return {
         kind: "cold",
@@ -156,6 +156,15 @@ export function resolveLive(opts: {
         range: found.range,
       };
     }
+    return {
+      kind: "cold",
+      title: `${hero} против 3-бета`,
+      blurb: "Холодный колл почти всегда фолд. Пуш только с сильной рукой.",
+      call: "Call",
+      exact: false,
+      stackUsed: stack,
+      range: paint([], [], [...pairs("T"), "AKs", "AKo", "AQs", "AQo"]),
+    };
   }
   if (three) {
     const group = bucket(hero);
