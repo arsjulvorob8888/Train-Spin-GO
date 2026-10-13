@@ -59,7 +59,7 @@ export function ActionLine({
     if (spot.group === "BB") setSbAct((prev) => (prev === "fold" && spot.id.startsWith("bb_vs_sb") ? prev : ""));
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard, setFacing } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -87,11 +87,16 @@ export function ActionLine({
   const won = tookPot(spot, mine, sbAct, bbAct, btnAct);
   const folded = mine === "fold" || back === "fold";
   const live = flopOpen(spot, mine, sbAct, bbAct, btnAct, back);
+  const answerCol = cols.find((col) => col.hero && !col.selected && col.actions.some((action) => action.back));
+  const facingNow = answerCol ? faceReply(shown?.equity ?? 0, shown?.need ?? null, answerCol.actions.some((action) => action.back === "allin")) : "";
+  useEffect(() => {
+    setFacing(facingNow);
+  }, [facingNow, setFacing]);
   useEffect(() => {
     if (live || mine || board.length < 3) return;
     dropBoard();
   }, [live, mine, board.length, dropBoard]);
-  const waiting = !won && !folded && !live && (mine === "call" || mine === "raise" || mine === "allin");
+  const waiting = !answerCol && !won && !folded && !live && (mine === "call" || mine === "raise" || mine === "allin");
   const sizeAt = cols.reduce((at, col, index) => (!col.hero && /raise|3-bet/i.test(col.selected) ? index : at), -1);
   const sized = sizeAt >= 0;
   const chartSize = chartRaiseTo(spot.id, bb);
@@ -178,7 +183,9 @@ export function ActionLine({
             <div className="mt-1 flex flex-col">
               {col.actions.map((action) => {
                 const on = action.label === col.selected;
-                const wanted = Boolean(col.hero && expected && action.pick.mine === expected);
+                const wanted = answerCol
+                  ? action.back === facingNow
+                  : Boolean(col.hero && expected && action.pick.mine === expected);
                 return (
                   <button
                     key={action.label}
@@ -305,7 +312,7 @@ export function ActionLine({
         ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
-        {live || waiting ? null : <StreetClose onAdvance={goNext} />}
+        {live || waiting || answerCol ? null : <StreetClose onAdvance={goNext} />}
       </div>
       {live ? <BoardLine openBoard onAdvance={goNext} runout={runout} /> : null}
       {won ? <ResultBanner kind="win" detail="Все сбросили. Банк ваш, флопа нет." /> : null}
@@ -316,6 +323,8 @@ export function ActionLine({
             ? "Раздача закрыта. Вы сбросили, карт дальше нет."
             : waiting
               ? "Отметьте действия оппонентов. Карты флопа появятся, только если раздача идёт дальше."
+            : answerCol
+              ? `Солвер: ${facingNow === "fold" ? "Fold" : facingNow === "allin" ? "All-in" : "Call"}. Это ответ на рейз, рамка на второй вашей колонке.`
             : askFlop
               ? "Префлоп закрыт. Дальше флоп: три карты подсвечены зелёным."
             : fate === "win"
@@ -370,6 +379,13 @@ function preflopFolded(spot: SpotDef, sbAct: Blind, bbAct: Blind, btnAct: Blind)
     if (btnAct === "fold") out.push("BTN");
   }
   return out;
+}
+
+function faceReply(equity: number, need: number | null, canJam: boolean): "" | "fold" | "call" | "allin" {
+  if (need == null || !(need > 0)) return equity < 0.45 ? "fold" : "call";
+  if (equity + 0.01 < need) return "fold";
+  if (canJam && equity >= 0.55 && equity >= need + 0.15) return "allin";
+  return "call";
 }
 
 function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): boolean {

@@ -90,6 +90,8 @@ type HandApi = {
   openHole: () => void;
   dropBoard: () => void;
   queueRef: MutableRefObject<Slot[]>;
+  facing: "" | "fold" | "call" | "allin";
+  setFacing: (value: "" | "fold" | "call" | "allin") => void;
 };
 
 const HandCtx = createContext<HandApi | null>(null);
@@ -138,6 +140,7 @@ export function HandProvider({
   const [line, setLine] = useState<Line>(emptyLine);
   const [deviation, setDeviation] = useState<string | null>(null);
   const [sizeText, setSizeText] = useState("");
+  const [facing, setFacing] = useState<"" | "fold" | "call" | "allin">("");
   const [result, setResult] = useState<"" | "win" | "fold">("");
   const [handNonce, setHandNonce] = useState(0);
   const [out, setOutState] = useState<Seat[]>([]);
@@ -295,6 +298,7 @@ export function HandProvider({
     manual.current = false;
     setDeviation(null);
     setSizeText("");
+    setFacing("");
     setResult("");
     setHandNonce((n) => n + 1);
     setOutState([]);
@@ -539,6 +543,8 @@ export function HandProvider({
     openHole,
     dropBoard,
     queueRef,
+    facing,
+    setFacing,
   };
 
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
@@ -865,13 +871,14 @@ export function EquityDesk() {
     setQueue,
     queueRef,
     out,
+    facing,
   } = useHand();
   const cardOpened = useRef(0);
   const pickerWasOpen = useRef(false);
   if (queue.length > 0 && !pickerWasOpen.current) cardOpened.current = Date.now();
   pickerWasOpen.current = queue.length > 0;
-  const trick = shown?.trick?.deviate ? shown.trick : null;
-  const play = trick ? trick.action : (shown?.verdict ?? "");
+  const trick = shown?.trick?.deviate && !facing ? shown.trick : null;
+  const play = facing ? (facing === "fold" ? "Fold" : facing === "call" ? "Call" : "All-in") : trick ? trick.action : (shown?.verdict ?? "");
 
   return (
     <div className="rounded-xl border border-border bg-surface-2 p-3">
@@ -897,6 +904,8 @@ export function EquityDesk() {
               <p className="mt-2 text-sm text-muted">
                 {trick
                   ? `Чарт: ${shown.label}. ${trick.title}. ${trick.why}`
+                  : facing
+                  ? `Ответ на рейз. Чарт открытия был «${shown.label}». Рамка на колонке ответа.`
                   : shown.street === "Префлоп"
                   ? shown.label === shown.verdict
                     ? "Совпадает с чартом"
