@@ -56,7 +56,7 @@ export function ActionLine({
     setBtnAct("");
     setBack("");
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
-    if (spot.group === "BB") setSbAct("");
+    if (spot.group === "BB") setSbAct((prev) => (prev === "fold" && spot.id.startsWith("bb_vs_sb") ? prev : ""));
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
   const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard } = useHand();
@@ -225,6 +225,7 @@ export function ActionLine({
                         setSbAct("");
                         setBbAct("");
                       }
+                      if (spot.group === "BB" && action.pick.spot) setSbAct("");
                       if (action.pick.spot && action.pick.spot !== spot.id) {
                         if (spot.group !== "BTN") setBbAct("");
                         onSpot(action.pick.spot);
@@ -388,6 +389,7 @@ function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blin
 }
 
 function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind): boolean {
+  if (spot.group === "BB" && sbAct === "fold" && spot.id.startsWith("bb_vs_sb")) return true;
   if (mine !== "raise" && mine !== "allin" && mine !== "call") return false;
   if (spot.group === "BTN" && spot.id === "btn") return sbAct === "fold" && bbAct === "fold";
   if (spot.group === "SB") return sbTook(spot.id, mine, btnAct, bbAct);
@@ -800,11 +802,14 @@ function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
     {
       seat: "SB",
       stack: bb - 0.5,
-      actions: branch.sb.map((item) => ({
-        label: dress(item.label, "sb"),
-        pick: { spot: item.spot },
-      })),
-      selected: dress(leaf.label, "sb"),
+      actions: [
+        ...(branch.label === "Fold" ? [{ label: "Fold", pick: {}, blind: { seat: "SB" as const, act: "fold" as const } }] : []),
+        ...branch.sb.map((item) => ({
+          label: dress(item.label, "sb"),
+          pick: { spot: item.spot },
+        })),
+      ],
+      selected: branch.label === "Fold" && sbAct === "fold" ? "Fold" : dress(leaf.label, "sb"),
     },
     heroColumn(spot, bb, labels, mine),
   ];
