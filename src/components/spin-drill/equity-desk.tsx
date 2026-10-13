@@ -4,7 +4,7 @@ import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { spinHabits, tableRead, type Trick } from "@/lib/spin-drill/reads";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, placesFor, prizesFor, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand, type Place } from "@/lib/spin-drill/craft";
+import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, placesFor, prizesFor, quotePot, readBank, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand, type Place } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -637,8 +637,16 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     return (
       <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
         <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-4">
-          <h2 className="text-lg font-semibold">Какой турнир?</h2>
-          {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Какой турнир?</h2>
+              {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
+            </div>
+            <div className="shrink-0 rounded-xl border border-border px-3 py-2 text-right">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Ваш банк</p>
+              <p className="font-mono text-2xl font-semibold leading-none">{money(readBank().cash)}</p>
+            </div>
+          </div>
           <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-zinc-500">Стоимость</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {BUYINS.map((amount) => (
