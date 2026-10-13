@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { RANK_CHARS, SUIT_GLYPHS, handClass, isRedSuit, type Card } from "@/lib/poker/cards";
 import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
@@ -10,22 +11,75 @@ import { cn } from "@/lib/utils";
 
 type Act = "fold" | "limp" | "raise" | "call" | "3bet" | "allin";
 type Btn = { id: Act; label: string };
-type Col = { key: string; seat: MttSeat; hero: boolean; title: string; actions: Btn[]; selected: Act | ""; wanted: Act | "" };
+type Col = { key: string; seat: MttSeat; hero: boolean; title: string; chips: string; actions: Btn[]; selected: Act | ""; wanted: Act | "" };
 type Outcome = "pending" | "fold" | "win" | "flop";
+type SlotId = "h0" | "h1" | "b0" | "b1" | "b2" | "b3" | "b4";
+type Stacks = Record<MttSeat, number>;
 
 const MADE = ["старшая карта", "пара", "две пары", "сет", "стрит", "флеш", "фулл-хаус", "каре", "стрит-флеш"];
+const RANKS = [...RANK_CHARS].reverse();
+
+function chipsOf(n: number): number {
+  return Math.max(0, Math.round(n * 10) / 10);
+}
+
+function freshStacks(depth: number): Stacks {
+  const next = Object.fromEntries(SEATS.map((seat) => [seat, depth])) as Stacks;
+  next.SB = chipsOf(depth - 0.5);
+  next.BB = chipsOf(depth - 1);
+  return next;
+}
+
+function rotateStacks(stacks: Stacks): Stacks {
+  const next = {} as Stacks;
+  SEATS.forEach((seat, index) => {
+    const from = SEATS[(index + SEATS.length - 1) % SEATS.length]!;
+    next[seat] = stacks[from];
+  });
+  next.SB = chipsOf(next.SB - 0.5);
+  next.BB = chipsOf(next.BB - 1);
+  return next;
+}
+
+function stillIn(pick: Record<string, Act>, hero: MttSeat): MttSeat[] {
+  return SEATS.filter((seat) => {
+    if (pick[`pre:${seat}`] === "fold" || pick[`post:${seat}`] === "fold" || pick[`ans:${seat}`] === "fold") return false;
+    if (seat === hero && (pick.hero === "fold" || pick.back === "fold")) return false;
+    return true;
+  });
+}
+
+function effectOf(stacks: Stacks, hero: MttSeat, pick: Record<string, Act>, charts: number[]): { bb: number; chart: number; why: string } {
+  const live = stillIn(pick, hero);
+  const mine = stacks[hero];
+  const others = live.filter((seat) => seat !== hero).map((seat) => stacks[seat]);
+  const values = live.map((seat) => stacks[seat]);
+  const spread = values.length ? Math.max(...values) - Math.min(...values) : 0;
+  const even = spread <= 1.5;
+  const raw = even || !others.length ? mine : Math.min(mine, ...others);
+  const bb = chipsOf(raw);
+  const chart = charts.reduce((best, item) => (Math.abs(item - bb) < Math.abs(best - bb) ? item : best), charts[0] ?? 30);
+  const who = live.filter((seat) => seat !== hero).map((seat) => `${seat === "UTG1" ? "UTG+1" : seat} ${stacks[seat]}`).join(", ");
+  const why = even
+    ? `Стеки почти равны, разница только блайнды. Чарт ${chart}bb.`
+    : `Вы ${mine}bb, в раздаче ${who}. Эффективный ${bb}bb — меньший из них. Чарт ${chart}bb.`;
+  return { bb, chart, why };
+}
 
 export function MttDesk() {
   const [pack, setPack] = useState<MttPack | null>(null);
   const [error, setError] = useState("");
-  const [stack, setStack] = useState(30);
+  const [stacks, setStacks] = useState<Stacks>(() => freshStacks(30));
   const [hero, setHero] = useState<MttSeat>("UTG");
   const [pick, setPick] = useState<Record<string, Act>>({});
   const [klass, setKlass] = useState("");
   const [hole, setHole] = useState<[Card | null, Card | null]>([null, null]);
   const [board, setBoard] = useState<(Card | null)[]>([null, null, null, null, null]);
-  const [slot, setSlot] = useState("");
+  const [queue, setQueue] = useState<SlotId[]>(["h0", "h1"]);
   const [street, setStreet] = useState<Record<string, Act>>({});
+  const flopAsk = useRef(false);
+  const turnAsk = useRef(false);
+  const riverAsk = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -43,8 +97,33 @@ export function MttDesk() {
   }, []);
 
   const spots = useMemo(() => (pack ? spotsOf(pack) : []), [pack]);
+  const depth = pack ? effectOf(stacks, hero, pick, pack.stacks) : { bb: 30, chart: 30, why: "" };
   const dealt = hole[0] && hole[1] ? handClass(hole[0], hole[1]) : klass;
-  const built = pack ? buildLine(pack, spots, stack, hero, pick, dealt) : null;
+  const built = pack ? buildLine(pack, spots, depth.bb, depth.chart, stacks, hero, pick, dealt) : null;
+
+  useEffect(() => {
+    if (built?.outcome !== "flop") {
+      flopAsk.current = false;
+      turnAsk.current = false;
+      riverAsk.current = false;
+      return;
+    }
+    if (!hole[0] || !hole[1] || queue.length) return;
+    if (!board[0] && !flopAsk.current) {
+      flopAsk.current = true;
+      setQueue(["b0", "b1", "b2"]);
+      return;
+    }
+    if (board[0] && board[1] && board[2] && street["флоп"] && !board[3] && !turnAsk.current) {
+      turnAsk.current = true;
+      setQueue(["b3"]);
+      return;
+    }
+    if (board[3] && street["тёрн"] && !board[4] && !riverAsk.current) {
+      riverAsk.current = true;
+      setQueue(["b4"]);
+    }
+  }, [built?.outcome, hole, board, street, queue.length]);
 
   function choose(key: string, action: Act) {
     setPick((prev) => {
@@ -77,28 +156,47 @@ export function MttDesk() {
   function nextHand() {
     const i = SEATS.indexOf(hero);
     setHero(SEATS[(i + 1) % SEATS.length]!);
+    setStacks((prev) => rotateStacks(prev));
     setPick({});
     setKlass("");
     setHole([null, null]);
     setBoard([null, null, null, null, null]);
-    setSlot("");
+    setQueue(["h0", "h1"]);
     setStreet({});
+    flopAsk.current = false;
+    turnAsk.current = false;
+    riverAsk.current = false;
   }
 
-  function put(card: Card) {
-    if (slot === "h0" || slot === "h1") {
-      const copy: [Card | null, Card | null] = [...hole];
-      copy[slot === "h0" ? 0 : 1] = card;
-      setHole(copy);
-      setSlot(slot === "h0" && !copy[1] ? "h1" : "");
-      return;
+  function openSlot(id: SlotId) {
+    const order: SlotId[] = ["h0", "h1", "b0", "b1", "b2", "b3", "b4"];
+    const filled = (slot: SlotId) => (slot === "h0" ? hole[0] : slot === "h1" ? hole[1] : board[Number(slot.slice(1))]);
+    const rest = order.slice(order.indexOf(id)).filter((slot) => slot === id || !filled(slot));
+    setQueue(rest);
+  }
+
+  function chooseCard(rank: number, suit: number) {
+    const current = queue[0];
+    if (!current) return;
+    const card = { rank, suit };
+    if (current === "h0" || current === "h1") {
+      setHole((prev) => {
+        const copy: [Card | null, Card | null] = [...prev];
+        copy[current === "h0" ? 0 : 1] = card;
+        return copy;
+      });
+    } else {
+      setBoard((prev) => {
+        const copy = [...prev];
+        copy[Number(current.slice(1))] = card;
+        return copy;
+      });
     }
-    if (slot.startsWith("b")) {
-      const copy = [...board];
-      copy[Number(slot.slice(1))] = card;
-      setBoard(copy);
-      setSlot("");
-    }
+    setQueue((prev) => prev.slice(1));
+  }
+
+  function correctStack(seat: MttSeat, value: number) {
+    setStacks((prev) => ({ ...prev, [seat]: chipsOf(value) }));
   }
 
   if (error) return <p className="text-sm text-bad">{error}</p>;
@@ -107,7 +205,7 @@ export function MttDesk() {
   const node = built.node;
   const advice = built.advice;
   const word = built.outcome === "win" ? "Банк ваш" : advice ? actionWord(advice, node?.call ?? "Call") : "Ждём";
-  const size = built.outcome === "win" ? "Флопа нет." : built.outcome === "fold" ? "Карты дальше не открывайте." : node && advice ? sizeLine(advice, stack, node.kind, node.call) : "Сначала ходы до вас. Флоп откроется, только если раздача идёт дальше.";
+  const size = built.outcome === "win" ? "Флопа нет." : built.outcome === "fold" ? "Карты дальше не открывайте." : node && advice ? sizeLine(advice, depth.bb, node.kind, node.call) : "Сначала ходы до вас. Флоп откроется, только если раздача идёт дальше.";
   const bluff = node && advice && dealt ? bluffLine(dealt, advice, hero, node.kind) : null;
   const known = board.filter((card): card is Card => Boolean(card));
   const post = built.outcome === "flop" && hole[0] && hole[1] ? postAdvice(hole[0], hole[1], known, street) : null;
@@ -130,28 +228,51 @@ export function MttDesk() {
             {seat === hero ? " · вы" : ""}
           </button>
         ))}
-        <span className="ml-auto grid h-11 min-w-[4.5rem] place-items-center rounded-xl border-2 border-ok bg-ok/15 px-2">
+        <span className="ml-auto grid h-11 min-w-[4.5rem] place-items-center rounded-xl border-2 border-ok bg-ok/15 px-2" title={depth.why}>
           <span className="text-[9px] font-medium uppercase leading-none text-ok">Эфф.</span>
-          <span className="font-mono text-lg font-semibold leading-none">{stack}</span>
+          <span className="font-mono text-lg font-semibold leading-none">{depth.bb}</span>
         </span>
         <button type="button" onClick={nextHand} className="h-11 rounded-full bg-ok px-4 text-sm font-semibold text-bg">
           Новая раздача
         </button>
       </div>
+      <div className="mt-2 flex flex-wrap items-end gap-1">
+        {SEATS.map((seat) => {
+          const mine = seat === hero;
+          return (
+            <label key={seat} className="block w-14 text-center">
+              <span className={cn("block text-[11px] font-semibold leading-none", mine ? "text-ok" : "text-fg")}>{seat === "UTG1" ? "+1" : seat}</span>
+              <span className={cn("mt-0.5 block h-3 text-[10px] font-medium leading-none", mine ? "text-ok" : "text-transparent")}>{mine ? "Вы" : "·"}</span>
+              <input
+                inputMode="decimal"
+                aria-label={`Стек ${seat}`}
+                defaultValue={String(stacks[seat])}
+                key={`${seat}-${stacks[seat]}`}
+                onBlur={(event) => {
+                  const n = Number(event.target.value.replace(",", "."));
+                  if (n >= 0.5 && n <= 300) correctStack(seat, n);
+                }}
+                className={cn("mt-1 h-11 w-14 rounded-md border bg-surface px-1 text-center font-mono text-sm text-fg", mine ? "border-ok ring-2 ring-ok/60" : "border-border")}
+              />
+            </label>
+          );
+        })}
+      </div>
       <div className="mt-2 flex flex-wrap gap-1">
         {pack.stacks.map((item) => (
-          <button key={item} type="button" onClick={() => setStack(item)} className={cn("h-7 rounded-full px-2 font-mono text-[11px]", item === stack ? "bg-zinc-600 text-zinc-100" : "bg-zinc-900 text-zinc-500")}>
+          <button key={item} type="button" onClick={() => setStacks(freshStacks(item))} className={cn("h-7 rounded-full px-2 font-mono text-[11px]", item === depth.chart ? "bg-zinc-600 text-zinc-100" : "bg-zinc-900 text-zinc-500")}>
             {item}bb
           </button>
         ))}
       </div>
+      <p className="mt-1 text-xs text-muted">{depth.why} Блайнды снимаются при новой раздаче. Если стол разъехался — поправьте поле, солвер сразу берёт новое число.</p>
 
       <div className="mt-3 flex flex-wrap items-start gap-1">
         <div className="shrink-0 rounded-lg border border-border p-1">
           <p className="px-1 text-[11px] font-medium">Вы</p>
           <div className="mt-1 flex gap-1">
             {[0, 1].map((index) => (
-              <CardFace key={index} card={hole[index] ?? null} cue={!hole[index]} active={slot === `h${index}`} onClick={() => setSlot(slot === `h${index}` ? "" : `h${index}`)} />
+              <CardFace key={index} card={hole[index] ?? null} cue={!hole[index]} active={queue[0] === `h${index}`} onClick={() => openSlot(index === 0 ? "h0" : "h1")} />
             ))}
           </div>
           {dealt ? <p className="mt-1 px-1 font-mono text-[11px] text-muted">{dealt}</p> : null}
@@ -169,17 +290,54 @@ export function MttDesk() {
           board={board}
           street={street}
           post={post}
-          onCard={(index) => setSlot(slot === `b${index}` ? "" : `b${index}`)}
-          active={slot}
+          onCard={(index) => openSlot(`b${index}` as SlotId)}
+          active={queue[0] ?? ""}
           onStreet={(key, action) => setStreet((prev) => ({ ...prev, [key]: action }))}
         />
       ) : null}
 
-      {slot ? <CardPicker used={[...hole, ...board]} onPick={put} /> : null}
+      {typeof document !== "undefined" && queue.length > 0
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-3 sm:items-center" onPointerDown={() => setQueue([])}>
+              <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onPointerDown={(event) => event.stopPropagation()}>
+                <p className="text-sm font-medium">{slotTitle(queue[0]!)}</p>
+                <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
+                  {RANKS.map((glyph) => {
+                    const rank = RANK_CHARS.indexOf(glyph);
+                    return (
+                      <div key={glyph} className="grid grid-cols-4 gap-1">
+                        {SUIT_GLYPHS.map((suitGlyph, suit) => {
+                          const taken = [...hole, ...board].some((card) => card && card.rank === rank && card.suit === suit);
+                          return (
+                            <button
+                              key={suitGlyph}
+                              type="button"
+                              disabled={taken}
+                              onPointerDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (!taken) chooseCard(rank, suit);
+                              }}
+                              className={cn("h-9 rounded-md bg-card-face font-mono text-sm font-semibold disabled:opacity-100", taken ? "ring-2 ring-yellow-400" : "", isRedSuit(suit) ? "text-suit-red" : "text-card-ink")}
+                            >
+                              {glyph === "T" ? "10" : glyph}
+                              {suitGlyph}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(280px,1fr)]">
         <div className="w-full max-w-[440px]">
-          {node ? <MixGrid compact range={node.range} selected={dealt || null} onPick={setKlass} bb={stack} /> : <p className="text-sm text-muted">Рейндж появится, когда ход дойдёт до вас.</p>}
+          {node ? <MixGrid compact range={node.range} selected={dealt || null} onPick={setKlass} bb={depth.chart} /> : <p className="text-sm text-muted">Рейндж появится, когда ход дойдёт до вас.</p>}
           {node ? <p className="mt-2 text-xs text-muted">В игре {continuePct(node.range, ALL).toFixed(1)}% рук. Один цвет — преобладающее действие. {node.exact ? `Чарт ${node.stackUsed}bb.` : `Приближение, ближайший чарт ${node.stackUsed}bb.`}</p> : null}
         </div>
         <div className="min-w-0 space-y-2 lg:sticky lg:top-3">
@@ -199,7 +357,7 @@ export function MttDesk() {
           {advice && !post ? (
             <div className="rounded-xl border border-border p-3 text-sm text-muted">
               <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Неш</p>
-              <p className="mt-1">{nashLine(stack, advice, node?.kind ?? "open")}</p>
+              <p className="mt-1">{nashLine(depth.bb, advice, node?.kind ?? "open")}</p>
             </div>
           ) : null}
         </div>
@@ -208,7 +366,7 @@ export function MttDesk() {
   );
 }
 
-function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: number, hero: MttSeat, pick: Record<string, Act>, hand: string) {
+function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: number, chart: number, stacks: Stacks, hero: MttSeat, pick: Record<string, Act>, hand: string) {
   const cols: Col[] = [];
   let opener: MttSeat | null = null;
   let limp = false;
@@ -219,9 +377,9 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: numb
 
   for (const seat of SEATS.slice(0, idx)) {
     const facing = Boolean(opener);
-    const actions = facing ? faceBtns(stack) : openBtns(seat, stack);
+    const actions = facing ? faceBtns(depth) : openBtns(seat, depth);
     const selected = pick[`pre:${seat}`] ?? "";
-    cols.push({ key: `pre:${seat}`, seat, hero: false, title: seat === "UTG1" ? "UTG+1" : seat, actions, selected, wanted: "" });
+    cols.push({ key: `pre:${seat}`, seat, hero: false, title: seat === "UTG1" ? "UTG+1" : seat, chips: trim(stacks[seat]), actions, selected, wanted: "" });
     if (!selected) return stop(null, null, "pending");
     if ((selected === "raise" || selected === "allin") && !opener) opener = seat;
     else if (selected === "3bet" || (opener && selected === "allin")) threeFrom = seat;
@@ -234,14 +392,14 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: numb
   const node = resolveLive({
     pack,
     spots,
-    stack,
+    stack: chart,
     hero,
     opener: threeFrom ? null : opener,
     limp: limp && !opener && !threeFrom,
     three: null,
     cold: Boolean(threeFrom),
   });
-  const advice = hand ? playAction(node, hand, stack) : null;
+  const advice = hand ? playAction(node, hand, depth) : null;
   const wanted = advice ? asAct(advice, facingKind) : "";
   const heroSelected = pick.hero ?? "";
   cols.push({
@@ -249,7 +407,8 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: numb
     seat: hero,
     hero: true,
     title: "Вы · ваш ход",
-    actions: heroBtns(hero, stack, facingKind),
+    chips: trim(stacks[hero]),
+    actions: heroBtns(hero, depth, facingKind),
     selected: heroSelected,
     wanted,
   });
@@ -266,7 +425,8 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: numb
         seat,
         hero: false,
         title: seat === "UTG1" ? "UTG+1" : seat,
-        actions: aggressor ? jamBtns(stack) : faceBtns(stack),
+        chips: trim(stacks[seat]),
+        actions: aggressor ? jamBtns(depth) : faceBtns(depth),
         selected,
         wanted: "",
       });
@@ -281,21 +441,22 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: numb
     const backNode = resolveLive({
       pack,
       spots,
-      stack,
+      stack: chart,
       hero,
       opener: null,
       limp: false,
       three: aggressor === "SB" || aggressor === "BB" ? "blind" : "ip",
       cold: false,
     });
-    const backAdvice = hand ? playAction(backNode, hand, stack) : null;
+    const backAdvice = hand ? playAction(backNode, hand, depth) : null;
     const back = pick.back ?? "";
     cols.push({
       key: "back",
       seat: hero,
       hero: true,
       title: "Вы · на 3-бет",
-      actions: jamBtns(stack),
+      chips: trim(stacks[hero]),
+      actions: jamBtns(depth),
       selected: back,
       wanted: backAdvice ? asAct(backAdvice, "three") : "",
     });
@@ -306,7 +467,7 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, stack: numb
 
   if (opener && (heroSelected === "3bet" || heroSelected === "allin")) {
     const selected = pick[`ans:${opener}`] ?? "";
-    cols.push({ key: `ans:${opener}`, seat: opener, hero: false, title: `${opener} · на 3-бет`, actions: jamBtns(stack), selected, wanted: "" });
+    cols.push({ key: `ans:${opener}`, seat: opener, hero: false, title: `${opener} · на 3-бет`, chips: trim(stacks[opener]), actions: jamBtns(depth), selected, wanted: "" });
     if (!selected) return stop(node, advice, "pending");
     if (selected === "fold") return stop(node, advice, "win");
     return stop(node, advice, "flop");
@@ -357,8 +518,9 @@ function asAct(action: MixAction, facing: string): Act {
 function ActionCol({ col, live, onPick }: { col: Col; live: boolean; onPick: (action: Act) => void }) {
   return (
     <div className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : live ? "next-step border-ok bg-ok/10" : "border-border")}>
-      <div className={cn("rounded px-1 py-0.5 text-[11px] font-medium", col.hero ? "bg-ok text-bg" : col.seat === "SB" ? "bg-amber-800/80 text-amber-50" : col.seat === "BB" ? "bg-orange-900/80 text-orange-50" : "bg-zinc-700 text-zinc-50")}>
-        {col.title}
+      <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px] font-medium", col.hero ? "bg-ok text-bg" : col.seat === "SB" ? "bg-amber-800/80 text-amber-50" : col.seat === "BB" ? "bg-orange-900/80 text-orange-50" : "bg-zinc-700 text-zinc-50")}>
+        <span>{col.title}</span>
+        <span className="font-mono">{col.chips}</span>
       </div>
       <div className="mt-1 flex flex-col">
         {col.actions.map((action) => {
@@ -397,25 +559,18 @@ function CardFace({ card, cue, active, onClick }: { card: Card | null; cue?: boo
   );
 }
 
-function CardPicker({ used, onPick }: { used: (Card | null)[]; onPick: (card: Card) => void }) {
-  const taken = (rank: number, suit: number) => used.some((card) => card && card.rank === rank && card.suit === suit);
-  return (
-    <div className="mt-2 space-y-1">
-      {[0, 1, 2, 3].map((suit) => (
-        <div key={suit} className="flex flex-wrap gap-1">
-          {Array.from({ length: 13 }, (_, index) => 12 - index).map((rank) => {
-            const dead = taken(rank, suit);
-            return (
-              <button key={`${rank}${suit}`} type="button" disabled={dead} onClick={() => onPick({ rank, suit })} className={cn("h-8 w-8 rounded font-mono text-[11px]", dead ? "opacity-20" : isRedSuit(suit) ? "bg-surface-2 text-suit-red" : "bg-surface-2 text-fg")}>
-                {RANK_CHARS[rank] === "T" ? "10" : RANK_CHARS[rank]}
-                {SUIT_GLYPHS[suit]}
-              </button>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
+function trim(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+}
+
+function slotTitle(slot: SlotId): string {
+  if (slot === "h0") return "Ваши карты · первая";
+  if (slot === "h1") return "Ваши карты · вторая";
+  if (slot === "b0") return "Флоп · первая";
+  if (slot === "b1") return "Флоп · вторая";
+  if (slot === "b2") return "Флоп · третья";
+  if (slot === "b3") return "Тёрн";
+  return "Ривер";
 }
 
 function postAdvice(a: Card, b: Card, board: Card[], street: Record<string, Act>): { word: string; size: string; why: string } | null {
