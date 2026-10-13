@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { RANK_CHARS, SUIT_GLYPHS, isRedSuit, type Card } from "@/lib/poker/cards";
 import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
+import { spinHabits, tableRead, type Trick } from "@/lib/spin-drill/reads";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
 import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, placesFor, prizesFor, quotePot, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand, type Place } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
@@ -52,6 +53,7 @@ type HandApi = {
     need: number | null;
     action: string;
     label: string;
+    trick: Trick | null;
     bluff: {
       on: boolean;
       title: string;
@@ -231,7 +233,24 @@ export function HandProvider({
       raiseTo,
       out,
     });
-    return { ...once, label: labels[once.action] };
+    const trick = tableRead({
+      spotId: spot.id,
+      hero: spot.hero,
+      klass: once.klass,
+      chart: once.action,
+      chartLabel: labels[once.action],
+      verdict: once.verdict,
+      bluff: Boolean(once.bluff?.on),
+      raiseTo,
+      bb,
+      street: once.street,
+      made: once.made,
+      draw: once.draw,
+      line,
+      boardLength: board.length,
+      habits: spinHabits(),
+    });
+    return { ...once, label: labels[once.action], trick };
   }, [hero, board, spot.id, bb, range, labels, pot, toCall, line, sizeText, outKey]);
   const typedOdds = pot != null && toCall != null && toCall > 0 ? toCall / (pot + toCall) : null;
 
@@ -848,6 +867,8 @@ export function EquityDesk() {
   const pickerWasOpen = useRef(false);
   if (queue.length > 0 && !pickerWasOpen.current) cardOpened.current = Date.now();
   pickerWasOpen.current = queue.length > 0;
+  const trick = shown?.trick?.deviate ? shown.trick : null;
+  const play = trick ? trick.action : (shown?.verdict ?? "");
 
   return (
     <div className="rounded-xl border border-border bg-surface-2 p-3">
@@ -865,13 +886,15 @@ export function EquityDesk() {
           <div className="flex w-full flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[10px] font-medium tracking-wide text-subtle uppercase">
-                {isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff?.on ? "Солвер: это блеф" : "Решение солвера"}
+                {trick ? "Хитрость против их линии" : isSummary(shown.verdict, shown.street) ? "Итог раздачи" : shown.bluff?.on ? "Солвер: это блеф" : "Решение солвера"}
               </p>
-              <p className={cn("text-4xl font-semibold leading-none sm:text-5xl", shown.bluff?.on ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
-                {shown.verdict}
+              <p className={cn("text-4xl font-semibold leading-none sm:text-5xl", trick ? "text-amber-300" : shown.bluff?.on ? "text-bluff" : isSummary(shown.verdict, shown.street) ? (shown.verdict === "Нет пары" ? "text-zinc-200" : "text-ok") : "")}>
+                {play}
               </p>
               <p className="mt-2 text-sm text-muted">
-                {shown.street === "Префлоп"
+                {trick
+                  ? `Чарт: ${shown.label}. ${trick.title}. ${trick.why}`
+                  : shown.street === "Префлоп"
                   ? shown.label === shown.verdict
                     ? "Совпадает с чартом"
                     : `Чарт на этот размер: ${shown.label}`
@@ -902,7 +925,7 @@ export function EquityDesk() {
             bb={bb}
             klass={shown.klass}
             street={shown.street}
-            chart={shown.verdict}
+            chart={play}
             players={seatsInHand(spot.id, out).length}
             equity={shown.equity}
             need={shown.need}
@@ -921,9 +944,14 @@ export function EquityDesk() {
           : result === "fold"
             ? "Вы сбросили. Раздача закрыта, выбирать карты больше не нужно."
             : shown
-              ? shown.text
+              ? trick
+                ? `Хитрость вместо чарта: ${trick.action}. ${trick.why}`
+                : shown.text
               : "Сначала карты, потом линия префлопа, потом борд. Совет пересчитывается после каждого хода."}
       </p>
+      {shown && result !== "win" && result !== "fold" && shown.trick && !shown.trick.deviate ? (
+        <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-50">{shown.trick.title}. {shown.trick.why}</p>
+      ) : null}
       {shown && result !== "win" && result !== "fold" ? <OddsBar need={shown.need} equity={shown.equity} street={shown.street} /> : null}
       {shown && result !== "win" && result !== "fold" ? <EquityLesson shown={shown} pot={pot} toCall={toCall} /> : null}
       {shown && result !== "win" && result !== "fold" ? <BluffNotice bluff={shown.bluff} /> : null}
@@ -1383,7 +1411,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
   const turnClosed = board.length >= 4 && streetStatus(seats, line, "turn", jammed).closed;
   const finished = handFinished(spot.id, line, board.length, out);
   const over = fate === "win" || fate === "loss";
-  const hint = shown?.verdict ?? "";
+  const hint = shown?.trick?.deviate && shown.street !== "Префлоп" ? shown.trick.action : (shown?.verdict ?? "");
   const focus: StreetId = board.length >= 5 ? "river" : board.length >= 4 ? "turn" : "flop";
   const streetHint = (street: StreetId) => (street === focus ? hint : "");
   const askFlop = board.length < 3;

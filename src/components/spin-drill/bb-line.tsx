@@ -63,6 +63,7 @@ export function ActionLine({
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
+    if (shown?.trick?.deviate) return;
     if (/jam|push|reshove/.test(spot.id) || spot.id === "sb_iso") return;
     const key = `${spot.id}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
     if (stamped.current === key) return;
@@ -70,7 +71,7 @@ export function ActionLine({
     if (!spot.actions.includes(action)) return;
     stamped.current = key;
     if (action !== mine) onMine(action);
-  }, [hero, selected, spot.id, spot.hero, spot.actions, bb, range, board.length, mine, onMine]);
+  }, [hero, selected, spot.id, spot.hero, spot.actions, bb, range, board.length, mine, onMine, shown?.trick?.deviate]);
   useEffect(() => {
     if (mine) setPlayed(mine);
   }, [mine, setPlayed]);
@@ -94,8 +95,9 @@ export function ActionLine({
   const sizeAt = cols.reduce((at, col, index) => (!col.hero && /raise|3-bet/i.test(col.selected) ? index : at), -1);
   const sized = sizeAt >= 0;
   const chartSize = chartRaiseTo(spot.id, bb);
-  const doneRight = cycleClosed(cols) && actionMatches(spot, mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
-  const expected = live && board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
+  const guide = shown?.trick?.deviate && shown.street === "Префлоп" ? shown.trick.action : shown?.street === "Префлоп" ? shown?.verdict ?? null : null;
+  const doneRight = cycleClosed(cols) && actionMatches(spot, mine, selected, range, sizeText, guide);
+  const expected = live && board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, guide);
   const order = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
   const flopDone = board.length >= 3 && streetStatus(order, line, "flop", jammed).closed;
