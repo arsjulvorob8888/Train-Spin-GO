@@ -256,6 +256,22 @@ export function splitStacks(start: number): TableStacks {
   return { BTN: n, SB: Math.round((n - 0.5) * 10) / 10, BB: Math.max(0.5, n - 1) };
 }
 
+function chips(n: number): number {
+  return Math.max(0, Math.round(n * 10) / 10);
+}
+
+/**
+ * Next hand: the button moves, and the new blinds come out of the players who post them.
+ * Stacks are what is left behind, so the previous blind is already gone and is not charged again.
+ * 3-max: old SB becomes BTN, old BB posts 0.5 as SB, old BTN posts 1 as BB.
+ */
+export function postBlinds(stacks: TableStacks, table: "3max" | "hu"): TableStacks {
+  if (table === "hu") {
+    return { BTN: stacks.BTN, SB: chips(stacks.BB - 0.5), BB: chips(stacks.SB - 1) };
+  }
+  return { BTN: stacks.SB, SB: chips(stacks.BB - 0.5), BB: chips(stacks.BTN - 1) };
+}
+
 /**
  * 15bb is the app chart, unchanged.
  * Other depths are a study model: the same hands breathe with stack size,

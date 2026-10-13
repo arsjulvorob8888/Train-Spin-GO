@@ -509,7 +509,7 @@ export function HandProvider({
   return <HandCtx.Provider value={api}>{children}</HandCtx.Provider>;
 }
 
-export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb: number) => void; onAuto?: (bb: number) => void; onStarted?: () => void; onSeat?: (seat: "BTN" | "SB" | "BB" | "HU") => void }) {
+export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb: number) => void; onAuto?: (bb: number, blind: number) => void; onStarted?: () => void; onSeat?: (seat: "BTN" | "SB" | "BB" | "HU") => void }) {
   const [saved, setSaved] = useState(0);
   const [buy, setBuy] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
@@ -527,7 +527,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
       if (next) setSaved(readPrize()?.prize ?? 0);
       if (next && next.stack !== sent.current) {
         sent.current = next.stack;
-        autoRef.current?.(next.stack);
+        autoRef.current?.(next.stack, next.bb);
       }
     };
     tick();

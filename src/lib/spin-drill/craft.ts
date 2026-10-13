@@ -102,7 +102,14 @@ export function readBlind(): BlindSession | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as BlindSession;
     if (typeof parsed.prize !== "number" || typeof parsed.chips !== "number" || typeof parsed.startedAt !== "number") return null;
-    return { prize: parsed.prize, chips: parsed.chips, startedAt: parsed.startedAt, hands: parsed.hands || 0 };
+    return {
+      prize: parsed.prize,
+      chips: parsed.chips,
+      startedAt: parsed.startedAt,
+      hands: parsed.hands || 0,
+      buy: typeof parsed.buy === "number" ? parsed.buy : undefined,
+      gameId: typeof parsed.gameId === "string" ? parsed.gameId : undefined,
+    };
   } catch {
     return null;
   }

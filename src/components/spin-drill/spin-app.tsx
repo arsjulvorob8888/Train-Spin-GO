@@ -50,7 +50,7 @@ import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, microStrategy } from "@/lib/spin-drill/micro-plan";
 import { sizedRaise } from "@/lib/spin-drill/equity-calc";
-import { chartDepth, rangeAtStack, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
+import { chartDepth, postBlinds, rangeAtStack, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -554,6 +554,8 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
+  const depthRef = useRef(15);
+  const blindRef = useRef(20);
   const [stacks, setStacks] = useState<TableStacks>({ BTN: 15, SB: 14.5, BB: 14 });
   const pins = useRef<Record<keyof TableStacks, boolean>>({ BTN: false, SB: false, BB: false });
   const [pinView, setPinView] = useState<Record<keyof TableStacks, boolean>>({ BTN: false, SB: false, BB: false });
@@ -692,12 +694,14 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
 
   function advanceSeat() {
     if (group === "HU") {
+      setStacks((prev) => postBlinds(prev, "hu"));
       setSpotId(spot.hero === "SB" ? "hu_bb_raise" : "hu_sb");
       setMine("");
       setSelected("");
       setStackOpen(false);
       return;
     }
+    setStacks((prev) => postBlinds(prev, "3max"));
     const turn: Record<string, SpotGroup> = { BTN: "BB", BB: "SB", SB: "BTN" };
     const next = turn[group] ?? "BTN";
     const first = spotsIn(next)[0];
@@ -731,23 +735,28 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
 
   function tuneStack(next: number) {
     setBb(next);
+    depthRef.current = next;
     pins.current = { BTN: false, SB: false, BB: false };
     setPinView({ BTN: false, SB: false, BB: false });
     setStacks(splitStacks(next));
     retargetChips(next);
   }
 
-  function autoStack(next: number) {
+  function autoStack(next: number, blind = 0) {
+    const prevBlind = blindRef.current;
     setBb(next);
-    const lock = pins.current;
-    setStacks((prev) => {
-      const base = splitStacks(next);
-      return {
-        BTN: lock.BTN ? prev.BTN : base.BTN,
-        SB: lock.SB ? prev.SB : base.SB,
-        BB: lock.BB ? prev.BB : base.BB,
-      };
-    });
+    depthRef.current = next;
+    if (!blind || !prevBlind || prevBlind === blind) {
+      if (blind) blindRef.current = blind;
+      return;
+    }
+    const ratio = prevBlind / blind;
+    blindRef.current = blind;
+    setStacks((cur) => ({
+      BTN: Math.round(cur.BTN * ratio * 10) / 10,
+      SB: Math.round(cur.SB * ratio * 10) / 10,
+      BB: Math.round(cur.BB * ratio * 10) / 10,
+    }));
   }
 
   function correctStack(seat: keyof TableStacks, value: number) {
