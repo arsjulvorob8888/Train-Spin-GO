@@ -27,6 +27,7 @@ export function ActionLine({
   range,
   selected,
   onSpot,
+  onShift,
   onMine,
   onAdvance,
 }: {
@@ -37,6 +38,7 @@ export function ActionLine({
   range: MixRange;
   selected: string;
   onSpot: (id: string) => void;
+  onShift?: (id: string) => void;
   onMine: (action: MixAction | "") => void;
   onAdvance: () => void;
 }) {
@@ -60,7 +62,7 @@ export function ActionLine({
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
-    if (/jam|push|reshove/.test(spot.id)) return;
+    if (/jam|push|reshove/.test(spot.id) || spot.id === "sb_iso") return;
     const key = `${spot.id}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
     if (stamped.current === key) return;
     const action = playable(spot, primary(mixOf(range, selected)));
@@ -188,6 +190,16 @@ export function ActionLine({
                         const nextBb = action.blind.seat === "BB" ? action.blind.act : bbAct;
                         if (action.blind.seat === "SB") setSbAct(action.blind.act);
                         else setBbAct(action.blind.act);
+                        if (spot.group === "SB" && spot.id === "sb_fold" && mine === "call" && action.blind.seat === "BB") {
+                          if (action.blind.act === "3bet") {
+                            onShift?.("sb_iso");
+                            return;
+                          }
+                          if (action.blind.act === "allin") {
+                            onShift?.("sb_vs_bb_jam");
+                            return;
+                          }
+                        }
                         if (spot.group !== "BTN") return;
                         const chart = blindChart(nextSb, nextBb);
                         if (chart !== spot.id) {

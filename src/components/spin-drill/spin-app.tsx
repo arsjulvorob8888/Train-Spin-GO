@@ -664,6 +664,14 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     if (first) setSpotId(first.id);
   }
 
+  function shiftSpot(id: string) {
+    const next = findSpot(id);
+    if (!next || next.id === spot.id) return;
+    setSpotId(id);
+    setGroup(next.group);
+    setMine("");
+  }
+
   function changeSpot(id: string) {
     clearAdvance();
     const s = findSpot(id);
@@ -936,6 +944,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
                 range={range}
                 selected={selected}
                 onSpot={changeSpot}
+                onShift={shiftSpot}
                 onMine={setMine}
                 onAdvance={advanceSeat}
               />
