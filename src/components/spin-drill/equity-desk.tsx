@@ -609,11 +609,14 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">Игра окончена</h2>
-        <p className="mt-1 text-sm text-muted">Банк на столе — весь приз. На PokerOK с x10 его делят, второе место тоже получает деньги. В банк пишется приз минус бай-ин.</p>
+        <p className="mt-1 text-sm text-muted">Отметьте место. Второе без денег — это не третье: для статистики они разные, даже если оба стоят бай-ин.</p>
         <div className="mt-3 flex flex-col gap-2">
           {(stake != null ? placesFor(stake, saved) : []).map((row) => (
             <button key={row.place} type="button" onClick={() => finish(row.place)} className={cn("h-11 rounded-full px-4 text-left text-sm font-semibold", row.place === 1 ? "bg-fg text-bg" : "bg-surface-2 text-fg")}>
-              {row.place} место · приз {money(row.payout)} · {row.net > 0 ? "+" : ""}
+              {row.place} место
+              {row.place === 2 && row.payout <= 0 ? " · без приза" : ` · приз ${money(row.payout)}`}
+              {" · "}
+              {row.net > 0 ? "+" : ""}
               {money(row.net)}
             </button>
           ))}

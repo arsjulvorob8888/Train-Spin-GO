@@ -209,12 +209,10 @@ export function spinPayout(buy: number, prize: number, place: Place): number {
 }
 
 export function placesFor(buy: number, prize: number): { place: Place; payout: number; net: number }[] {
-  return ([1, 2, 3] as const)
-    .map((place) => {
-      const payout = spinPayout(buy, prize, place);
-      return { place, payout, net: Math.round((payout - buy) * 100) / 100 };
-    })
-    .filter((row) => row.place === 1 || row.place === 3 || row.payout > 0);
+  return ([1, 2, 3] as const).map((place) => {
+    const payout = spinPayout(buy, prize, place);
+    return { place, payout, net: Math.round((payout - buy) * 100) / 100 };
+  });
 }
 
 export type BankSpin = {

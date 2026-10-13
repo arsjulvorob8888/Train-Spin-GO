@@ -42,7 +42,8 @@ export function CraftTable() {
   });
   const slice = filter === "50" ? hands.slice(0, 50) : shown;
   const track = trackHands(slice);
-  const spinWins = spins.filter((spin) => spin.won).length;
+  const spinWins = spins.filter((spin) => spin.place === 1 || (spin.place == null && spin.won)).length;
+  const placeCount = (place: 1 | 2 | 3) => spins.filter((spin) => spin.place === place || (spin.place == null && place === 1 && spin.won) || (spin.place == null && place === 3 && spin.won === false)).length;
   const spinRate = spins.length ? Math.round((spinWins / spins.length) * 1000) / 10 : null;
   const visibleIds = slice.map((hand) => hand.id);
   const allOn = visibleIds.length > 0 && visibleIds.every((id) => picked.includes(id));
@@ -90,6 +91,7 @@ export function CraftTable() {
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Stat name="Винрейт спинов" value={num(spinRate, "%")} hint={spins.length ? `${spinWins} из ${spins.length} турниров выиграны. Это победа в спине, не в раздаче. Ноль с рейком около 36%.` : "Закройте спин победой или поражением. Пока считаются только раздачи."} />
+          <Stat name="Места 1 / 2 / 3" value={spins.length ? `${placeCount(1)} / ${placeCount(2)} / ${placeCount(3)}` : "—"} hint="Первое, второе и третье. Второе без приза всё равно не третье: вы вылетели не первым. Деньги у обоих могут быть одинаковые." />
           <Stat name="Винрейт раздач" value={num(track.winrate, "%")} hint={`${track.wins} из ${track.hands} раздач банк ваш. В спине мало: нужен перевес над соперниками, не 33%.`} />
           <Stat name="bb/100" value={signed(track.bb100)} hint={`Факт ${signed(track.net)} bb за выборку. Выигрыш — банк, который уже лежал. Проигрыш вскрытия — цена колла. Фолд — 0.`} />
           <Stat name="EV bb/100" value={signed(track.ev100)} hint={`Матожидание ${signed(track.ev)} bb. Колл заменён на эквити × (банк + колл) − колл. Так трекеры убирают удачу борда.`} />
