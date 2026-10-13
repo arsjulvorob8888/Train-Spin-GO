@@ -1287,7 +1287,7 @@ export function StreetClose({ onAdvance }: { onAdvance?: () => void }) {
 }
 
 export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard: boolean; onAdvance?: () => void; runout?: boolean }) {
-  const { spot, bb, stacks, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out, setQueue, queueRef } = useHand();
+  const { spot, bb, stacks, cards, queue, hero, board, shown, line, open, chooseLine, reviseLine, undoLine, out, setQueue, queueRef, place } = useHand();
   const latest = useRef<HTMLDivElement>(null);
   const heard = useRef(0);
   const holeNow = hero ? [hero[0], hero[1]] : [];
@@ -1352,7 +1352,12 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           </div>
         </div>
         <ShowdownPanel />
-        {board.length >= 5 ? <DoneMark label={showdown(hero ?? [], board)?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
+        {board.length >= 5 || place ? (
+          <DoneMark
+            label={place === "hero" ? "Победа" : place === "villain" ? "Проигрыш" : place === "split" ? "Ничья" : (showdown(hero ?? [], board)?.label ?? "Итог")}
+            onAdvance={onAdvance}
+          />
+        ) : null}
       </div>
     );
   }
