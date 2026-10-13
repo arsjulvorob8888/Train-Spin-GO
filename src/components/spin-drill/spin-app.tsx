@@ -14,6 +14,7 @@ import { PotOddsDrill } from "@/components/spin-drill/pot-odds-drill";
 import { PostflopLesson } from "@/components/spin-drill/postflop-lesson";
 import { RangeExperiment } from "@/components/spin-drill/range-experiment";
 import { SimLab } from "@/components/spin-drill/sim-lab";
+import { MttDesk } from "@/components/spin-drill/mtt-desk";
 import { GroupHint, SpotExplain } from "@/components/spin-drill/spot-explain";
 import { COMBOS, closeEnough } from "@/lib/spin-drill/combos";
 import { ALL, gridName } from "@/lib/spin-drill/legacy-ranges";
@@ -55,7 +56,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-export type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft" | "sources";
+export type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "hands" | "math" | "stats" | "journal" | "craft" | "sources" | "mtt";
 export type AppPane = "lesson" | "anchors" | "drill";
 
 const KEYS: Record<string, MixAction> = {
@@ -597,7 +598,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     if (!params.has("tab")) {
       const saved = localStorage.getItem("spin-open-tab");
       const savedPane = localStorage.getItem("spin-open-pane");
-      const tabs: Tab[] = ["practice", "strategy", "experiment", "sim", "hands", "math", "journal", "craft", "sources"];
+      const tabs: Tab[] = ["practice", "strategy", "mtt", "experiment", "sim", "hands", "math", "journal", "craft", "sources"];
       const nextPane: AppPane = savedPane === "anchors" || savedPane === "drill" ? savedPane : "lesson";
       if (saved === "table" || saved === "stats") {
         void navigate({ to: "/", search: { tab: "strategy", pane: nextPane }, replace: true });
@@ -821,6 +822,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     { id: "practice", label: "Тренировка" },
     { id: "sim", label: "Симулятор" },
     { id: "strategy", label: "Стратегия" },
+    { id: "mtt", label: "MTT 8-max" },
     { id: "journal", label: "Журнал" },
     { id: "craft", label: "PokerCraft" },
     { id: "sources", label: "Источники" },
@@ -858,7 +860,9 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
           <h1 className="font-display text-xl font-medium">
             Spin Drill{" "}
             <span className="font-mono text-sm font-normal text-muted">
-              {tab === "hands"
+              {tab === "mtt"
+                ? "MTT 8-max"
+                : tab === "hands"
                 ? "Комбинации"
                 : tab === "experiment"
                   ? "GAME"
@@ -903,6 +907,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
 
       <main className="mx-auto w-full max-w-[1280px] flex-1 p-4 sm:p-5">
         {tab === "table" && <HandSim />}
+        {tab === "mtt" && <MttDesk />}
 
         {tab === "strategy" && (
           <HandProvider spot={spot} range={range} bb={depth.bb} stacks={stacks} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
