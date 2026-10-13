@@ -126,6 +126,7 @@ export function ActionLine({
     mine !== "" &&
     ((/jam|push|reshove/.test(spot.id) && mine === "call") ||
       (mine === "allin" && (sbAct === "call" || bbAct === "call" || btnAct === "call" || back === "call")) ||
+      (back === "allin" && btnAct === "call") ||
       (back === "call" && (sbAct === "allin" || btnAct === "allin" || bbAct === "allin")));
   useEffect(() => {
     if (!sized && board.length < 3) setSizeText("");
@@ -193,6 +194,7 @@ export function ActionLine({
                     onClick={() => {
                       if (action.back) {
                         setBack(action.back);
+                        if (action.back !== "allin") setBtnAct("");
                         return;
                       }
                       if (action.blind) {
@@ -398,7 +400,7 @@ function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blin
     return sbDone && bbDone && (sbAct === "call" || bbAct === "call");
   }
   if (spot.group === "SB") return sbFlop(spot.id, mine, btnAct, bbAct, back);
-  if (spot.group === "HU" && spot.id === "hu_sb") return huFlop(mine, bbAct, back);
+  if (spot.group === "HU" && spot.id === "hu_sb") return huFlop(mine, bbAct, back, btnAct);
   if (spot.group === "HU") return huBbFlop(mine, bbAct, back);
   if (spot.group === "BB") return bbFlop(spot.id, mine, sbAct, btnAct, back);
   return true;
@@ -409,7 +411,7 @@ function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind
   if (mine !== "raise" && mine !== "allin" && mine !== "call") return false;
   if (spot.group === "BTN" && spot.id === "btn") return sbAct === "fold" && bbAct === "fold";
   if (spot.group === "SB") return sbTook(spot.id, mine, btnAct, bbAct);
-  if (spot.group === "HU" && spot.id === "hu_sb") return bbAct === "fold";
+  if (spot.group === "HU" && spot.id === "hu_sb") return bbAct === "fold" || ((bbAct === "3bet" || bbAct === "allin") && back === "allin" && btnAct === "fold");
   if (spot.group === "HU" && spot.hero === "BB") return sbAct === "fold" || ((mine === "raise" || mine === "allin") && bbAct === "fold");
   if (spot.group === "BB") return bbTook(spot.id, mine, sbAct, btnAct);
   return false;
@@ -456,7 +458,7 @@ function actionMatches(spot: SpotDef, mine: MixAction | "", hand: string, range:
 function columns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): Column[] {
   if (spot.group === "BTN") return btnColumns(spot, bb, labels, mine, sbAct, bbAct);
   if (spot.group === "SB") return sbColumns(spot, bb, labels, mine, btnAct, bbAct, back);
-  if (spot.group === "HU") return huColumns(spot, bb, labels, mine, sbAct, bbAct, back);
+  if (spot.group === "HU") return huColumns(spot, bb, labels, mine, sbAct, bbAct, back, btnAct);
   return bbColumns(spot, bb, labels, mine, sbAct, btnAct, back);
 }
 
@@ -656,15 +658,17 @@ function huBbFlop(mine: MixAction | "", reply: Blind, back: Blind): boolean {
   return false;
 }
 
-function huFlop(mine: MixAction | "", bbAct: Blind, back: Blind): boolean {
+function huFlop(mine: MixAction | "", bbAct: Blind, back: Blind, answer: Blind): boolean {
   if (bbAct === "fold") return false;
   if (mine === "allin") return bbAct === "call";
   if (bbAct === "call") return true;
-  if (bbAct === "3bet" || bbAct === "allin") return back === "call" || back === "allin";
+  if (bbAct !== "3bet" && bbAct !== "allin") return false;
+  if (back === "call") return true;
+  if (back === "allin") return answer === "call";
   return false;
 }
 
-function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, back: Blind): Column[] {
+function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, back: Blind, btnAct: Blind): Column[] {
   const heroSb = spot.id === "hu_sb";
   const huOpen = sizedRaise("hu_sb", "Raise 2", bb);
   const sbSelected = heroSb
@@ -753,6 +757,18 @@ function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
       ],
       selected: back === "fold" ? "Fold" : back === "call" ? "Call" : back === "allin" ? `All-in ${bb}` : "",
     });
+    if (back === "allin") {
+      cols.push({
+        seat: "BB",
+        title: "BB · на пуш",
+        stack: bb - 1,
+        actions: [
+          { label: "Fold", pick: {}, blind: { seat: "BTN", act: "fold" } },
+          { label: "Call", pick: {}, blind: { seat: "BTN", act: "call" } },
+        ],
+        selected: btnAct === "fold" ? "Fold" : btnAct === "call" ? "Call" : "",
+      });
+    }
   }
   return cols;
 }
