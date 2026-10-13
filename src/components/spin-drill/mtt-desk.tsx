@@ -72,6 +72,7 @@ export function MttDesk() {
   const [pack, setPack] = useState<MttPack | null>(null);
   const [error, setError] = useState("");
   const [stacks, setStacks] = useState<Stacks>(() => freshStacks(30));
+  const [tableBb, setTableBb] = useState(30);
   const [hero, setHero] = useState<MttSeat>("UTG");
   const [pick, setPick] = useState<Record<string, Act>>({});
   const [klass, setKlass] = useState("");
@@ -304,13 +305,6 @@ export function MttDesk() {
           );
         })}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {pack.stacks.map((item) => (
-          <button key={item} type="button" onClick={() => setStacks(freshStacks(item))} className={cn("h-7 rounded-full px-2 font-mono text-[11px]", item === depth.chart ? "bg-zinc-600 text-zinc-100" : "bg-zinc-900 text-zinc-500")}>
-            {item}bb
-          </button>
-        ))}
-      </div>
       <p className="mt-1 text-xs text-muted">{depth.why} Блайнды снимаются при новой раздаче. Если стол разъехался — поправьте поле, солвер сразу берёт новое число.</p>
 
       <div className="mt-3 flex flex-wrap items-start gap-1">
@@ -406,9 +400,18 @@ export function MttDesk() {
         : null}
 
       <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(280px,1fr)]">
-        <div className="w-full max-w-[440px]">
-          {node ? <MixGrid compact range={node.range} selected={dealt || null} onPick={setKlass} bb={depth.chart} /> : <p className="text-sm text-muted">Рейндж появится, когда ход дойдёт до вас.</p>}
-          {node ? <p className="mt-2 text-xs text-muted">В игре {continuePct(node.range, ALL).toFixed(1)}% рук. Один цвет — преобладающее действие. {node.exact ? `Чарт ${node.stackUsed}bb.` : `Приближение, ближайший чарт ${node.stackUsed}bb.`}</p> : null}
+        <div className="flex w-full max-w-[560px] items-stretch gap-2 select-none">
+          <div className="min-w-0 flex-1">
+            {node ? <MixGrid compact range={node.range} selected={dealt || null} onPick={setKlass} bb={depth.chart} /> : <p className="text-sm text-muted">Рейндж появится, когда ход дойдёт до вас.</p>}
+            {node ? <p className="mt-2 text-xs text-muted">В игре {continuePct(node.range, ALL).toFixed(1)}% рук. Один цвет — преобладающее действие. {node.exact ? `Чарт ${node.stackUsed}bb.` : `Приближение, ближайший чарт ${node.stackUsed}bb.`}</p> : null}
+          </div>
+          <MttRail
+            bb={tableBb}
+            onChange={(next) => {
+              setTableBb(next);
+              setStacks(freshStacks(next));
+            }}
+          />
         </div>
         <div className="min-w-0 space-y-2 lg:sticky lg:top-3">
           <div className={cn("rounded-xl border p-4", advice && advice !== "fold" ? "border-ok" : "border-border")}>
@@ -743,6 +746,71 @@ function StreetBadge({ hole, board }: { hole: [Card, Card]; board: Card[] }) {
       {made.category > 0 ? name : "Старшая"}
       {drawName ? ` · ${drawName}` : ""}
     </p>
+  );
+}
+
+function MttRail({ bb, onChange }: { bb: number; onChange: (bb: number) => void }) {
+  const rail = useRef<HTMLDivElement>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const min = 3;
+  const max = 100;
+
+  function choose(clientY: number) {
+    const el = rail.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    if (box.height <= 0) return;
+    const t = Math.min(1, Math.max(0, (clientY - box.top) / box.height));
+    onChangeRef.current(Math.round(max - t * (max - min)));
+  }
+
+  useEffect(() => {
+    const el = rail.current;
+    if (!el) return;
+    const down = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      choose(event.clientY);
+      const move = (e: PointerEvent) => {
+        e.preventDefault();
+        choose(e.clientY);
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
+    };
+    el.addEventListener("pointerdown", down);
+    return () => el.removeEventListener("pointerdown", down);
+  }, []);
+
+  const top = `${((max - bb) / (max - min)) * 100}%`;
+  return (
+    <div className="flex w-24 shrink-0 touch-none flex-col select-none">
+      <div ref={rail} className="relative h-full min-h-48 w-full flex-1 cursor-pointer">
+        <div className="absolute top-3 bottom-3 left-3 w-1 rounded-full bg-fg" />
+        <span className="pointer-events-none absolute top-0 left-8 font-mono text-xs text-muted">100</span>
+        <button
+          type="button"
+          className={cn("absolute left-8 font-mono text-xs", bb === 30 ? "font-semibold text-fg" : "text-muted")}
+          style={{ top: "72%" }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => onChange(30)}
+        >
+          30
+        </button>
+        <span className="pointer-events-none absolute bottom-0 left-8 font-mono text-xs text-muted">3</span>
+        <div className="pointer-events-none absolute left-3 -translate-x-1/2 -translate-y-1/2" style={{ top }}>
+          <span className="absolute top-1/2 left-0 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg bg-fg" />
+          <span className={cn("absolute top-1/2 left-6 -translate-y-1/2 rounded-full px-2.5 py-1 font-mono text-lg font-semibold", bb === 30 ? "bg-fg text-bg" : "bg-surface text-fg")}>{bb}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
