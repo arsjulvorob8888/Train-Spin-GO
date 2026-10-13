@@ -305,7 +305,7 @@ export function ActionLine({
         ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
-        {live ? null : <StreetClose onAdvance={goNext} />}
+        {live || waiting ? null : <StreetClose onAdvance={goNext} />}
       </div>
       {live ? <BoardLine openBoard onAdvance={goNext} runout={runout} /> : null}
       {won ? <ResultBanner kind="win" detail="Все сбросили. Банк ваш, флопа нет." /> : null}
@@ -383,6 +383,7 @@ function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blin
   }
   if (spot.group === "SB") return sbFlop(spot.id, mine, btnAct, bbAct, back);
   if (spot.group === "HU" && spot.id === "hu_sb") return huFlop(mine, bbAct, back);
+  if (spot.group === "HU") return huBbFlop(mine, bbAct, back);
   if (spot.group === "BB") return bbFlop(spot.id, mine, sbAct, btnAct, back);
   return true;
 }
@@ -393,7 +394,7 @@ function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind
   if (spot.group === "BTN" && spot.id === "btn") return sbAct === "fold" && bbAct === "fold";
   if (spot.group === "SB") return sbTook(spot.id, mine, btnAct, bbAct);
   if (spot.group === "HU" && spot.id === "hu_sb") return bbAct === "fold";
-  if (spot.group === "HU" && spot.hero === "BB") return sbAct === "fold";
+  if (spot.group === "HU" && spot.hero === "BB") return sbAct === "fold" || ((mine === "raise" || mine === "allin") && bbAct === "fold");
   if (spot.group === "BB") return bbTook(spot.id, mine, sbAct, btnAct);
   return false;
 }
@@ -630,6 +631,15 @@ function sbColumns(spot: SpotDef, stack: number, labels: SpotDef["labels"], mine
   return cols;
 }
 
+function huBbFlop(mine: MixAction | "", reply: Blind, back: Blind): boolean {
+  if (mine === "call") return true;
+  if (mine === "allin") return reply === "call";
+  if (mine !== "raise") return false;
+  if (reply === "call") return true;
+  if (reply === "3bet" || reply === "allin") return back === "call" || back === "allin";
+  return false;
+}
+
 function huFlop(mine: MixAction | "", bbAct: Blind, back: Blind): boolean {
   if (bbAct === "fold") return false;
   if (mine === "allin") return bbAct === "call";
@@ -668,6 +678,30 @@ function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
   ];
   if (!heroSb) {
     cols.push(heroColumn(spot, bb, labels, mine));
+    if ((mine === "raise" || mine === "allin") && sbAct !== "fold") {
+      const vsJam = mine === "allin";
+      const menu: Blind[] = vsJam ? ["fold", "call"] : ["fold", "call", "allin"];
+      cols.push({
+        seat: "SB",
+        title: "SB · на рейз",
+        stack: bb - 0.5,
+        actions: menu.map((act) => ({ label: blindLabel(act, bb), pick: {}, blind: { seat: "BB", act } })),
+        selected: blindLabel(bbAct, bb),
+      });
+      if (!vsJam && bbAct === "allin") {
+        cols.push({
+          seat: "BB",
+          title: "Вы · на пуш",
+          stack: bb - 1,
+          hero: true,
+          actions: [
+            { label: "Fold", pick: {}, back: "fold" },
+            { label: "Call", pick: {}, back: "call" },
+          ],
+          selected: back === "fold" ? "Fold" : back === "call" ? "Call" : "",
+        });
+      }
+    }
     return cols;
   }
   if (mine !== "call" && mine !== "raise" && mine !== "allin") return cols;
