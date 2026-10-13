@@ -528,18 +528,21 @@ function Meta({ spot, bb, range, labels }: { spot: SpotDef; bb: number; range: M
   );
 }
 
-export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
+export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "spin" | "mtt" }) {
   const navigate = useNavigate();
   function setTab(next: Tab) {
     localStorage.setItem("spin-open-tab", next);
-    void navigate({ to: "/", search: { tab: next, pane }, replace: true });
+    void navigate({ to: "/", search: { tab: next, pane, mode }, replace: true });
   }
   function setMathPane(next: AppPane) {
     localStorage.setItem("spin-open-pane", next);
-    void navigate({ to: "/", search: { tab, pane: next }, replace: true });
+    void navigate({ to: "/", search: { tab, pane: next, mode }, replace: true });
+  }
+  function pickMode(next: "spin" | "mtt") {
+    localStorage.setItem("spin-table-mode", next);
+    void navigate({ to: "/", search: { tab, pane, mode: next }, replace: true });
   }
   const [spotId, setSpotId] = useState("btn");
-  const [tableMode, setTableMode] = useState<"spin" | "mtt">("spin");
   const [mine, setMine] = useState<MixAction | "">("");
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [store, setStore] = useState<Store>({ spots: {}, reps: 0 });
@@ -596,16 +599,22 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     if (!readLive()) publishLive(microStrategy(), false);
     setLive(readLive());
     const params = new URLSearchParams(window.location.search);
+    const savedMode = localStorage.getItem("spin-table-mode") === "mtt" ? "mtt" : "spin";
     if (!params.has("tab")) {
       const saved = localStorage.getItem("spin-open-tab");
       const savedPane = localStorage.getItem("spin-open-pane");
       const tabs: Tab[] = ["practice", "strategy", "mtt", "experiment", "sim", "hands", "math", "journal", "craft", "sources"];
       const nextPane: AppPane = savedPane === "anchors" || savedPane === "drill" ? savedPane : "lesson";
+      const keep = savedMode === "mtt" ? "mtt" : mode;
       if (saved === "table" || saved === "stats") {
-        void navigate({ to: "/", search: { tab: "strategy", pane: nextPane }, replace: true });
-      } else if (saved && tabs.includes(saved as Tab) && (saved !== "strategy" || nextPane !== "lesson")) {
-        void navigate({ to: "/", search: { tab: saved as Tab, pane: nextPane }, replace: true });
+        void navigate({ to: "/", search: { tab: "strategy", pane: nextPane, mode: keep }, replace: true });
+      } else if (saved && tabs.includes(saved as Tab) && (saved !== "strategy" || nextPane !== "lesson" || keep === "mtt")) {
+        void navigate({ to: "/", search: { tab: saved as Tab, pane: nextPane, mode: keep }, replace: true });
+      } else if (keep === "mtt") {
+        void navigate({ to: "/", search: { tab, pane, mode: "mtt" }, replace: true });
       }
+    } else if (!params.has("mode") && savedMode === "mtt") {
+      void navigate({ to: "/", search: { tab, pane, mode: "mtt" }, replace: true });
     }
     const sync = (event: Event) => {
       setLive(readLive());
@@ -913,10 +922,10 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
         {tab === "strategy" && (
           <>
           <div className="mb-3 flex flex-wrap gap-1">
-            <button type="button" onClick={() => setTableMode("spin")} className={cn("h-9 rounded-full px-4 text-sm", tableMode === "spin" ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>Spin & Go · 3-max</button>
-            <button type="button" onClick={() => setTableMode("mtt")} className={cn("h-9 rounded-full px-4 text-sm", tableMode === "mtt" ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>MTT · 8-max</button>
+            <button type="button" onClick={() => pickMode("spin")} className={cn("h-9 rounded-full px-4 text-sm", mode === "spin" ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>Spin & Go · 3-max</button>
+            <button type="button" onClick={() => pickMode("mtt")} className={cn("h-9 rounded-full px-4 text-sm", mode === "mtt" ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>MTT · 8-max</button>
           </div>
-          {tableMode === "mtt" ? <MttDesk /> : (
+          {mode === "mtt" ? <MttDesk /> : (
           <HandProvider spot={spot} range={range} bb={depth.bb} stacks={stacks} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
               <StartBank
