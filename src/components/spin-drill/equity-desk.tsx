@@ -1293,18 +1293,26 @@ function CycleMark({ label }: { label: string }) {
   );
 }
 
-export function StreetClose({ onAdvance }: { onAdvance?: () => void }) {
+export function StreetClose({ onAdvance, quiet = false }: { onAdvance?: () => void; quiet?: boolean }) {
   const { award, setAward, spot, shown } = useHand();
+  const [open, setOpen] = useState(false);
   const rivals = seatsInHand(spot.id).filter((seat) => seat !== spot.hero);
   const names = ["hero", ...rivals, "split"];
   const label = (id: string) => (id === "hero" ? "Я выиграл" : id === "split" ? "Ничья" : id);
   const winner = award === "hero" || award === spot.hero ? "Вы" : award === "split" ? "Ничья" : award;
   const lost = award === "split" ? [] : award === "hero" || award === spot.hero ? rivals : award ? ["Вы", ...rivals.filter((seat) => seat !== award)] : [];
   const eq = shown?.equity != null ? `${Math.round(shown.equity * 100)}%` : "считается по рейнджу";
+  if (quiet && !open && !award) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="self-center px-2 text-[11px] text-muted underline">
+        Рука кончилась
+      </button>
+    );
+  }
   return (
     <div className="street-float ml-auto w-[16rem] shrink-0 self-start rounded-lg border border-border bg-surface p-2 shadow-lg">
       <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Итог этой улицы</p>
-      <p className="mt-0.5 text-[11px] leading-snug text-muted">Рука уже кончилась — отметьте, кто забрал банк. Дальше можно не вводить.</p>
+      <p className="mt-0.5 text-[11px] leading-snug text-muted">Если в игре уже все сбросили или вскрылись — отметьте, кто забрал банк. Пока есть ход, продолжайте ввод.</p>
       <div className="mt-1 flex flex-wrap gap-1">
         {names.map((id) => (
           <button
@@ -1439,7 +1447,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
           <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="flop" hint={streetHint("flop")} out={out} onAction={(seat, action) => chooseLine("flop", seat, action)} onRevise={(index, action) => reviseLine("flop", index, action)} onUndo={() => undoLine("flop")} />
         ) : null}
         {flopClosed ? <CycleMark label="флоп" /> : null}
-        {turnOpen ? null : <StreetClose onAdvance={onAdvance} />}
+        {turnOpen || over ? null : <StreetClose quiet={!flopClosed} onAdvance={onAdvance} />}
       </div>
       {over ? (
         <div>
@@ -1462,7 +1470,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="turn" hint={streetHint("turn")} out={out} onAction={(seat, action) => chooseLine("turn", seat, action)} onRevise={(index, action) => reviseLine("turn", index, action)} onUndo={() => undoLine("turn")} />
           ) : null}
           {turnClosed ? <CycleMark label="тёрн" /> : null}
-          {riverOpen ? null : <StreetClose onAdvance={onAdvance} />}
+          {riverOpen || over ? null : <StreetClose quiet={!turnClosed} onAdvance={onAdvance} />}
         </div>
       ) : null}
       {board.length >= 5 || (turnClosed && fate === "play") ? (
@@ -1479,7 +1487,7 @@ export function BoardLine({ openBoard, onAdvance, runout = false }: { openBoard:
             <StreetColumns spotId={spot.id} hero={spot.hero} bb={bb} line={line} only="river" hint={streetHint("river")} out={out} onAction={(seat, action) => chooseLine("river", seat, action)} onRevise={(index, action) => reviseLine("river", index, action)} onUndo={() => undoLine("river")} />
           ) : null}
           {finished ? <DoneMark label={showdown(hole, board)?.label ?? "Итог"} onAdvance={onAdvance} /> : null}
-          <StreetClose onAdvance={onAdvance} />
+          {over ? null : <StreetClose quiet={!finished} onAdvance={onAdvance} />}
         </div>
       ) : null}
       {board.length >= 5 || (finished && !over) ? <ShowdownPanel /> : null}
