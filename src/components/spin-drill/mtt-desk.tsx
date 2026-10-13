@@ -6,7 +6,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
 import { continuePct, type MixAction } from "@/lib/spin-drill/mix";
 import { actionWord, spotsOf, type MttPack } from "@/lib/mtt/charts";
-import { bluffLine, nashLine, playAction, resolveLive, SEATS, sizeLine, type LiveNode, type MttSeat } from "@/lib/mtt/live";
+import { bluffLine, chartOpenSize, chartThreeSize, nashLine, playAction, pricedAction, resolveLive, SEATS, sizeLine, type LiveNode, type MttSeat } from "@/lib/mtt/live";
 import { playBluffSting, playDrawSting, playHandSting } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +108,7 @@ export function MttDesk() {
   const spots = useMemo(() => (pack ? spotsOf(pack) : []), [pack]);
   const depth = pack ? effectOf(stacks, hero, pick, pack.stacks) : { bb: 30, chart: 30, why: "" };
   const dealt = cards.h0 && cards.h1 ? handClass(cards.h0, cards.h1) : klass;
-  const built = pack ? buildLine(pack, spots, depth.bb, depth.chart, stacks, hero, pick, dealt) : null;
+  const built = pack ? buildLine(pack, spots, depth.bb, depth.chart, stacks, hero, pick, dealt, sizes) : null;
   const hole: [Card | null, Card | null] = [cards.h0 ?? null, cards.h1 ?? null];
   const board = [cards.b0 ?? null, cards.b1 ?? null, cards.b2 ?? null, cards.b3 ?? null, cards.b4 ?? null];
 
@@ -424,7 +424,8 @@ export function MttDesk() {
                 <p className="mt-1 text-xs text-muted">{depth.chart}bb чарт</p>
               </div>
             </div>
-            <p className="mt-3 text-sm text-muted">{post?.why ?? (built.outcome === "win" ? "Все сбросили. Банк ваш, флопа нет." : built.outcome === "fold" ? "Вы сбросили. Раздача закрыта." : node ? `${node.title}. ${node.blurb}` : "Отметьте действия до вас слева направо. Карты — плюс слева, окно как в Spin&Go.")}</p>
+            <p className="mt-3 text-sm text-muted">{post?.why ?? (built.outcome === "win" ? "Все сбросили. Банк ваш, флопа нет." : built.outcome === "fold" ? "Вы сбросили. Раздача закрыта." : node ? `${node.title}. ${node.blurb}` : "Отметьте действия до вас слева направо.")}</p>
+            {built.note ? <p className="mt-2 text-sm font-medium text-ok">{built.note}</p> : null}
           </div>
           {bluff && !post ? <BluffSound on={bluff.on} /> : null}
           {bluff && !post ? (
@@ -447,14 +448,14 @@ export function MttDesk() {
   );
 }
 
-function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: number, chart: number, stacks: Stacks, hero: MttSeat, pick: Record<string, Act>, hand: string) {
+function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: number, chart: number, stacks: Stacks, hero: MttSeat, pick: Record<string, Act>, hand: string, sizes: Record<string, string>) {
   const cols: Col[] = [];
   let opener: MttSeat | null = null;
   let limp = false;
   let threeFrom: MttSeat | null = null;
   const idx = SEATS.indexOf(hero);
 
-  const stop = (node: LiveNode | null, advice: MixAction | null, outcome: Outcome) => ({ cols, node, advice, outcome });
+  const stop = (node: LiveNode | null, advice: MixAction | null, outcome: Outcome, note = "") => ({ cols, node, advice, outcome, note });
 
   for (const seat of SEATS.slice(0, idx)) {
     const facing = Boolean(opener);
@@ -480,7 +481,15 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
     three: null,
     cold: Boolean(threeFrom),
   });
-  const advice = hand ? playAction(node, hand, depth) : null;
+  const raw = hand ? playAction(node, hand, depth) : null;
+  const faced =
+    threeFrom && pick[`pre:${threeFrom}`] === "3bet"
+      ? { key: `pre:${threeFrom}`, chartTo: chartThreeSize(depth) }
+      : opener && pick[`pre:${opener}`] === "raise"
+        ? { key: `pre:${opener}`, chartTo: chartOpenSize(depth) }
+        : null;
+  const priced = raw && faced ? applyPrice(raw, hand, sizes[faced.key] ?? "", faced.chartTo, depth) : { action: raw, note: "" };
+  const advice = priced.action;
   const wanted = advice ? asAct(advice, facingKind) : "";
   const heroSelected = pick.hero ?? "";
   cols.push({
@@ -493,8 +502,8 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
     selected: heroSelected,
     wanted,
   });
-  if (!heroSelected) return stop(node, advice, "pending");
-  if (heroSelected === "fold") return stop(node, advice, "fold");
+  if (!heroSelected) return stop(node, advice, "pending", priced.note);
+  if (heroSelected === "fold") return stop(node, advice, "fold", priced.note);
 
   if (!opener && !threeFrom && (heroSelected === "raise" || heroSelected === "allin" || heroSelected === "limp")) {
     let aggressor: MttSeat | null = null;
@@ -529,7 +538,9 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
       three: aggressor === "SB" || aggressor === "BB" ? "blind" : "ip",
       cold: false,
     });
-    const backAdvice = hand ? playAction(backNode, hand, depth) : null;
+    const backRaw = hand ? playAction(backNode, hand, depth) : null;
+    const backPriced = backRaw && pick[`post:${aggressor}`] === "3bet" ? applyPrice(backRaw, hand, sizes[`post:${aggressor}`] ?? "", chartThreeSize(depth), depth) : { action: backRaw, note: "" };
+    const backAdvice = backPriced.action;
     const back = pick.back ?? "";
     cols.push({
       key: "back",
@@ -541,9 +552,9 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
       selected: back,
       wanted: backAdvice ? asAct(backAdvice, "three") : "",
     });
-    if (!back) return stop(backNode, backAdvice, "pending");
-    if (back === "fold") return stop(backNode, backAdvice, "fold");
-    return stop(backNode, backAdvice, "flop");
+    if (!back) return stop(backNode, backAdvice, "pending", backPriced.note);
+    if (back === "fold") return stop(backNode, backAdvice, "fold", backPriced.note);
+    return stop(backNode, backAdvice, "flop", backPriced.note);
   }
 
   if (opener && (heroSelected === "3bet" || heroSelected === "allin")) {
@@ -558,17 +569,16 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
 }
 
 function openBtns(seat: MttSeat, stack: number): Btn[] {
-  const raise = stack <= 20 ? "Raise 2" : "Raise 2.3";
   const jam = { id: "allin" as Act, label: `All-in ${stack}` };
-  if (seat === "SB") return [{ id: "fold", label: "Fold" }, { id: "limp", label: "Limp" }, { id: "raise", label: raise }, jam];
-  return [{ id: "fold", label: "Fold" }, { id: "raise", label: raise }, jam];
+  if (seat === "SB") return [{ id: "fold", label: "Fold" }, { id: "limp", label: "Limp" }, { id: "raise", label: "Raise" }, jam];
+  return [{ id: "fold", label: "Fold" }, { id: "raise", label: "Raise" }, jam];
 }
 
 function faceBtns(stack: number): Btn[] {
   return [
     { id: "fold", label: "Fold" },
     { id: "call", label: "Call" },
-    { id: "3bet", label: stack <= 20 ? "3-bet 6" : "3-bet 7.5" },
+    { id: "3bet", label: "3-bet" },
     { id: "allin", label: `All-in ${stack}` },
   ];
 }
@@ -583,9 +593,17 @@ function jamBtns(stack: number): Btn[] {
 
 function heroBtns(hero: MttSeat, stack: number, facing: string): Btn[] {
   if (facing === "three") return jamBtns(stack);
-  if (facing === "limp") return [{ id: "call", label: "Check" }, { id: "raise", label: stack <= 20 ? "Raise 4" : "Raise 4.5" }, { id: "allin", label: `All-in ${stack}` }];
+  if (facing === "limp") return [{ id: "call", label: "Check" }, { id: "raise", label: "Raise" }, { id: "allin", label: `All-in ${stack}` }];
   if (facing === "raise") return faceBtns(stack);
   return openBtns(hero, stack);
+}
+
+function applyPrice(action: MixAction, hand: string, raw: string, chartTo: number, stack: number): { action: MixAction; note: string } {
+  const to = Number(raw.replace(",", "."));
+  if (!raw.trim() || !Number.isFinite(to) || to <= 0) {
+    return { action, note: `Размер не задан. Чарт считает ${chartTo}bb — выберите множитель рядом с рейзом.` };
+  }
+  return pricedAction(action, hand, to, chartTo, stack);
 }
 
 function asAct(action: MixAction, facing: string): Act {

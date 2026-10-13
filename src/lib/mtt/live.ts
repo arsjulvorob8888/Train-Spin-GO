@@ -58,6 +58,53 @@ export function dominantRange(range: MixRange): MixRange {
   return out;
 }
 
+export function chartOpenSize(stack: number): number {
+  return stack <= 20 ? 2 : 2.3;
+}
+
+export function chartThreeSize(stack: number): number {
+  return stack <= 20 ? 6 : 7.5;
+}
+
+function defendWider(hand: string): boolean {
+  if (hand.length < 2) return false;
+  if (hand.length === 2) return true;
+  if (hand[2] === "s" || hand[0] === "A") return true;
+  return "KQJT".includes(hand[0] ?? "") && "KQJT".includes(hand[1] ?? "");
+}
+
+function marginalCall(hand: string): boolean {
+  if (hand.length === 2) return false;
+  if (hand[0] === "A" && "KQJ".includes(hand[1] ?? "")) return false;
+  if (hand.startsWith("KQ")) return false;
+  if (hand[0] === "A" && hand[2] === "s") return false;
+  return true;
+}
+
+/** Shift the chart action when the real raise is not the size the chart assumed. */
+export function pricedAction(action: MixAction, hand: string, raiseTo: number | null, chartTo: number | null, stack: number): { action: MixAction; note: string } {
+  if (!hand || raiseTo == null || chartTo == null || !(chartTo > 0)) return { action, note: "" };
+  const to = Math.round(raiseTo * 10) / 10;
+  const chart = Math.round(chartTo * 10) / 10;
+  if (to >= stack * 0.7 && to < stack - 0.2) {
+    if (action === "fold") return { action, note: `Рейз ${to}bb — почти пуш при стеке ${stack}bb. Чарт и так сбрасывает.` };
+    if (!isValue(hand)) return { action: "fold", note: `Рейз ${to}bb — почти пуш. Колл только с сильной рукой, эта вне пуша.` };
+    return { action: "allin", note: `Рейз ${to}bb оставляет мало фишек. Сильная рука идёт пушем, не коллом.` };
+  }
+  if (Math.abs(to - chart) < 0.4) return { action, note: "" };
+  if (to <= chart - 0.4 && action === "fold" && defendWider(hand)) {
+    return { action: "call", note: `Рейз ${to}bb меньше чартовых ${chart}bb. Колл дешевле, диапазон открытия шире. Эта рука уже платит.` };
+  }
+  if (to >= chart + 0.6 && action === "call" && marginalCall(hand)) {
+    return { action: "fold", note: `Рейз ${to}bb больше чартовых ${chart}bb. Краевой колл чарта против такого размера — фолд.` };
+  }
+  if (to >= chart * 1.8 && action === "raise" && !isValue(hand)) {
+    return { action: "fold", note: `Рейз ${to}bb почти вдвое больше чарта ${chart}bb. Тонкий 3-бет не ставим.` };
+  }
+  if (to > chart) return { action, note: `Рейз ${to}bb крупнее чарта ${chart}bb. Рука всё ещё в диапазоне.` };
+  return { action, note: `Рейз ${to}bb мельче чарта ${chart}bb. Рука и так играется.` };
+}
+
 export function isValue(hand: string): boolean {
   if (hand.length === 2) return "AKQJT".includes(hand[0] ?? "");
   if (hand.startsWith("AK") || hand.startsWith("AQ")) return true;
