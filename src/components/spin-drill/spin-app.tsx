@@ -539,6 +539,7 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
     void navigate({ to: "/", search: { tab, pane: next }, replace: true });
   }
   const [spotId, setSpotId] = useState("btn");
+  const [tableMode, setTableMode] = useState<"spin" | "mtt">("spin");
   const [mine, setMine] = useState<MixAction | "">("");
   const [group, setGroup] = useState<SpotGroup>("BTN");
   const [store, setStore] = useState<Store>({ spots: {}, reps: 0 });
@@ -910,6 +911,12 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
         {tab === "mtt" && <MttDesk />}
 
         {tab === "strategy" && (
+          <>
+          <div className="mb-3 flex flex-wrap gap-1">
+            <button type="button" onClick={() => setTableMode("spin")} className={cn("h-9 rounded-full px-4 text-sm", tableMode === "spin" ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>Spin & Go · 3-max</button>
+            <button type="button" onClick={() => setTableMode("mtt")} className={cn("h-9 rounded-full px-4 text-sm", tableMode === "mtt" ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>MTT · 8-max</button>
+          </div>
+          {tableMode === "mtt" ? <MttDesk /> : (
           <HandProvider spot={spot} range={range} bb={depth.bb} stacks={stacks} labels={labels} onHand={setSelected} onReset={resetLine} openCards={cardAsk}>
           <section className="rounded-2xl border border-border bg-surface p-4">
               <StartBank
@@ -992,6 +999,8 @@ export function SpinApp({ tab, pane }: { tab: Tab; pane: AppPane }) {
               </p>
             </section>
           </HandProvider>
+          )}
+          </>
         )}
 
         {tab === "experiment" && <RangeExperiment />}

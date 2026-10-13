@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
-import { continuePct, mixOf, primary, segs, type MixAction } from "@/lib/spin-drill/mix";
-import { actionWord, chartKey, GROUP_LABEL, rangeOf, spotsOf, type MttGroup, type MttPack, type MttSpot } from "@/lib/mtt/charts";
+import { continuePct } from "@/lib/spin-drill/mix";
+import { actionWord, spotsOf, type MttPack } from "@/lib/mtt/charts";
+import { bluffLine, nashLine, playAction, resolveLive, SEATS, sizeLine, type MttSeat } from "@/lib/mtt/live";
 import { cn } from "@/lib/utils";
 
-const GROUPS: MttGroup[] = ["open", "face", "three", "cold"];
+type Scene = "fold" | "open" | "limp" | "three-blind" | "three-ip" | "cold";
 
 export function MttDesk() {
   const [pack, setPack] = useState<MttPack | null>(null);
   const [error, setError] = useState("");
   const [stack, setStack] = useState(30);
-  const [group, setGroup] = useState<MttGroup>("open");
-  const [spotId, setSpotId] = useState("rfi:BTN");
+  const [hero, setHero] = useState<MttSeat>("BTN");
+  const [scene, setScene] = useState<Scene>("fold");
+  const [opener, setOpener] = useState<MttSeat>("UTG");
   const [hand, setHand] = useState("AKs");
 
   useEffect(() => {
@@ -34,111 +36,114 @@ export function MttDesk() {
   }, []);
 
   const spots = useMemo(() => (pack ? spotsOf(pack) : []), [pack]);
-  const visible = spots.filter((spot) => spot.group === group && spot.stacks.includes(stack));
-  const spot = visible.find((item) => item.id === spotId) ?? visible[0] ?? null;
-  const range = spot && pack ? rangeOf(pack.charts[chartKey(stack, spot)]) : {};
-  const mix = hand ? mixOf(range, hand) : null;
-  const action = mix ? primary(mix) : null;
-  const played = continuePct(range, ALL);
+  const before = SEATS.slice(0, SEATS.indexOf(hero));
+  const openSeat = before.includes(opener) ? opener : (before[0] ?? null);
+  const node = pack
+    ? resolveLive({
+        pack,
+        spots,
+        stack,
+        hero,
+        opener: scene === "open" ? openSeat : null,
+        limp: scene === "limp",
+        three: scene === "three-blind" ? "blind" : scene === "three-ip" ? "ip" : null,
+        cold: scene === "cold",
+      })
+    : null;
+  const action = node && node.kind !== "walk" ? playAction(node, hand, stack) : null;
+  const word = action ? actionWord(action, node?.call ?? "Call") : "Банк ваш";
+  const size = node ? sizeLine(action ?? "call", stack, node.kind, node.call) : "";
+  const bluff = action ? bluffLine(hand, action, hero, node?.kind ?? "open") : null;
+  const played = node ? continuePct(node.range, ALL) : 0;
 
-  function pickStack(next: number) {
-    setStack(next);
-    const still = spots.find((item) => item.id === spotId && item.group === group && item.stacks.includes(next));
-    if (!still) {
-      const fallback = spots.find((item) => item.group === group && item.stacks.includes(next));
-      if (fallback) setSpotId(fallback.id);
-    }
-  }
-
-  function pickGroup(next: MttGroup) {
-    setGroup(next);
-    const fallback = spots.find((item) => item.group === next && item.stacks.includes(stack));
-    if (fallback) setSpotId(fallback.id);
+  function pickHero(next: MttSeat) {
+    setHero(next);
+    const earlier = SEATS.slice(0, SEATS.indexOf(next));
+    if (!earlier.includes(opener) && earlier[0]) setOpener(earlier[0]);
+    if (!earlier.length && scene === "open") setScene("fold");
+    if (next !== "BB" && scene === "limp") setScene("fold");
+    if (next !== "BTN" && next !== "BB" && scene === "cold") setScene("fold");
   }
 
   if (error) return <p className="text-sm text-bad">{error}</p>;
-  if (!pack) return <p className="text-sm text-muted">Загружаю чарты MTT 8-max…</p>;
+  if (!pack || !node) return <p className="text-sm text-muted">Загружаю MTT 8-max…</p>;
 
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-lg font-semibold">MTT · техасский холдем · 8-max</h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted">
-          Префлоп-чарты на 16 стеков: открытие, игра против рейза, против 3-бета и холодный 4-бет. Нажмите клетку — солвер скажет действие и частоту.
-        </p>
+        <h2 className="text-lg font-semibold">MTT · 8-max · совет в раздаче</h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted">Позиция, что сделали до вас, рука. Одно действие и размер ставки. Миксы убраны: в клетке только преобладающее. Постфлоп 8-max этот пакет не считает — деньги MTT здесь на префлопе, пуше и стиле.</p>
       </div>
       <div className="flex flex-wrap gap-1">
         {pack.stacks.map((item) => (
-          <button key={item} type="button" onClick={() => pickStack(item)} className={cn("h-8 rounded-full px-3 font-mono text-xs", item === stack ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>
-            {item}bb
+          <button key={item} type="button" onClick={() => setStack(item)} className={cn("h-8 rounded-full px-2.5 font-mono text-xs", item === stack ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>
+            {item}
           </button>
         ))}
       </div>
       <div className="flex flex-wrap gap-1">
-        {GROUPS.map((item) => (
-          <button key={item} type="button" onClick={() => pickGroup(item)} className={cn("h-8 rounded-full px-3 text-xs", item === group ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>
-            {GROUP_LABEL[item]}
+        {SEATS.map((seat) => (
+          <button key={seat} type="button" onClick={() => pickHero(seat)} className={cn("h-9 rounded-full px-3 text-sm", seat === hero ? "bg-ok text-bg" : "bg-surface-2 text-fg")}>
+            {seat === "UTG1" ? "UTG+1" : seat}
           </button>
         ))}
       </div>
       <div className="flex flex-wrap gap-1">
-        {visible.map((item) => (
-          <button key={item.id} type="button" onClick={() => setSpotId(item.id)} className={cn("h-8 rounded-full px-3 text-xs", item.id === spot?.id ? "bg-ok text-bg" : "bg-surface-2 text-fg")}>
-            {item.title}
-          </button>
-        ))}
+        <SceneButton on={scene === "fold"} onClick={() => setScene("fold")}>Все сбросили</SceneButton>
+        <SceneButton on={scene === "open"} onClick={() => setScene("open")}>Мне открыли</SceneButton>
+        {hero === "BB" ? <SceneButton on={scene === "limp"} onClick={() => setScene("limp")}>SB лимп</SceneButton> : null}
+        <SceneButton on={scene === "three-blind"} onClick={() => setScene("three-blind")}>Я открыл · 3-бет блайнда</SceneButton>
+        <SceneButton on={scene === "three-ip"} onClick={() => setScene("three-ip")}>Я открыл · 3-бет в позиции</SceneButton>
+        {hero === "BTN" || hero === "BB" ? <SceneButton on={scene === "cold"} onClick={() => setScene("cold")}>Холодный 4-бет</SceneButton> : null}
       </div>
-      {spot && mix && action ? (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <div>
-            <MixGrid range={range} selected={hand} onPick={setHand} bb={stack} />
-            <p className="mt-2 text-xs text-muted">Входит {played.toFixed(1)}% рук. Красный — рейз, зелёный — {spot.call === "Check" ? "чек" : "колл"}, оранжевый — олл-ин, серый — фолд.</p>
-          </div>
-          <Decision hand={hand} action={action} mix={mix} spot={spot} stack={stack} />
+      {scene === "open" ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-xs text-muted">Открыл</span>
+          {before.map((seat) => (
+            <button key={seat} type="button" onClick={() => setOpener(seat)} className={cn("h-8 rounded-full px-3 text-xs", openSeat === seat ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>
+              {seat === "UTG1" ? "UTG+1" : seat}
+            </button>
+          ))}
         </div>
+      ) : null}
+      {node.kind === "walk" ? (
+        <p className="rounded-2xl border border-ok bg-ok/10 p-4 text-2xl font-semibold">Все сбросили. Банк ваш.</p>
       ) : (
-        <p className="text-sm text-muted">На {stack}bb в этом разделе чартов нет. Для 3-бета и холодного 4-бета есть 30, 50 и 100bb.</p>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div>
+            <MixGrid range={node.range} selected={hand} onPick={setHand} bb={stack} />
+            <p className="mt-2 text-xs text-muted">
+              В игре {played.toFixed(1)}% рук. Один цвет — преобладающее действие. {node.exact ? "Точный чарт." : "Приближение, точного узла нет."} Стек чарта {node.stackUsed}bb.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <div className={cn("rounded-2xl border p-4", action === "fold" ? "border-border" : "border-ok bg-ok/10")}>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-subtle">{stack}bb · {hero === "UTG1" ? "UTG+1" : hero} · {hand}</p>
+              <p className="mt-1 text-4xl font-semibold leading-none">{word}</p>
+              <p className="mt-2 text-lg font-medium">{size}</p>
+              <p className="mt-2 text-sm text-muted">{node.title}. {node.blurb}</p>
+            </div>
+            {bluff ? (
+              <div className={cn("rounded-xl border p-3 text-sm", bluff.on ? "border-amber-400/70 bg-amber-400/10 text-amber-100" : "border-border text-muted")}>
+                <p className="text-[10px] font-medium uppercase tracking-wide">{bluff.on ? "Блеф" : "Почему не блеф"}</p>
+                <p className="mt-1">{bluff.text}</p>
+              </div>
+            ) : null}
+            <div className="rounded-xl border border-border p-3 text-sm text-muted">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Неш</p>
+              <p className="mt-1">{action ? nashLine(stack, action, node.kind) : ""}</p>
+            </div>
+          </div>
+        </div>
       )}
-      <p className="text-[11px] text-subtle">
-        Источник чартов:{" "}
-        <a className="underline" href={pack.source} target="_blank" rel="noreferrer">
-          poker-hand-review
-        </a>
-        , лицензия {pack.license}. Это префлоп 8-max MTT, не постфлоп и не ICM под конкретный стол выплат.
-      </p>
     </section>
   );
 }
 
-function Decision({
-  hand,
-  action,
-  mix,
-  spot,
-  stack,
-}: {
-  hand: string;
-  action: MixAction;
-  mix: ReturnType<typeof mixOf>;
-  spot: MttSpot;
-  stack: number;
-}) {
-  const word = actionWord(action, spot.call);
-  const parts = segs(mix).filter((part) => part.p > 0);
+function SceneButton({ on, onClick, children }: { on: boolean; onClick: () => void; children: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-subtle">{stack}bb · {spot.title}</p>
-      <p className="mt-2 font-mono text-3xl font-semibold">{hand}</p>
-      <p className="mt-1 text-4xl font-semibold leading-none">{word}</p>
-      <p className="mt-2 text-sm text-muted">{spot.blurb}</p>
-      <div className="mt-3 space-y-1">
-        {parts.map((part) => (
-          <p key={part.a} className="flex items-center justify-between font-mono text-sm">
-            <span>{actionWord(part.a, spot.call)}</span>
-            <span>{part.p}%</span>
-          </p>
-        ))}
-      </div>
-    </div>
+    <button type="button" onClick={onClick} className={cn("h-8 rounded-full px-3 text-xs", on ? "bg-fg text-bg" : "bg-surface-2 text-muted")}>
+      {children}
+    </button>
   );
 }
