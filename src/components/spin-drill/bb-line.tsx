@@ -56,6 +56,7 @@ export function ActionLine({
     setBtnAct("");
     setBack("");
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
+    if (spot.group === "BB") setSbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
   const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard } = useHand();
@@ -117,6 +118,7 @@ export function ActionLine({
     mine !== "" &&
     ((/jam|push|reshove/.test(spot.id) && mine === "call") ||
       (mine === "allin" && (sbAct === "call" || bbAct === "call" || btnAct === "call" || back === "call")) ||
+      (back === "call" && (sbAct === "allin" || btnAct === "allin" || bbAct === "allin")) ||
       [...line.flop, ...line.turn, ...line.river].some((act) => act.action === "allin") &&
         [...line.flop, ...line.turn, ...line.river].some((act) => act.action === "call"));
   useEffect(() => {
@@ -165,7 +167,7 @@ export function ActionLine({
           <div
             className={cn(
               "w-[6.4rem] shrink-0 rounded-lg border p-1",
-              col.hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : "border-border",
+              col.hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : !col.selected && col.actions.some((action) => action.blind) ? "next-step border-ok bg-ok/10" : "border-border",
             )}
           >
             <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px]", col.hero ? "bg-ok text-bg" : head(col.seat))}>
@@ -361,6 +363,10 @@ function preflopFolded(spot: SpotDef, sbAct: Blind, bbAct: Blind, btnAct: Blind)
     if (open === "fold" || btnAct === "fold") out.push("BTN");
     if (bbAct === "fold" && spot.id !== "sb_vs_bb_jam") out.push("BB");
   }
+  if (spot.group === "BB") {
+    if (sbAct === "fold") out.push("SB");
+    if (btnAct === "fold") out.push("BTN");
+  }
   return out;
 }
 
@@ -375,6 +381,7 @@ function flopOpen(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blin
   }
   if (spot.group === "SB") return sbFlop(spot.id, mine, btnAct, bbAct, back);
   if (spot.group === "HU" && spot.id === "hu_sb") return huFlop(mine, bbAct, back);
+  if (spot.group === "BB") return bbFlop(spot.id, mine, sbAct, btnAct, back);
   return true;
 }
 
@@ -384,6 +391,7 @@ function tookPot(spot: SpotDef, mine: MixAction | "", sbAct: Blind, bbAct: Blind
   if (spot.group === "SB") return sbTook(spot.id, mine, btnAct, bbAct);
   if (spot.group === "HU" && spot.id === "hu_sb") return bbAct === "fold";
   if (spot.group === "HU" && spot.hero === "BB") return sbAct === "fold";
+  if (spot.group === "BB") return bbTook(spot.id, mine, sbAct, btnAct);
   return false;
 }
 
@@ -429,7 +437,7 @@ function columns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: Mix
   if (spot.group === "BTN") return btnColumns(spot, bb, labels, mine, sbAct, bbAct);
   if (spot.group === "SB") return sbColumns(spot, bb, labels, mine, btnAct, bbAct, back);
   if (spot.group === "HU") return huColumns(spot, bb, labels, mine, sbAct, bbAct, back);
-  return bbColumns(spot, bb, labels, mine);
+  return bbColumns(spot, bb, labels, mine, sbAct, btnAct, back);
 }
 
 function blindChart(sb: Blind, bb: Blind): string {
@@ -533,7 +541,7 @@ function sbFlop(id: string, mine: MixAction | "", btnAct: Blind, bbAct: Blind, b
   return btnLive || bbAct === "call";
 }
 
-function replyColumn(seat: "BTN" | "BB", stack: number, menu: Blind[], selected: Blind, full: number, title?: string): Column {
+function replyColumn(seat: "BTN" | "SB" | "BB", stack: number, menu: Blind[], selected: Blind, full: number, title?: string): Column {
   return {
     seat,
     title,
@@ -743,7 +751,32 @@ const BB_BTN: { label: string; spot: string; sb: { label: string; spot: string }
   },
 ];
 
-function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | ""): Column[] {
+function bbVillains(id: string): ("SB" | "BTN")[] {
+  if (id === "bb_vs_sb_limp" || id === "bb_vs_sb_raise") return ["SB"];
+  if (id === "bb_vs_btn_limp" || id === "bb_vs_btn_raise") return ["BTN"];
+  if (id === "bb_squeeze" || id === "bb_vs_limp_call" || id === "bb_vs_limp_iso") return ["SB", "BTN"];
+  return [];
+}
+
+function bbFlop(id: string, mine: MixAction | "", sbAct: Blind, btnAct: Blind, back: Blind): boolean {
+  if (mine === "call") return true;
+  if (mine !== "raise" && mine !== "allin") return false;
+  const seats = bbVillains(id);
+  if (!seats.length) return true;
+  const acts = seats.map((seat) => (seat === "SB" ? sbAct : btnAct));
+  if (acts.some((act) => act !== "fold" && act !== "call" && act !== "allin")) return false;
+  if (mine === "raise" && acts.includes("allin")) return back === "call";
+  return acts.some((act) => act === "call" || act === "allin");
+}
+
+function bbTook(id: string, mine: MixAction | "", sbAct: Blind, btnAct: Blind): boolean {
+  if (mine !== "raise" && mine !== "allin") return false;
+  const seats = bbVillains(id);
+  if (!seats.length) return false;
+  return seats.every((seat) => (seat === "SB" ? sbAct : btnAct) === "fold");
+}
+
+function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, btnAct: Blind, back: Blind): Column[] {
   const branch = BB_BTN.find((item) => item.sb.some((leaf) => leaf.spot === spot.id)) ?? BB_BTN[2]!;
   const leaf = branch.sb.find((item) => item.spot === spot.id) ?? branch.sb[0]!;
   const dress = (label: string, kind: "btn" | "sb") => {
@@ -752,7 +785,7 @@ function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
     if (label === "Raise 4") return sizedRaise("bb_vs_limp_iso", "Raise 4", bb);
     return label;
   };
-  return [
+  const cols: Column[] = [
     {
       seat: "BTN",
       stack: bb,
@@ -773,6 +806,28 @@ function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
     },
     heroColumn(spot, bb, labels, mine),
   ];
+  if (mine !== "raise" && mine !== "allin") return cols;
+  const seats = bbVillains(spot.id);
+  if (!seats.length) return cols;
+  const menu: Blind[] = mine === "allin" ? ["fold", "call"] : ["fold", "call", "allin"];
+  for (const seat of seats) {
+    const act = seat === "SB" ? sbAct : btnAct;
+    cols.push(replyColumn(seat, seat === "SB" ? bb - 0.5 : bb, menu, act, bb, mine === "allin" ? `${seat} · на пуш` : `${seat} · ответ`));
+  }
+  if (mine === "raise" && seats.some((seat) => (seat === "SB" ? sbAct : btnAct) === "allin")) {
+    cols.push({
+      seat: "BB",
+      title: "Вы · на пуш",
+      stack: bb - 1,
+      hero: true,
+      actions: [
+        { label: "Fold", pick: {}, back: "fold" },
+        { label: "Call", pick: {}, back: "call" },
+      ],
+      selected: back === "fold" ? "Fold" : back === "call" ? "Call" : "",
+    });
+  }
+  return cols;
 }
 
 function heroColumn(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | ""): Column {
