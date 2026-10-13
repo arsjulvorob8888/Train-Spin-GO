@@ -109,6 +109,17 @@ export const RANGE_SB_VS_BB_JAM: MixRange = Object.assign(
   }),
 );
 
+/** SB already called a minraise. BB jammed. 75s and the other suited gappers fold. */
+export const RANGE_SB_VS_SQUEEZE: MixRange = fill(
+  [
+    "AA", "KK", "QQ", "JJ", "TT", "99", "88", "77", "66", "55",
+    "AKs", "AQs", "AJs", "ATs", "A9s", "A5s",
+    "AKo", "AQo", "AJo",
+    "KQs", "KJs", "QJs", "JTs",
+  ],
+  "call",
+);
+
 export const RANGE_BB_VS_BTN_RAISE: MixRange = fromChart("bb_vs_btn_raise", {
   AA: { raise: 62, allin: 24, call: 14 },
   KK: { raise: 48, allin: 36, call: 16 },

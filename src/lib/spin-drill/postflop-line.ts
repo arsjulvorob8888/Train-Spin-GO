@@ -88,6 +88,7 @@ export function preflopAllin(spotId: string): Seat[] {
     hu_bb_jam: ["SB"],
     sb_push: ["BTN"],
     sb_vs_bb_jam: ["BB"],
+    sb_vs_squeeze_jam: ["BB"],
     bb_vs_reshove: ["SB"],
     bb_vs_limp_jam: ["SB"],
     bb_vs_jam_call: ["BTN", "SB"],

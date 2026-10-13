@@ -190,15 +190,19 @@ export function ActionLine({
                         const nextBb = action.blind.seat === "BB" ? action.blind.act : bbAct;
                         if (action.blind.seat === "SB") setSbAct(action.blind.act);
                         else setBbAct(action.blind.act);
-                        if (spot.group === "SB" && spot.id === "sb_fold" && mine === "call" && action.blind.seat === "BB") {
-                          if (action.blind.act === "3bet") {
-                            onShift?.("sb_iso");
-                            return;
-                          }
-                          if (action.blind.act === "allin") {
+                        if (spot.group === "SB" && action.blind.seat === "BB" && action.blind.act === "allin") {
+                          if (spot.id === "sb_fold" && mine === "call") {
                             onShift?.("sb_vs_bb_jam");
                             return;
                           }
+                          if ((spot.id === "sb_raise" || spot.id === "sb_limp") && (mine === "call" || mine === "raise")) {
+                            onShift?.("sb_vs_squeeze_jam");
+                            return;
+                          }
+                        }
+                        if (spot.group === "SB" && spot.id === "sb_fold" && mine === "call" && action.blind.seat === "BB" && action.blind.act === "3bet") {
+                          onShift?.("sb_iso");
+                          return;
                         }
                         if (spot.group !== "BTN") return;
                         const chart = blindChart(nextSb, nextBb);
@@ -478,14 +482,14 @@ function btnColumns(spot: SpotDef, stack: number, labels: SpotDef["labels"], min
 
 function sbOpener(id: string): "fold" | "limp" | "raise" | "jam" {
   if (id === "sb_limp") return "limp";
-  if (id === "sb_raise") return "raise";
+  if (id === "sb_raise" || id === "sb_vs_squeeze_jam") return "raise";
   if (id === "sb_push") return "jam";
   return "fold";
 }
 
 function sbReplies(id: string, mine: MixAction | ""): { btn: boolean; bb: boolean; menu: Blind[] } | null {
   if (mine !== "call" && mine !== "raise" && mine !== "allin") return null;
-  if (id === "sb_vs_bb_jam") return null;
+  if (id === "sb_vs_bb_jam" || id === "sb_vs_squeeze_jam") return null;
   if (id === "sb_iso") return mine === "allin" ? { btn: false, bb: true, menu: ["fold", "call"] } : null;
   const open = sbOpener(id);
   const shove = mine === "allin" || open === "jam";
@@ -498,7 +502,7 @@ function sbReplies(id: string, mine: MixAction | ""): { btn: boolean; bb: boolea
 
 function sbTook(id: string, mine: MixAction | "", btnAct: Blind, bbAct: Blind): boolean {
   if (mine !== "call" && mine !== "raise" && mine !== "allin") return false;
-  if (id === "sb_vs_bb_jam") return false;
+  if (id === "sb_vs_bb_jam" || id === "sb_vs_squeeze_jam") return false;
   if (id === "sb_iso") return mine === "allin" && bbAct === "fold";
   if (bbAct !== "fold") return false;
   const open = sbOpener(id);
@@ -509,7 +513,7 @@ function sbTook(id: string, mine: MixAction | "", btnAct: Blind, bbAct: Blind): 
 
 function sbFlop(id: string, mine: MixAction | "", btnAct: Blind, bbAct: Blind, back: Blind): boolean {
   if (sbTook(id, mine, btnAct, bbAct)) return false;
-  if (id === "sb_vs_bb_jam") return mine === "call";
+  if (id === "sb_vs_bb_jam" || id === "sb_vs_squeeze_jam") return mine === "call";
   if (id === "sb_iso") {
     if (mine === "call") return true;
     return mine === "allin" && bbAct === "call";
@@ -570,6 +574,22 @@ function sbColumns(spot: SpotDef, stack: number, labels: SpotDef["labels"], mine
     });
     cols.push(heroColumn(spot, stack, labels, mine));
     if (spot.id === "sb_iso" && mine === "allin") cols.push(replyColumn("BB", stack - 1, ["fold", "call"], bbAct, stack, "BB · на пуш"));
+    return cols;
+  }
+  if (spot.id === "sb_vs_squeeze_jam") {
+    cols.push({
+      seat: "SB",
+      stack: stack - 0.5,
+      actions: [{ label: "Call", pick: { spot: "sb_raise", mine: "call" } }],
+      selected: "Call",
+    });
+    cols.push({
+      seat: "BB",
+      stack: stack - 1,
+      actions: [{ label: `All-in ${stack}`, pick: { spot: "sb_vs_squeeze_jam" } }],
+      selected: `All-in ${stack}`,
+    });
+    cols.push(heroColumn(spot, stack, labels, mine));
     return cols;
   }
   cols.push(heroColumn(spot, stack, labels, mine));

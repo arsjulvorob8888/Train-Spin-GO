@@ -22,6 +22,7 @@ import {
   RANGE_HU_SB,
   RANGE_SB_ISO,
   RANGE_SB_VS_BB_JAM,
+  RANGE_SB_VS_SQUEEZE,
 } from "./extra-ranges";
 import { continuePct, emptyMix, mixOf, primary, type MixAction, type MixRange } from "./mix";
 import { ALL } from "./legacy-ranges";
@@ -278,6 +279,27 @@ export const SPOTS: SpotDef[] = [
     actions: FOLD_CALL,
     labels: L({ call: "Call" }),
     range: RANGE_SB_VS_BB_JAM,
+  },
+  {
+    id: "sb_vs_squeeze_jam",
+    group: "SB",
+    hero: "SB",
+    title: "SB vs squeeze jam",
+    detail: "BTN Raise 2 · вы колл · BB олл-ин",
+    line: "BTN Raise 2 · SB Call · BB All-in",
+    vs: "BB squeeze jam",
+    players: 3,
+    steps: [
+      { label: "BTN", did: "Raise 2", kind: "acted" },
+      { label: "вы · SB", did: "уже Call", kind: "acted" },
+      { label: "BB", did: "All-in", kind: "acted" },
+      { label: "вы · SB", did: "ваш ход", kind: "hero" },
+    ],
+    story:
+      "Баттон открыл 2bb, вы из малого блайнда уравняли, и большой блайнд запушил. Это уже не колл рейза: нужно решать, отдавать ли оставшийся стек. 75s сюда не входит — фолд.",
+    actions: FOLD_CALL,
+    labels: L({ call: "Call" }),
+    range: RANGE_SB_VS_SQUEEZE,
   },
   {
     id: "bb_vs_btn_raise",

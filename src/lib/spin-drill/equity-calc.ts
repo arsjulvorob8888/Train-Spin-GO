@@ -29,6 +29,7 @@ const VILLAIN: Record<string, Spec> = {
   sb_push: { spotId: "btn", actions: ["allin"], who: "баттон, который запушил" },
   sb_iso: { spotId: "bb_vs_sb_limp", actions: ["raise", "allin"], who: "BB, который изолейтит лимп" },
   sb_vs_bb_jam: { spotId: "bb_vs_sb_limp", actions: ["allin"], who: "BB, который запушил против лимпа" },
+  sb_vs_squeeze_jam: { spotId: "bb_squeeze", actions: ["allin"], who: "BB, который запушил после вашего колла" },
   bb_vs_btn_raise: { spotId: "btn", actions: ["raise"], who: "баттон, открывший рейзом" },
   bb_vs_btn_jam: { spotId: "btn", actions: ["allin"], who: "баттон, который запушил" },
   bb_vs_btn_limp: { spotId: "btn", actions: ["call"], who: "баттон, который залимпил" },
@@ -154,7 +155,7 @@ function spotPrice(spotId: string, bb: number): { toCall: number; pot: number } 
   if (spotId === "bb_vs_btn_jam") return { toCall: Math.max(0.5, stack - 1), pot: stack + 1.5 };
   if (spotId === "bb_vs_sb_jam" || spotId === "hu_bb_jam") return { toCall: Math.max(0.5, stack - 1), pot: stack + 1 };
   if (spotId === "sb_push") return { toCall: Math.max(0.5, stack - 0.5), pot: stack + 1.5 };
-  if (spotId === "btn_vs_jam" || spotId === "bb_vs_reshove" || spotId === "sb_vs_bb_jam") {
+  if (spotId === "btn_vs_jam" || spotId === "bb_vs_reshove" || spotId === "sb_vs_bb_jam" || spotId === "sb_vs_squeeze_jam") {
     return { toCall: Math.max(0.5, stack - 2), pot: stack + 3.5 };
   }
   if (spotId === "bb_vs_btn_raise" || spotId === "hu_bb_raise") return { toCall: 1, pot: 3.5 };
@@ -174,6 +175,7 @@ export function chartRaiseTo(spotId: string, bb: number): number | null {
     spotId === "btn_vs_jam" ||
     spotId === "bb_vs_reshove" ||
     spotId === "sb_vs_bb_jam" ||
+    spotId === "sb_vs_squeeze_jam" ||
     spotId === "bb_vs_limp_jam" ||
     spotId === "bb_vs_jam_call"
   ) {
@@ -219,7 +221,7 @@ export function priceFromRaise(spotId: string, raiseTo: number): { toCall: numbe
   };
   if (spotId === "btn_vs_3bet" || spotId === "btn_vs_jam") return call(2, 1);
   if (spotId === "sb_raise" || spotId === "sb_push" || spotId === "sb_limp") return call(0.5, 1);
-  if (spotId === "sb_iso" || spotId === "sb_vs_bb_jam") return call(1, 0);
+  if (spotId === "sb_iso" || spotId === "sb_vs_bb_jam" || spotId === "sb_vs_squeeze_jam") return call(spotId === "sb_vs_squeeze_jam" ? 2 : 1, 0);
   if (spotId === "bb_vs_reshove" || spotId === "bb_squeeze") return call(1, 2);
   if (spotId.startsWith("bb_vs_btn") || spotId === "bb_vs_limp_iso" || spotId === "bb_vs_limp_call" || spotId === "bb_vs_limp_jam") {
     return call(1, 0.5);
