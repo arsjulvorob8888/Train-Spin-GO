@@ -7,6 +7,7 @@ import { ALL } from "@/lib/spin-drill/legacy-ranges";
 import { continuePct, type MixAction } from "@/lib/spin-drill/mix";
 import { actionWord, spotsOf, type MttPack } from "@/lib/mtt/charts";
 import { bluffLine, nashLine, playAction, resolveLive, SEATS, sizeLine, type LiveNode, type MttSeat } from "@/lib/mtt/live";
+import { playBluffSting, playDrawSting, playHandSting } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
 type Act = "fold" | "limp" | "raise" | "call" | "3bet" | "allin";
@@ -73,13 +74,18 @@ export function MttDesk() {
   const [hero, setHero] = useState<MttSeat>("UTG");
   const [pick, setPick] = useState<Record<string, Act>>({});
   const [klass, setKlass] = useState("");
-  const [hole, setHole] = useState<[Card | null, Card | null]>([null, null]);
-  const [board, setBoard] = useState<(Card | null)[]>([null, null, null, null, null]);
-  const [queue, setQueue] = useState<SlotId[]>(["h0", "h1"]);
+  const [cards, setCards] = useState<Partial<Record<SlotId, Card>>>({});
+  const cardsRef = useRef<Partial<Record<SlotId, Card>>>({});
+  const queueRef = useRef<SlotId[]>([]);
+  const [queue, setQueue] = useState<SlotId[]>([]);
+  const openedAt = useRef(0);
   const [street, setStreet] = useState<Record<string, Act>>({});
   const flopAsk = useRef(false);
   const turnAsk = useRef(false);
   const riverAsk = useRef(false);
+  const heardHand = useRef(0);
+  const heardDraw = useRef("");
+  const heardBluff = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -98,32 +104,65 @@ export function MttDesk() {
 
   const spots = useMemo(() => (pack ? spotsOf(pack) : []), [pack]);
   const depth = pack ? effectOf(stacks, hero, pick, pack.stacks) : { bb: 30, chart: 30, why: "" };
-  const dealt = hole[0] && hole[1] ? handClass(hole[0], hole[1]) : klass;
+  const dealt = cards.h0 && cards.h1 ? handClass(cards.h0, cards.h1) : klass;
   const built = pack ? buildLine(pack, spots, depth.bb, depth.chart, stacks, hero, pick, dealt) : null;
+  const hole: [Card | null, Card | null] = [cards.h0 ?? null, cards.h1 ?? null];
+  const board = [cards.b0 ?? null, cards.b1 ?? null, cards.b2 ?? null, cards.b3 ?? null, cards.b4 ?? null];
+
+  function showQueue(slots: SlotId[]) {
+    queueRef.current = slots;
+    setQueue(slots);
+    openedAt.current = Date.now();
+  }
 
   useEffect(() => {
-    if (built?.outcome !== "flop") {
-      flopAsk.current = false;
-      turnAsk.current = false;
-      riverAsk.current = false;
+    if (built?.outcome !== "flop" || !cards.h0 || !cards.h1) {
+      if (built?.outcome !== "flop") {
+        flopAsk.current = false;
+        turnAsk.current = false;
+        riverAsk.current = false;
+      }
       return;
     }
-    if (!hole[0] || !hole[1] || queue.length) return;
-    if (!board[0] && !flopAsk.current) {
+    if (queueRef.current.length) return;
+    if (!cards.b0 && !flopAsk.current) {
       flopAsk.current = true;
-      setQueue(["b0", "b1", "b2"]);
+      showQueue(["b0", "b1", "b2"]);
       return;
     }
-    if (board[0] && board[1] && board[2] && street["флоп"] && !board[3] && !turnAsk.current) {
+    if (cards.b0 && cards.b1 && cards.b2 && street["флоп"] && !cards.b3 && !turnAsk.current) {
       turnAsk.current = true;
-      setQueue(["b3"]);
+      showQueue(["b3"]);
       return;
     }
-    if (board[3] && street["тёрн"] && !board[4] && !riverAsk.current) {
+    if (cards.b3 && street["тёрн"] && !cards.b4 && !riverAsk.current) {
       riverAsk.current = true;
-      setQueue(["b4"]);
+      showQueue(["b4"]);
     }
-  }, [built?.outcome, hole, board, street, queue.length]);
+  }, [built?.outcome, cards, street, queue.length]);
+
+  useEffect(() => {
+    const pair = cards.h0 && cards.h1 ? [cards.h0, cards.h1] : null;
+    const known = [cards.b0, cards.b1, cards.b2, cards.b3, cards.b4].filter((card): card is Card => Boolean(card));
+    if (!pair || known.length < 3) {
+      heardHand.current = 0;
+      heardDraw.current = "";
+      return;
+    }
+    const made = evaluateBest([...pair, ...known]);
+    if (made.category > 0 && made.category > heardHand.current) {
+      playHandSting(made.category);
+      heardHand.current = made.category;
+    }
+    if (known.length >= 5) return;
+    const draw = analyzeDraws(pair, known);
+    const key = `${draw.flushDraw ? "f" : ""}${draw.oesd ? "o" : ""}${draw.gutshot ? "g" : ""}`;
+    if (key && key !== heardDraw.current) {
+      playDrawSting(Boolean(draw.flushDraw || draw.oesd));
+      heardDraw.current = key;
+    }
+    if (!key) heardDraw.current = "";
+  }, [cards]);
 
   function choose(key: string, action: Act) {
     setPick((prev) => {
@@ -159,40 +198,42 @@ export function MttDesk() {
     setStacks((prev) => rotateStacks(prev));
     setPick({});
     setKlass("");
-    setHole([null, null]);
-    setBoard([null, null, null, null, null]);
-    setQueue(["h0", "h1"]);
+    cardsRef.current = {};
+    setCards({});
+    showQueue(["h0", "h1"]);
     setStreet({});
     flopAsk.current = false;
     turnAsk.current = false;
     riverAsk.current = false;
+    heardHand.current = 0;
+    heardDraw.current = "";
   }
 
-  function openSlot(id: SlotId) {
-    const order: SlotId[] = ["h0", "h1", "b0", "b1", "b2", "b3", "b4"];
-    const filled = (slot: SlotId) => (slot === "h0" ? hole[0] : slot === "h1" ? hole[1] : board[Number(slot.slice(1))]);
-    const rest = order.slice(order.indexOf(id)).filter((slot) => slot === id || !filled(slot));
-    setQueue(rest);
+  function open(slot: SlotId) {
+    const prev = cardsRef.current;
+    if (prev[slot]) {
+      const next = { ...prev };
+      delete next[slot];
+      cardsRef.current = next;
+      setCards(next);
+      if (slot === "h0" || slot === "h1") setKlass("");
+      showQueue([]);
+      return;
+    }
+    const group: SlotId[] = slot === "h0" || slot === "h1" ? ["h0", "h1"] : slot === "b0" || slot === "b1" || slot === "b2" ? ["b0", "b1", "b2"] : [slot];
+    showQueue(group.filter((item) => !prev[item]));
   }
 
   function chooseCard(rank: number, suit: number) {
-    const current = queue[0];
-    if (!current) return;
-    const card = { rank, suit };
-    if (current === "h0" || current === "h1") {
-      setHole((prev) => {
-        const copy: [Card | null, Card | null] = [...prev];
-        copy[current === "h0" ? 0 : 1] = card;
-        return copy;
-      });
-    } else {
-      setBoard((prev) => {
-        const copy = [...prev];
-        copy[Number(current.slice(1))] = card;
-        return copy;
-      });
-    }
-    setQueue((prev) => prev.slice(1));
+    const slot = queueRef.current[0];
+    if (!slot) return;
+    const prev = cardsRef.current;
+    if (Object.values(prev).some((card) => card && card.rank === rank && card.suit === suit)) return;
+    const next = { ...prev, [slot]: { rank, suit } };
+    cardsRef.current = next;
+    setCards(next);
+    if (next.h0 && next.h1) setKlass(handClass(next.h0, next.h1));
+    showQueue(queueRef.current.slice(1));
   }
 
   function correctStack(seat: MttSeat, value: number) {
@@ -272,7 +313,7 @@ export function MttDesk() {
           <p className="px-1 text-[11px] font-medium">Вы</p>
           <div className="mt-1 flex gap-1">
             {[0, 1].map((index) => (
-              <CardFace key={index} card={hole[index] ?? null} cue={!hole[index]} active={queue[0] === `h${index}`} onClick={() => openSlot(index === 0 ? "h0" : "h1")} />
+              <CardFace key={index} card={hole[index] ?? null} cue={!hole[index]} active={queue[0] === `h${index}`} onClick={() => open(index === 0 ? "h0" : "h1")} />
             ))}
           </div>
           {dealt ? <p className="mt-1 px-1 font-mono text-[11px] text-muted">{dealt}</p> : null}
@@ -290,7 +331,7 @@ export function MttDesk() {
           board={board}
           street={street}
           post={post}
-          onCard={(index) => openSlot(`b${index}` as SlotId)}
+          onCard={(index) => open(`b${index}` as SlotId)}
           active={queue[0] ?? ""}
           onStreet={(key, action) => setStreet((prev) => ({ ...prev, [key]: action }))}
         />
@@ -298,7 +339,13 @@ export function MttDesk() {
 
       {typeof document !== "undefined" && queue.length > 0
         ? createPortal(
-            <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-3 sm:items-center" onPointerDown={() => setQueue([])}>
+            <div
+              className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-3 sm:items-center"
+              onPointerDown={() => {
+                if (Date.now() - openedAt.current < 500) return;
+                showQueue([]);
+              }}
+            >
               <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onPointerDown={(event) => event.stopPropagation()}>
                 <p className="text-sm font-medium">{slotTitle(queue[0]!)}</p>
                 <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
@@ -342,16 +389,27 @@ export function MttDesk() {
         </div>
         <div className="min-w-0 space-y-2 lg:sticky lg:top-3">
           <div className={cn("rounded-xl border p-4", advice && advice !== "fold" ? "border-ok" : "border-border")}>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Решение солвера</p>
-            <p className="mt-1 text-5xl font-semibold leading-none">{post?.word ?? word}</p>
-            <p className="mt-2 text-lg font-medium">{post?.size ?? size}</p>
-            <p className="mt-2 text-sm text-muted">{post?.why ?? (built.outcome === "win" ? "Все сбросили. Банк ваш, флопа нет." : built.outcome === "fold" ? "Вы сбросили. Раздача закрыта." : node ? `${node.title}. ${node.blurb}` : "Отметьте действия до вас слева направо.")}</p>
-            {dealt ? <p className="mt-1 text-xs text-muted">Префлоп · {dealt}</p> : <p className="mt-1 text-xs text-muted">Нажмите клетку рейнджа или введите карты.</p>}
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Решение солвера</p>
+                <p className="mt-1 text-5xl font-semibold leading-none">{post?.word ?? word}</p>
+                <p className="mt-2 text-lg font-medium">{post?.size ?? size}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Рука</p>
+                <p className="font-mono text-3xl font-semibold leading-none">{dealt || "—"}</p>
+                <p className="mt-1 text-xs text-muted">{depth.chart}bb чарт</p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-muted">{post?.why ?? (built.outcome === "win" ? "Все сбросили. Банк ваш, флопа нет." : built.outcome === "fold" ? "Вы сбросили. Раздача закрыта." : node ? `${node.title}. ${node.blurb}` : "Отметьте действия до вас слева направо. Карты — плюс слева, окно как в Spin&Go.")}</p>
           </div>
+          {bluff && !post ? <BluffSound on={bluff.on} /> : null}
           {bluff && !post ? (
-            <div className={cn("rounded-xl border p-3 text-sm", bluff.on ? "border-amber-400/70 bg-amber-400/10" : "border-border text-muted")}>
-              <p className="text-[10px] font-medium uppercase tracking-wide">{bluff.on ? "Блеф" : "Почему не блеф"}</p>
-              <p className="mt-1">{bluff.text}</p>
+            <div className={cn("relative overflow-hidden rounded-xl border px-3 py-3", bluff.on ? "border-2 border-bluff bg-bluff/15" : "border-border bg-bg")}>
+              {bluff.on ? <div className="bluff-sheen pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent" /> : null}
+              <p className={cn("text-[10px] font-medium tracking-[0.2em] uppercase", bluff.on ? "text-bluff" : "text-subtle")}>{bluff.on ? "Блеф берём" : "Блеф не берём"}</p>
+              <p className={cn("mt-1 text-2xl font-semibold", bluff.on ? "text-bluff" : "")}>{bluff.on ? "Стил по чарту" : "Без блефа"}</p>
+              <p className="mt-1 text-sm">{bluff.text}</p>
             </div>
           ) : null}
           {advice && !post ? (
@@ -559,6 +617,31 @@ function CardFace({ card, cue, active, onClick }: { card: Card | null; cue?: boo
   );
 }
 
+function BluffSound({ on }: { on: boolean }) {
+  const heard = useRef(false);
+  useEffect(() => {
+    if (on && !heard.current) playBluffSting();
+    heard.current = on;
+  }, [on]);
+  return null;
+}
+
+function StreetBadge({ hole, board }: { hole: [Card, Card]; board: Card[] }) {
+  if (board.length < 3) return null;
+  const made = evaluateBest([...hole, ...board]);
+  const name = MADE[made.category] ?? "";
+  const draw = board.length < 5 ? analyzeDraws(hole, board) : null;
+  const drawName = draw?.flushDraw ? "Флеш-дро" : draw?.oesd ? "Стрит-дро" : draw?.gutshot ? "Гатшот" : "";
+  if (!name && !drawName) return null;
+  const strong = made.category >= 1;
+  return (
+    <p className={cn("mt-1 rounded px-1.5 py-1 text-xs font-semibold leading-tight", strong ? "bg-ok text-bg" : "bg-zinc-700 text-zinc-50")}>
+      {made.category > 0 ? name : "Старшая"}
+      {drawName ? ` · ${drawName}` : ""}
+    </p>
+  );
+}
+
 function trim(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
 }
@@ -634,6 +717,7 @@ function StreetRow({
                   <CardFace key={row.from + index} card={card} cue={!card} active={active === `b${row.from + index}`} onClick={() => onCard(row.from + index)} />
                 ))}
               </div>
+              {filled && hole[0] && hole[1] ? <StreetBadge hole={[hole[0], hole[1]]} board={board.slice(0, row.from + row.count).filter((card): card is Card => Boolean(card))} /> : null}
             </div>
             {filled ? (
               <>

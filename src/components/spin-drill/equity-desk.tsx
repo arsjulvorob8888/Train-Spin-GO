@@ -1766,7 +1766,7 @@ function OddsBar({ need, equity, street }: { need: number | null; equity: number
   );
 }
 
-function playBluffSting() {
+export function playBluffSting() {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) return;
   const ctx = playBluffSting.ctx ?? new Ctx();
@@ -1859,7 +1859,7 @@ function playLossSting() {
   });
 }
 
-function playHandSting(category: number) {
+export function playHandSting(category: number) {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) return;
   const ctx = playBluffSting.ctx ?? new Ctx();
@@ -1884,7 +1884,7 @@ function playHandSting(category: number) {
   });
 }
 
-function playDrawSting(strong: boolean) {
+export function playDrawSting(strong: boolean) {
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) return;
   const ctx = playBluffSting.ctx ?? new Ctx();
