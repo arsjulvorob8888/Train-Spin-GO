@@ -630,14 +630,14 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
         <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-4">
           <h2 className="text-lg font-semibold">Какой турнир?</h2>
           {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
-          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-subtle">Стоимость</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-zinc-500">Стоимость</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             {BUYINS.map((amount) => (
               <button
                 key={amount}
                 type="button"
                 onClick={() => setBuy(amount)}
-                className={cn("h-11 rounded-full px-3 font-mono text-sm", buy === amount ? "bg-fg text-bg" : "bg-surface-2 text-fg")}
+                className={cn("h-7 rounded-full px-2.5 font-mono text-xs", buy === amount ? "bg-zinc-700 text-zinc-300" : "bg-zinc-900 text-zinc-500")}
               >
                 {money(amount)}
               </button>
