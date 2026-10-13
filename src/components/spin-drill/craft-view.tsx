@@ -188,7 +188,7 @@ function GameList({
             const payout = row.buy != null && row.prize != null && place != null ? spinPayout(row.buy, row.prize, place) : null;
             const placeName = place === 1 ? "1 место" : place === 2 ? "2 место" : place === 3 ? "3 место" : "";
             return (
-              <li key={row.id} className="border-t border-border">
+              <li key={row.id} className={delta != null && delta > 0 ? "border-t border-emerald-700/40 bg-emerald-400/15" : "border-t border-border"}>
                 <div className="flex items-start gap-3 py-2">
                   <input
                     type="checkbox"
@@ -207,7 +207,7 @@ function GameList({
                       <span className="mt-0.5 block text-xs text-muted">{row.hands.length} раздач · нажмите, чтобы разобрать</span>
                     </span>
                     <span className="shrink-0 text-right font-mono text-xs">
-                      {delta == null ? "—" : `${delta > 0 ? "+" : ""}$${delta}`}
+                      {delta == null ? "—" : <span className={delta > 0 ? "font-semibold text-emerald-300" : ""}>{`${delta > 0 ? "+" : ""}$${delta}`}</span>}
                       {row.cash != null ? <span className="mt-0.5 block text-muted">{money(row.cash)}</span> : null}
                     </span>
                   </button>
