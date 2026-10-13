@@ -86,6 +86,7 @@ type HandApi = {
   guard: boolean;
   setQueue: (queue: Slot[]) => void;
   openHole: () => void;
+  dropBoard: () => void;
   queueRef: MutableRefObject<Slot[]>;
 };
 
@@ -284,6 +285,20 @@ export function HandProvider({
   function openHole() {
     queueRef.current = ["h0", "h1"];
     setQueue(["h0", "h1"]);
+  }
+
+  function dropBoard() {
+    const prev = cardsRef.current;
+    if (!prev.f0 && !prev.f1 && !prev.f2 && !prev.t && !prev.r) return;
+    const next = { ...prev };
+    delete next.f0;
+    delete next.f1;
+    delete next.f2;
+    delete next.t;
+    delete next.r;
+    cardsRef.current = next;
+    setCards(next);
+    setLine(emptyLine());
   }
 
   function open(slot: Slot) {
@@ -503,6 +518,7 @@ export function HandProvider({
     guard,
     setQueue,
     openHole,
+    dropBoard,
     queueRef,
   };
 

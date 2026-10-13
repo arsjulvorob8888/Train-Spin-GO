@@ -58,7 +58,7 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -85,12 +85,16 @@ export function ActionLine({
   const won = tookPot(spot, mine, sbAct, bbAct, btnAct);
   const folded = mine === "fold" || back === "fold";
   const live = flopOpen(spot, mine, sbAct, bbAct, btnAct, back);
+  useEffect(() => {
+    if (live || mine || board.length < 3) return;
+    dropBoard();
+  }, [live, mine, board.length, dropBoard]);
   const waiting = !won && !folded && !live && (mine === "call" || mine === "raise" || mine === "allin");
   const sizeAt = cols.reduce((at, col, index) => (!col.hero && /raise|3-bet/i.test(col.selected) ? index : at), -1);
   const sized = sizeAt >= 0;
   const chartSize = chartRaiseTo(spot.id, bb);
   const doneRight = cycleClosed(cols) && actionMatches(spot, mine, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict : null);
-  const expected = board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
+  const expected = live && board.length >= 3 ? null : wantedAction(spot, selected, range, sizeText, shown?.street === "Префлоп" ? shown.verdict ?? null : null);
   const order = seatsInHand(spot.id, out);
   const jammed = preflopAllin(spot.id);
   const flopDone = board.length >= 3 && streetStatus(order, line, "flop", jammed).closed;
