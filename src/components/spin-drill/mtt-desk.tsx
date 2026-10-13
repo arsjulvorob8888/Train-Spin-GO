@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { RANK_CHARS, SUIT_GLYPHS, handClass, isRedSuit, type Card } from "@/lib/poker/cards";
@@ -19,6 +19,7 @@ type Stacks = Record<MttSeat, number>;
 
 const MADE = ["старшая карта", "пара", "две пары", "сет", "стрит", "флеш", "фулл-хаус", "каре", "стрит-флеш"];
 const RANKS = [...RANK_CHARS].reverse();
+const BET_SIZES = [2, 2.5, 3, 4, 5, 6, 8, 10];
 
 function chipsOf(n: number): number {
   return Math.max(0, Math.round(n * 10) / 10);
@@ -80,6 +81,8 @@ export function MttDesk() {
   const [queue, setQueue] = useState<SlotId[]>([]);
   const openedAt = useRef(0);
   const [street, setStreet] = useState<Record<string, Act>>({});
+  const [sizes, setSizes] = useState<Record<string, string>>({});
+  const [award, setAward] = useState("");
   const flopAsk = useRef(false);
   const turnAsk = useRef(false);
   const riverAsk = useRef(false);
@@ -116,7 +119,7 @@ export function MttDesk() {
   }
 
   useEffect(() => {
-    if (built?.outcome !== "flop" || !cards.h0 || !cards.h1) {
+    if (built?.outcome !== "flop" || !cards.h0 || !cards.h1 || award) {
       if (built?.outcome !== "flop") {
         flopAsk.current = false;
         turnAsk.current = false;
@@ -139,7 +142,7 @@ export function MttDesk() {
       riverAsk.current = true;
       showQueue(["b4"]);
     }
-  }, [built?.outcome, cards, street, queue.length]);
+  }, [built?.outcome, cards, street, queue.length, award]);
 
   useEffect(() => {
     const pair = cards.h0 && cards.h1 ? [cards.h0, cards.h1] : null;
@@ -202,6 +205,8 @@ export function MttDesk() {
     setCards({});
     showQueue(["h0", "h1"]);
     setStreet({});
+    setSizes({});
+    setAward("");
     flopAsk.current = false;
     turnAsk.current = false;
     riverAsk.current = false;
@@ -249,7 +254,7 @@ export function MttDesk() {
   const size = built.outcome === "win" ? "Флопа нет." : built.outcome === "fold" ? "Карты дальше не открывайте." : node && advice ? sizeLine(advice, depth.bb, node.kind, node.call) : "Сначала ходы до вас. Флоп откроется, только если раздача идёт дальше.";
   const bluff = node && advice && dealt ? bluffLine(dealt, advice, hero, node.kind) : null;
   const known = board.filter((card): card is Card => Boolean(card));
-  const post = built.outcome === "flop" && hole[0] && hole[1] ? postAdvice(hole[0], hole[1], known, street) : null;
+  const post = built.outcome === "flop" && hole[0] && hole[1] ? postAdvice(hole[0], hole[1], known, street, sizes) : null;
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-4">
@@ -318,22 +323,40 @@ export function MttDesk() {
           </div>
           {dealt ? <p className="mt-1 px-1 font-mono text-[11px] text-muted">{dealt}</p> : null}
         </div>
-        {built.cols.map((col, index) => (
-          <ActionCol key={col.key} col={col} live={!col.selected && built.cols.slice(0, index).every((item) => item.selected)} onPick={(action) => choose(col.key, action)} />
-        ))}
-        {built.outcome === "win" ? <p className="self-center rounded-lg border border-ok bg-ok/10 px-3 py-2 text-sm font-medium">Все сбросили. Банк ваш, флопа нет.</p> : null}
-        {built.outcome === "fold" ? <p className="self-center text-sm text-muted">Вы сбросили. Раздача закрыта.</p> : null}
+        {built.cols.map((col, index) => {
+          const sized = col.selected === "raise" || col.selected === "3bet";
+          return (
+            <Fragment key={col.key}>
+              <ActionCol col={col} size={sized ? sizes[col.key] ?? "" : ""} live={!col.selected && built.cols.slice(0, index).every((item) => item.selected)} onPick={(action) => choose(col.key, action)} />
+              {sized ? <SizePad title={`Рейз ${col.title}`} value={sizes[col.key] ?? ""} onChange={(value) => setSizes((prev) => ({ ...prev, [col.key]: value }))} /> : null}
+            </Fragment>
+          );
+        })}
+        <OutcomePad
+          seats={SEATS.filter((seat) => seat !== hero)}
+          award={award}
+          onAward={setAward}
+          onNext={nextHand}
+        />
+        {built.outcome === "win" && !award ? <p className="self-center rounded-lg border border-ok bg-ok/10 px-3 py-2 text-sm font-medium">Все сбросили. Банк ваш, флопа нет.</p> : null}
+        {built.outcome === "fold" && !award ? <p className="self-center text-sm text-muted">Вы сбросили. Раздача закрыта.</p> : null}
       </div>
 
-      {built.outcome === "flop" ? (
+      {built.outcome === "flop" && (!award || board.some(Boolean)) ? (
         <StreetRow
           hole={hole}
           board={board}
           street={street}
+          sizes={sizes}
           post={post}
           onCard={(index) => open(`b${index}` as SlotId)}
           active={queue[0] ?? ""}
           onStreet={(key, action) => setStreet((prev) => ({ ...prev, [key]: action }))}
+          onSize={(key, value) => setSizes((prev) => ({ ...prev, [key]: value }))}
+          award={award}
+          onAward={setAward}
+          onNext={nextHand}
+          rivals={SEATS.filter((seat) => seat !== hero)}
         />
       ) : null}
 
@@ -573,7 +596,7 @@ function asAct(action: MixAction, facing: string): Act {
   return "raise";
 }
 
-function ActionCol({ col, live, onPick }: { col: Col; live: boolean; onPick: (action: Act) => void }) {
+function ActionCol({ col, live, size, onPick }: { col: Col; live: boolean; size: string; onPick: (action: Act) => void }) {
   return (
     <div className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", col.hero ? "border-2 border-ok bg-ok/15 shadow-[0_0_0_3px] shadow-ok/25" : live ? "next-step border-ok bg-ok/10" : "border-border")}>
       <div className={cn("flex items-center justify-between rounded px-1 py-0.5 text-[11px] font-medium", col.hero ? "bg-ok text-bg" : col.seat === "SB" ? "bg-amber-800/80 text-amber-50" : col.seat === "BB" ? "bg-orange-900/80 text-orange-50" : "bg-zinc-700 text-zinc-50")}>
@@ -584,6 +607,7 @@ function ActionCol({ col, live, onPick }: { col: Col; live: boolean; onPick: (ac
         {col.actions.map((action) => {
           const on = col.selected === action.id;
           const wanted = Boolean(col.wanted && action.id === col.wanted);
+          const label = on && (action.id === "raise" || action.id === "3bet") ? withSize(action.label, size) : action.label;
           return (
             <button
               key={action.id}
@@ -591,12 +615,74 @@ function ActionCol({ col, live, onPick }: { col: Col; live: boolean; onPick: (ac
               onClick={() => onPick(action.id)}
               className={cn("rounded px-1 py-1 text-left text-xs", on ? "bg-fg font-medium text-bg" : wanted ? "bg-ok/20 font-semibold ring-2 ring-ok" : "text-muted")}
             >
-              {action.label}
+              {label}
               {wanted && !on ? " · солвер" : ""}
             </button>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function withSize(label: string, size: string): string {
+  const n = Number(size.replace(",", "."));
+  if (!size.trim() || !Number.isFinite(n) || n <= 0) return label;
+  const text = Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+  if (/^3-bet/i.test(label)) return `3-bet ${text}`;
+  if (/^bet/i.test(label)) return `Bet ${text}`;
+  if (/raise/i.test(label)) return `Raise ${text}`;
+  return label;
+}
+
+function SizePad({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="w-[11.5rem] shrink-0 rounded-lg border border-ok/60 bg-ok/5 p-1 text-[11px]">
+      <span className="block px-1 font-medium">{title}, bb</span>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {BET_SIZES.map((size) => {
+          const on = Number(value.replace(",", ".")) === size;
+          return (
+            <button key={size} type="button" onClick={() => onChange(String(size))} className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}>
+              {size}
+            </button>
+          );
+        })}
+      </div>
+      <input
+        inputMode="decimal"
+        value={value}
+        placeholder="2"
+        aria-label={title}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
+      />
+    </div>
+  );
+}
+
+function OutcomePad({ seats, award, onAward, onNext }: { seats: MttSeat[]; award: string; onAward: (id: string) => void; onNext: () => void }) {
+  const names: [string, string][] = [["hero", "Я выиграл"], ...seats.map((seat) => [seat, seat === "UTG1" ? "UTG+1" : seat] as [string, string]), ["split", "Ничья"]];
+  const winner = award === "hero" ? "Вы" : award === "split" ? "Ничья" : award === "UTG1" ? "UTG+1" : award;
+  return (
+    <div className="w-[16rem] shrink-0 self-start rounded-lg border border-border bg-surface p-2 shadow-lg">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-subtle">Итог этой улицы</p>
+      <p className="mt-0.5 text-[11px] leading-snug text-muted">Если все уже сбросили или вскрылись — отметьте, кто забрал банк. Пока есть ход, продолжайте ввод.</p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {names.map(([id, label]) => (
+          <button key={id} type="button" onClick={() => onAward(award === id ? "" : id)} className={cn("h-8 rounded px-2 text-xs", award === id ? "bg-fg font-medium text-bg" : "bg-surface-2 text-muted")}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {award ? (
+        <div className="mt-2 text-xs">
+          <p className="font-medium">{award === "split" ? "Банк делится." : `Победитель: ${winner}`}</p>
+          <button type="button" onClick={onNext} className="mt-2 h-8 rounded-full bg-ok px-3 text-xs font-semibold text-bg">
+            Дальше, следующая раздача
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -656,7 +742,7 @@ function slotTitle(slot: SlotId): string {
   return "Ривер";
 }
 
-function postAdvice(a: Card, b: Card, board: Card[], street: Record<string, Act>): { word: string; size: string; why: string } | null {
+function postAdvice(a: Card, b: Card, board: Card[], street: Record<string, Act>, sizes: Record<string, string>): { word: string; size: string; why: string } | null {
   if (board.length < 3) return { word: "Флоп", size: "Откройте три карты.", why: "Постфлоп считается по вашей руке и дро, не по префлоп-чарту." };
   const made = evaluateBest([a, b, ...board]);
   const draw = board.length < 5 ? analyzeDraws([a, b], board) : null;
@@ -665,32 +751,50 @@ function postAdvice(a: Card, b: Card, board: Card[], street: Record<string, Act>
   const pair = made.category >= 1;
   const drawName = draw?.flushDraw ? "флеш-дро" : draw?.oesd ? "стрит-дро" : draw?.gutshot ? "гатшот" : "";
   const streetName = board.length >= 5 ? "ривер" : board.length === 4 ? "тёрн" : "флоп";
+  const raw = Number((sizes[streetName] ?? "").replace(",", "."));
+  const betBb = Number.isFinite(raw) && raw > 0 ? raw : null;
   const opp = street[streetName] ?? "";
-  if (!opp) return { word: "Ход соперника", size: "Отметьте чек или ставку.", why: `${name}${drawName ? `, ${drawName}` : ""}.` };
-  if (opp === "raise" && !strong && !draw?.flushDraw && !draw?.oesd) {
-    return { word: "Fold", size: "Фолд на ставку.", why: `${name} без сильного дро не защищается против ставки.` };
+  const hand = `${name}${drawName ? `, ${drawName}` : ""}.`;
+  if (!opp) return { word: "Ход соперника", size: "Отметьте чек или ставку и её размер.", why: hand };
+  if (opp === "raise" && betBb != null && betBb >= 6 && !strong) {
+    return { word: "Fold", size: `Фолд. ${betBb}bb слишком дорого.`, why: `${hand} Большой бет без двух пар и сильнее не оплачивается.` };
   }
-  if (opp === "raise") return { word: strong ? "Raise" : "Call", size: strong ? "Рейз, это ценность." : "Колл.", why: `${name}${drawName ? `, ${drawName}` : ""}.` };
-  if (pair || strong || draw?.flushDraw || draw?.oesd) return { word: "Bet 33%", size: "Ставка треть банка.", why: `${name}${drawName ? `, ${drawName}` : ""}. Чек сдаёт улицу.` };
-  return { word: "Check", size: "Чек. Блеф на мультивее не ставим.", why: `${name}. Воздух без дро не блефуется.` };
+  if (opp === "raise" && !strong && !draw?.flushDraw && !draw?.oesd) {
+    return { word: "Fold", size: betBb ? `Фолд. Не коллируйте ${betBb}bb.` : "Фолд на ставку.", why: `${hand} Без сильного дро ставка не защищается.` };
+  }
+  if (opp === "raise") return { word: strong ? "Raise" : "Call", size: strong ? `Рейз против ${betBb ?? "ставки"}bb.` : betBb ? `Колл ${betBb}bb.` : "Колл.", why: hand };
+  if (pair || strong || draw?.flushDraw || draw?.oesd) return { word: "Bet 2.5", size: "Ставка 2.5bb, если не задали другой размер.", why: `${hand} Чек сдаёт улицу.` };
+  return { word: "Check", size: "Чек. Блеф на мультивее не ставим.", why: `${hand} Воздух без дро не блефуется.` };
 }
 
 function StreetRow({
   hole,
   board,
   street,
+  sizes,
   post,
   onCard,
   active,
   onStreet,
+  onSize,
+  award,
+  onAward,
+  onNext,
+  rivals,
 }: {
   hole: [Card | null, Card | null];
   board: (Card | null)[];
   street: Record<string, Act>;
+  sizes: Record<string, string>;
   post: { word: string; size: string; why: string } | null;
   onCard: (index: number) => void;
   active: string;
   onStreet: (key: string, action: Act) => void;
+  onSize: (key: string, value: string) => void;
+  award: string;
+  onAward: (id: string) => void;
+  onNext: () => void;
+  rivals: MttSeat[];
 }) {
   const ready = Boolean(hole[0] && hole[1]);
   const names = [
@@ -708,6 +812,7 @@ function StreetRow({
         const filled = cards.every(Boolean);
         const show = row.id === "флоп" || board.slice(0, row.from).every(Boolean);
         if (!show) return null;
+        const mine = `${row.id}:you`;
         const node = (
           <div key={row.id} className="flex flex-wrap items-start gap-1">
             <div className={cn("rounded-lg border p-1", filled ? "border-border" : "next-step border-ok bg-ok/10")}>
@@ -721,26 +826,32 @@ function StreetRow({
             </div>
             {filled ? (
               <>
-                <MiniCol title="Оппонент" actions={[{ id: "call", label: "Check" }, { id: "raise", label: "Bet" }]} selected={street[row.id] ?? ""} wanted="" onPick={(action) => onStreet(row.id, action)} />
+                <MiniCol title="Оппонент" actions={[{ id: "call", label: "Check" }, { id: "raise", label: "Bet" }]} selected={street[row.id] ?? ""} size={sizes[row.id] ?? ""} wanted="" onPick={(action) => onStreet(row.id, action)} />
+                {street[row.id] === "raise" ? <SizePad title={`Бет на ${row.id}`} value={sizes[row.id] ?? ""} onChange={(value) => onSize(row.id, value)} /> : null}
                 {street[row.id] ? (
                   <MiniCol
                     title="Вы · ваш ход"
                     hero
                     actions={[
                       { id: "fold", label: "Fold" },
-                      { id: "call", label: post?.word === "Check" || post?.word === "Call" ? post.word : "Check" },
-                      { id: "raise", label: post?.word.startsWith("Bet") || post?.word === "Raise" ? post.word : "Bet 33%" },
+                      { id: "call", label: street[row.id] === "raise" ? "Call" : "Check" },
+                      { id: "raise", label: street[row.id] === "raise" ? "Raise" : "Bet" },
                     ]}
-                    selected=""
+                    selected={street[mine] ?? ""}
+                    size={sizes[mine] ?? ""}
                     wanted={postWanted(post)}
-                    onPick={() => undefined}
+                    onPick={(action) => onStreet(mine, action)}
                   />
                 ) : null}
+                {street[mine] === "raise" ? <SizePad title="Ваш рейз" value={sizes[mine] ?? ""} onChange={(value) => onSize(mine, value)} /> : null}
+                <OutcomePad seats={rivals} award={award} onAward={onAward} onNext={onNext} />
               </>
             ) : null}
           </div>
         );
-        if (!filled || !street[row.id] || street[row.id] === "fold") open = false;
+        const heroFold = street[mine] === "fold";
+        const nextCard = row.id === "ривер" ? null : board[row.from + row.count];
+        if (!filled || !street[row.id] || heroFold || (award && !nextCard)) open = false;
         return node;
       })}
     </div>
@@ -754,17 +865,19 @@ function postWanted(post: { word: string } | null): Act | "" {
   return "call";
 }
 
-function MiniCol({ title, hero, actions, selected, wanted, onPick }: { title: string; hero?: boolean; actions: Btn[]; selected: Act | ""; wanted: Act | ""; onPick: (action: Act) => void }) {
+function MiniCol({ title, hero, actions, selected, size = "", wanted, onPick }: { title: string; hero?: boolean; actions: Btn[]; selected: Act | ""; size?: string; wanted: Act | ""; onPick: (action: Act) => void }) {
   return (
     <div className={cn("w-[6.4rem] shrink-0 rounded-lg border p-1", hero ? "border-2 border-ok bg-ok/15" : "border-border")}>
       <div className={cn("rounded px-1 py-0.5 text-[11px] font-medium", hero ? "bg-ok text-bg" : "bg-zinc-700 text-zinc-50")}>{title}</div>
       <div className="mt-1 flex flex-col">
         {actions.map((action) => {
           const on = selected === action.id;
-          const want = wanted && action.id === wanted;
+          const want = Boolean(wanted && action.id === wanted);
+          const label = on && action.id === "raise" ? withSize(action.label, size) : action.label;
           return (
-            <button key={action.label} type="button" onClick={() => onPick(action.id)} className={cn("rounded px-1 py-1 text-left text-xs", on || want ? "bg-ok/20 font-semibold ring-2 ring-ok" : "text-muted")}>
-              {action.label}
+            <button key={action.id} type="button" onClick={() => onPick(action.id)} className={cn("rounded px-1 py-1 text-left text-xs", on ? "bg-fg font-medium text-bg" : want ? "bg-ok/20 font-semibold ring-2 ring-ok" : "text-muted")}>
+              {label}
+              {want && !on ? " · солвер" : ""}
             </button>
           );
         })}
