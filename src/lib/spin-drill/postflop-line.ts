@@ -177,7 +177,8 @@ export function potFate(order: Seat[], line: Line, hero: Seat, alreadyAllin: Sea
     const status = streetStatus(order, line, street, alreadyAllin);
     if (!status.closed) return "play";
     const jammedHere = line[street].some((act) => act.action === "allin") || carriesJam;
-    if (jammedHere) return "runout";
+    const preflopJam = carriesJam && line.flop.length === 0 && line.turn.length === 0 && line.river.length === 0;
+    if (jammedHere && preflopJam) return "runout";
   }
   return "play";
 }

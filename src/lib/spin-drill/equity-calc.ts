@@ -320,6 +320,13 @@ function advice(opts: {
     if (opts.facing !== "none") {
       const who = opts.facing === "allin" ? `${opts.aggressor} в олл-ине` : `${opts.aggressor} уже поставил`;
       const need = opts.need == null ? null : Math.round(opts.need * 100);
+      const realDraw = Boolean(opts.draw && (opts.draw.includes("флеш-дро") || opts.draw.includes("двусторонний")));
+      if (opts.facing === "allin" && bare && !realDraw) {
+        return {
+          verdict: "Fold",
+          text: `${opts.street}: ${who}. ${hand}${extra}. ${shape} На олл-ин без пары и без сильного дро колл — ошибка. ${need == null ? "" : `Нужно ${need}%, у руки ${pct}%. `}Фолд.`,
+        };
+      }
       if (opts.facing !== "allin" && opts.need != null && opts.equity >= opts.need + 0.18 && opts.equity >= 0.55) {
         return {
           verdict: "Raise 2",

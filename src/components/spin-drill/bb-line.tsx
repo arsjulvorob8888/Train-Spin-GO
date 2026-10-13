@@ -114,15 +114,14 @@ export function ActionLine({
     openHole();
   }
   const runout =
+    board.length < 3 &&
     result !== "win" &&
     result !== "fold" &&
     mine !== "fold" &&
     mine !== "" &&
     ((/jam|push|reshove/.test(spot.id) && mine === "call") ||
       (mine === "allin" && (sbAct === "call" || bbAct === "call" || btnAct === "call" || back === "call")) ||
-      (back === "call" && (sbAct === "allin" || btnAct === "allin" || bbAct === "allin")) ||
-      [...line.flop, ...line.turn, ...line.river].some((act) => act.action === "allin") &&
-        [...line.flop, ...line.turn, ...line.river].some((act) => act.action === "call"));
+      (back === "call" && (sbAct === "allin" || btnAct === "allin" || bbAct === "allin")));
   useEffect(() => {
     if (!sized && board.length < 3) setSizeText("");
   }, [sized, board.length, spot.id, setSizeText]);
