@@ -203,9 +203,35 @@ const S15: Record<SpotId, RangeSpec> = {
     call: ["JJ+", "AKs", "AKo", "AQs"],
   },
   hu_sb_rfi: {
-    raise: ["JJ+", "AKs", "AKo", "AQs"],
-    jam: ["22-TT", "A2s-AJs", "A2o+", "K5s+", "K9o+", "Q8s+", "QTo+", "J8s+", "JTo", "T8s+", "98s", "87s", "76s", "65s"],
-    limp: ["K2s-K4s", "Q2s-Q7s", "J2s-J7s", "T2s-T7s", "96s+", "85s+", "74s+", "64s+", "54s", "53s", "K5o-K8o"],
+    jam: ["22", "33", "A4o"],
+    raise: ["AA", "KK", "QQ", "AKs", "AQs", "AJs", "ATs", "A9s", "A8s", "AKo", "JTs", "T2s", "98s", "94s", "93s", "K8o", "85s", "84s", "73s", "63s"],
+    limp: [
+      "44+",
+      "A2s+",
+      "A2o+",
+      "K2s+",
+      "K2o+",
+      "Q2s+",
+      "Q2o+",
+      "J2s+",
+      "J2o+",
+      "T2s+",
+      "T2o+",
+      "92s+",
+      "92o+",
+      "82s+",
+      "84o+",
+      "72s+",
+      "73o+",
+      "62s+",
+      "63o+",
+      "52s+",
+      "52o",
+      "53o+",
+      "42s+",
+      "43o+",
+      "32s",
+    ],
   },
   hu_bb_vs_raise: {
     jam: ["55+", "A8s+", "ATo+", "KQs", "KJs"],
@@ -421,7 +447,14 @@ const S25: Record<SpotId, RangeSpec> = {
   },
 };
 
-const S20: Record<SpotId, RangeSpec> = { ...S15 };
+const S20: Record<SpotId, RangeSpec> = {
+  ...S15,
+  hu_sb_rfi: {
+    raise: ["JJ+", "AKs", "AKo", "AQs"],
+    jam: ["22-TT", "A2s-AJs", "A2o+", "K5s+", "K9o+", "Q8s+", "QTo+", "J8s+", "JTo", "T8s+", "98s", "87s", "76s", "65s"],
+    limp: ["K2s-K4s", "Q2s-Q7s", "J2s-J7s", "T2s-T7s", "96s+", "85s+", "74s+", "64s+", "54s", "53s", "K5o-K8o"],
+  },
+};
 const S12: Record<SpotId, RangeSpec> = { ...S10 };
 const S8: Record<SpotId, RangeSpec> = {
   ...S10,
