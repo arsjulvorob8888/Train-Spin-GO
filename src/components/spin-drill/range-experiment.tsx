@@ -5,11 +5,12 @@ import { COMBOS, type Combo } from "@/lib/spin-drill/combos";
 import { ALL, gridName, handAt } from "@/lib/spin-drill/legacy-ranges";
 import { buildShape } from "@/lib/spin-drill/range-shape";
 import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
-import { paintHex, huBbLimpPaint, sizeCaption, sizeMark, SIZE_ORDER } from "@/lib/spin-drill/hu-bb-limp";
-import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
-import { cellDistance, nearestOpen, rangeAtStack, stackNote } from "@/lib/spin-drill/stack-ranges";
+import { paintHex, sizeCaption, sizeMark, SIZE_ORDER } from "@/lib/spin-drill/hu-bb-limp";
+import { cellDistance, nearestOpen, stackNote } from "@/lib/spin-drill/stack-ranges";
+import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
+import { readLive } from "@/lib/spin-drill/live-strategy";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
-import type { MixAction } from "@/lib/spin-drill/mix";
+import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -369,12 +370,25 @@ function otherDepths(bb: number): [number, number] {
   return [15, Math.max(1, bb - 5)];
 }
 
-export function RangeExperiment() {
-  const [group, setGroup] = useState<SpotGroup>("BTN");
-  const [spotId, setSpotId] = useState(SPOTS[0]!.id);
+export function RangeExperiment({
+  group,
+  spotId,
+  bb,
+  range,
+  onGroup,
+  onSpot,
+  onBb,
+}: {
+  group: SpotGroup;
+  spotId: string;
+  bb: number;
+  range: MixRange;
+  onGroup: (group: SpotGroup) => void;
+  onSpot: (id: string) => void;
+  onBb: (bb: number) => void;
+}) {
   const [music, setMusic] = useState(true);
   const [volume, setVolume] = useState(70);
-  const [bb, setBb] = useState(15);
   const [autoplay, setAutoplay] = useState(false);
   const [splash, setSplash] = useState<Splash | null>(null);
   const [doneSpots, setDoneSpots] = useState<string[]>([]);
@@ -387,11 +401,9 @@ export function RangeExperiment() {
   bbRef.current = bb;
 
   function go(nextId: string, depth: number) {
-    const next = SPOTS.find((s) => s.id === nextId) ?? SPOTS[0]!;
     if (splashTimer.current) window.clearTimeout(splashTimer.current);
-    setBb(depth);
-    setGroup(next.group);
-    setSpotId(next.id);
+    onBb(depth);
+    onSpot(nextId);
     setAutoplay(true);
     setSplash(null);
   }
@@ -492,11 +504,7 @@ export function RangeExperiment() {
           <button
             key={g}
             type="button"
-            onClick={() => {
-              setGroup(g);
-              const first = spotsIn(g)[0];
-              if (first) setSpotId(first.id);
-            }}
+            onClick={() => onGroup(g)}
             className={cn(
               "h-11 rounded-full border px-3 text-sm",
               group === g ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
@@ -511,7 +519,7 @@ export function RangeExperiment() {
           <button
             key={s.id}
             type="button"
-            onClick={() => setSpotId(s.id)}
+            onClick={() => onSpot(s.id)}
             className={cn(
               "h-11 shrink-0 rounded-full border px-3 text-sm",
               s.id === spot.id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
@@ -522,7 +530,7 @@ export function RangeExperiment() {
         ))}
       </div>
       <p className="text-sm text-muted">{stackNote(bb)}</p>
-      <Sapper key={spot.id} spot={spot} bb={bb} onBb={setBb} autoplay={autoplay} onClear={cleared} />
+      <Sapper key={`${spot.id}:${bb}`} spot={spot} bb={bb} range={range} onBb={onBb} autoplay={autoplay} onClear={cleared} />
       {splash ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg p-6">
           <div className="range-veil" />
@@ -595,22 +603,19 @@ function actionLabel(spot: SpotDef, action: MixAction, bb: number): string {
 function Sapper({
   spot,
   bb,
+  range,
   onBb,
   autoplay,
   onClear,
 }: {
   spot: SpotDef;
   bb: number;
+  range: MixRange;
   onBb: (bb: number) => void;
   autoplay: boolean;
   onClear: () => void;
 }) {
-  const range = useMemo(() => rangeAtStack(spot.range, spot.id, bb), [spot, bb]);
-  const sizes = useMemo(() => {
-    if (spot.id === "hu_bb_limp") return huBbLimpPaint(bb);
-    if (spot.id === "hu_bb_raise") return huBbRaisePaint(bb);
-    return null;
-  }, [spot.id, bb]);
+  const sizes = useMemo(() => studyPaint(spot.id, bb), [spot.id, bb]);
   const shape = useMemo(() => buildShape(range, sizes), [range, sizes]);
   const actions = useMemo(() => {
     if (sizes) {
@@ -982,8 +987,8 @@ function Sapper({
   const rewardShape = useMemo(
     () =>
       buildShape(
-        rangeAtStack(spot.range, spot.id, rewardBb),
-        spot.id === "hu_bb_limp" ? huBbLimpPaint(rewardBb) : spot.id === "hu_bb_raise" ? huBbRaisePaint(rewardBb) : null,
+        studyRange(spot.id, rewardBb, readLive()),
+        studyPaint(spot.id, rewardBb),
       ),
     [spot, rewardBb],
   );

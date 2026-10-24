@@ -16,7 +16,8 @@ import {
 import { mixOf, primary, type MixAction } from "@/lib/spin-drill/mix";
 import { actionTitle, emptyLine, lastBySeat, type Line, type LineAction, type StreetId } from "@/lib/spin-drill/postflop-line";
 import { findSpot } from "@/lib/spin-drill/spots";
-import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
+import { studyRange } from "@/lib/spin-drill/study-range";
+import { readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 
@@ -35,6 +36,13 @@ export function HandSim() {
   const [rank, setRank] = useState<number | null>(null);
 
   const [chartId, setChartId] = useState("btn");
+  const [live, setLive] = useState<LiveStrategy | null>(null);
+  useEffect(() => {
+    const sync = () => setLive(readLive());
+    sync();
+    window.addEventListener("spin-live", sync);
+    return () => window.removeEventListener("spin-live", sync);
+  }, []);
   const heroCards = cards.h0 && cards.h1 ? ([cards.h0, cards.h1] as [Card, Card]) : null;
   const board = useMemo(() => {
     if (!cards.f0 || !cards.f1 || !cards.f2) return [] as Card[];
@@ -84,18 +92,19 @@ export function HandSim() {
   const advice = useMemo(() => {
     if (!heroCards || !spotId) return null;
     const spot = findSpot(spotId);
-    const range = rangeAtStack(spot.range, spot.id, stack);
+    const depth = live?.adaptStack === false ? 15 : stack;
+    const range = studyRange(spot.id, depth, live);
     const labels = {
       ...spot.labels,
-      allin: `All-in ${stack}`,
-      raise: stack >= 20 ? "Raise 2.5" : spot.labels.raise,
+      allin: `All-in ${depth}`,
+      raise: depth >= 20 ? "Raise 2.5" : spot.labels.raise,
       call: spot.id === "sb_fold" || spot.id === "hu_sb" ? "Limp" : spot.labels.call,
     };
     const klass = handClass(heroCards[0], heroCards[1]);
     const mix = mixOf(range, klass);
     const action = primary(mix);
     return { klass, action, label: labels[action], spot: spot.vs };
-  }, [heroCards, spotId, stack]);
+  }, [heroCards, spotId, stack, live]);
 
   const post = useMemo(() => {
     if (!heroCards || street === "pre" || street === "over") return null;
@@ -106,8 +115,9 @@ export function HandSim() {
     const actor = order.find((seat) => !acted[seat]);
     if (!actor || actor !== hero) return { actor: actor ?? null, order, result: null as null };
     const spot = findSpot(chartId);
-    const range = rangeAtStack(spot.range, spot.id, stack);
-    const labels = { ...spot.labels, allin: `All-in ${stack}` };
+    const depth = live?.adaptStack === false ? 15 : stack;
+    const range = studyRange(spot.id, depth, live);
+    const labels = { ...spot.labels, allin: `All-in ${depth}` };
     const result = consult({
       hero: heroCards,
       board: board.slice(0, need),
@@ -121,7 +131,7 @@ export function HandSim() {
       heroSeat: hero,
     });
     return { actor, order, result };
-  }, [heroCards, street, board, stack, history, line, chartId, money.pot, hero]);
+  }, [heroCards, street, board, stack, history, line, chartId, money.pot, hero, live]);
 
   const prompt = describePrompt(street, who, hero, heroCards, board.length, post?.actor ?? null);
 

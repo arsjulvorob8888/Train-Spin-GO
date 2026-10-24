@@ -2,7 +2,9 @@ import { handClass, partialShuffle, remainingDeck, type Card } from "@/lib/poker
 import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { mixOf, primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
-import { rangeAtStack, handPower } from "@/lib/spin-drill/stack-ranges";
+import { handPower } from "@/lib/spin-drill/stack-ranges";
+import { studyRange } from "@/lib/spin-drill/study-range";
+import { readLive } from "@/lib/spin-drill/live-strategy";
 import { facingPrice, lineNote, narrowSeat, openStreet, preflopAllin, seatsInHand, type Line, type Seat } from "@/lib/spin-drill/postflop-line";
 
 const CAT_RU = [
@@ -110,8 +112,9 @@ function villainSpec(spotId: string, live: Seat[], hero: Seat): Spec {
 
 function villainCombos(spotId: string, bb: number, used: Set<string>, live: Seat[], hero: Seat, raiseTo: number | null): { combos: Combo[]; who: string; random: boolean } {
   const spec = villainSpec(spotId, live, hero);
-  const spot = findSpot(spec.spotId);
-  const range = rangeAtStack(spot.range, spot.id, bb);
+  const published = readLive();
+  const depth = published?.adaptStack === false ? 15 : bb;
+  const range = studyRange(spec.spotId, depth, published);
   const combos: Combo[] = [];
   for (const klass of Object.keys(range)) {
     const mix = mixOf(range, klass);

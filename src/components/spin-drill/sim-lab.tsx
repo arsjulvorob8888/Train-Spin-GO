@@ -1,7 +1,8 @@
 "use client";
 
-import { handAt } from "@/lib/spin-drill/legacy-ranges";
-import { primary, type MixAction } from "@/lib/spin-drill/mix";
+import { MixGrid } from "@/components/spin-drill/mix-grid";
+import { primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
+import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
 import { addTotals, commonEdge, emptyTotals, fieldRoi, playBatch, PRIZES, thinCurve, type SimTotals } from "@/lib/spin-drill/sim-engine";
 import {
   chartStrategy,
@@ -15,10 +16,10 @@ import {
   type SimStrategy,
   type StyleId,
 } from "@/lib/spin-drill/sim-strategy";
-import { publishLive } from "@/lib/spin-drill/live-strategy";
+import { publishLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { bakeRanges, searchSteps } from "@/lib/spin-drill/sim-search";
 import { cn } from "@/lib/utils";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const ACTIONS: MixAction[] = ["fold", "call", "raise", "allin"];
 const CLOUD_RUNS = 100;
@@ -46,17 +47,21 @@ type CloudMessage =
       curve: number[];
     };
 
-const PAINT: Record<MixAction, string> = {
-  fold: "bg-fold",
-  call: "bg-call",
-  raise: "bg-raise",
-  allin: "bg-allin",
-};
-
-export function SimLab() {
+export function SimLab({
+  chartBb,
+  focusSpot,
+  focusRange,
+  live,
+}: {
+  chartBb: number;
+  focusSpot: string;
+  focusRange: MixRange;
+  live: LiveStrategy | null;
+}) {
   const [strategy, setStrategy] = useState<SimStrategy>(() => chartStrategy());
+  const [seed] = useState(() => chartStrategy());
   const [versions, setVersions] = useState<SavedVersion[]>(() => readVersions());
-  const [spotId, setSpotId] = useState("btn");
+  const [spotId, setSpotId] = useState(focusSpot);
   const [totals, setTotals] = useState<SimTotals | null>(null);
   const [before, setBefore] = useState<SimTotals | null>(null);
   const [running, setRunning] = useState(false);
@@ -70,14 +75,47 @@ export function SimLab() {
   const cloudDone = useRef<(() => void) | null>(null);
   const generation = useRef(0);
   const spots = useMemo(() => spotChoices(), []);
-  const range = strategy.ranges[spotId] ?? {};
+  useEffect(() => {
+    setSpotId(focusSpot);
+  }, [focusSpot]);
+  const shown = useMemo(() => {
+    const depth = Math.max(1, Math.min(30, Math.round(chartBb)));
+    const canonical = spotId === focusSpot ? focusRange : studyRange(spotId, depth, live);
+    const stored = strategy.ranges[spotId];
+    const origin = seed.ranges[spotId];
+    if (!stored || !origin) return canonical;
+    const out: MixRange = { ...canonical };
+    let changed = false;
+    for (const hand of Object.keys(stored)) {
+      const now = stored[hand];
+      const was = origin[hand];
+      if (!now || !was || primary(now) === primary(was)) continue;
+      out[hand] = now;
+      changed = true;
+    }
+    return changed ? out : canonical;
+  }, [spotId, focusSpot, focusRange, chartBb, live, strategy.ranges, seed]);
+  const marks = useMemo(() => {
+    const paint = studyPaint(spotId, chartBb);
+    if (!paint) return null;
+    const stored = strategy.ranges[spotId];
+    const origin = seed.ranges[spotId];
+    if (!stored || !origin) return paint;
+    const next = { ...paint };
+    for (const hand of Object.keys(paint)) {
+      const now = stored[hand];
+      const was = origin[hand];
+      if (now && was && primary(now) !== primary(was)) delete next[hand];
+    }
+    return next;
+  }, [spotId, chartBb, strategy.ranges, seed]);
 
   function patch(next: Partial<SimStrategy>) {
     setStrategy((current) => ({ ...current, ...next }));
   }
 
   function paint(hand: string) {
-    const now = primary(range[hand] ?? pure("fold"));
+    const now = primary(shown[hand] ?? pure("fold"));
     const next = ACTIONS[(ACTIONS.indexOf(now) + 1) % ACTIONS.length]!;
     setStrategy((current) => ({
       ...current,
@@ -496,19 +534,11 @@ export function SimLab() {
             </button>
           ))}
         </div>
-        <p className="mb-2 text-xs text-muted">Клик по клетке ставит 100%: Fold, Call, Raise, All-in. Меняется только открытый спот.</p>
-        <div className="grid max-w-[520px] grid-cols-13 gap-px">
-          {Array.from({ length: 13 }, (_, row) =>
-            Array.from({ length: 13 }, (_, col) => {
-              const hand = handAt(row, col);
-              const action = primary(range[hand] ?? pure("fold"));
-              return (
-                <button key={hand} type="button" className={cn("aspect-square font-mono text-[9px] font-bold text-fg", PAINT[action])} onClick={() => paint(hand)}>
-                  {hand}
-                </button>
-              );
-            }),
-          )}
+        <p className="mb-2 text-xs text-muted">
+          Стек {Math.max(1, Math.min(30, Math.round(chartBb)))}bb. Цвета те же, что в Тренировке, Стратегии и GAME. Клик меняет клетку только здесь, пока не нажмёте «В Стратегию».
+        </p>
+        <div className="max-w-[520px]">
+          <MixGrid range={shown} paint={marks} bb={chartBb} onPick={paint} />
         </div>
       </section>
     </div>

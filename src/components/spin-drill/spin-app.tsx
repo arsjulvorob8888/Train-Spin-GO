@@ -42,8 +42,8 @@ import {
   spotStat,
   type Store,
 } from "@/lib/spin-drill/stats";
-import { huBbLimpPaint, sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
-import { huBbRaisePaint } from "@/lib/spin-drill/hu-bb-raise";
+import { sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
+import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
 import { Consultants } from "@/components/spin-drill/consultants";
 import { CraftTable } from "@/components/spin-drill/craft-view";
 import { clearBlind, readBlind, retargetChips } from "@/lib/spin-drill/craft";
@@ -51,7 +51,7 @@ import { JournalPanel } from "@/components/spin-drill/journal-panel";
 import { publishLive, readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 import { MICRO_NAME, microStrategy } from "@/lib/spin-drill/micro-plan";
 import { sizedRaise } from "@/lib/spin-drill/equity-calc";
-import { chartDepth, postBlinds, rangeAtStack, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
+import { chartDepth, postBlinds, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -571,14 +571,10 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const depth = useMemo(() => chartDepth(spot.id, spot.hero, stacks), [spot.id, spot.hero, stacks]);
-  const range = useMemo(() => rangeAtStack(live?.ranges[spot.id] ?? spot.range, spot.id, live?.adaptStack === false ? 15 : depth.bb), [spot, depth.bb, live]);
-  const paint = useMemo(() => {
-    if (live?.ranges[spot.id]) return null;
-    if (spot.id === "hu_bb_limp") return huBbLimpPaint(depth.bb);
-    if (spot.id === "hu_bb_raise") return huBbRaisePaint(depth.bb);
-    return null;
-  }, [spot.id, depth.bb, live]);
-  const labels = useMemo(() => labelsAt(spot, depth.bb, selected, paint), [spot, depth.bb, selected, paint]);
+  const chartBb = live?.adaptStack === false ? 15 : depth.bb;
+  const range = useMemo(() => studyRange(spot.id, chartBb, live), [spot.id, chartBb, live]);
+  const paint = useMemo(() => studyPaint(spot.id, chartBb), [spot.id, chartBb]);
+  const labels = useMemo(() => labelsAt(spot, chartBb, selected, paint), [spot, chartBb, selected, paint]);
   const statId = bb === 15 ? spot.id : `${spot.id}@${bb}`;
   const st = spotStat(store, spot.id);
   const drillStat = spotStat(store, statId);
@@ -695,7 +691,8 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
     setLocked(false);
     setLastGrade(null);
     setQuiz(null);
-    const nextRange = rangeAtStack(live?.ranges[s.id] ?? s.range, s.id, live?.adaptStack === false ? 15 : chartDepth(s.id, s.hero, stacks).bb);
+    const nextDepth = live?.adaptStack === false ? 15 : chartDepth(s.id, s.hero, stacks).bb;
+    const nextRange = studyRange(s.id, nextDepth, live);
     const nextId = bb === 15 ? s.id : `${s.id}@${bb}`;
     const picked = pickHand(nextRange, nextId, store, includeFolds);
     setReview(picked.review);
@@ -982,7 +979,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
                 <div className="flex w-full max-w-[440px] items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
-                    <MixGrid compact range={range} paint={paint} bb={depth.bb} selected={selected} onPick={setSelected} />
+                    <MixGrid compact range={range} paint={paint} bb={chartBb} selected={selected} onPick={setSelected} />
                   </div>
                   <StackRail bb={bb} onChange={tuneStack} />
                 </div>
@@ -1004,7 +1001,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                     ? "BB против рейза SB до 2. Один цвет — действие с наибольшей долей. Цифра — размер 3-бета."
                     : spot.id === "hu_bb_jam"
                       ? "BB против пуша SB. Зелёный — колл, синий — фолд. Чем короче стек, тем шире колл."
-                      : stackNote(bb)}
+                      : stackNote(chartBb)}
               </p>
             </section>
           </HandProvider>
@@ -1012,8 +1009,18 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
           </>
         )}
 
-        {tab === "experiment" && <RangeExperiment />}
-        {tab === "sim" && <SimLab />}
+        {tab === "experiment" && (
+          <RangeExperiment
+            group={group}
+            spotId={spot.id}
+            bb={chartBb}
+            range={range}
+            onGroup={changeGroup}
+            onSpot={changeSpot}
+            onBb={tuneStack}
+          />
+        )}
+        {tab === "sim" && <SimLab chartBb={chartBb} focusSpot={spot.id} focusRange={range} live={live} />}
         {tab === "journal" && <JournalPanel />}
         {tab === "craft" && <CraftTable />}
         {tab === "sources" && <Consultants />}
@@ -1069,28 +1076,37 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
             {!hideRange && (
               <section className="rounded-2xl border border-border bg-surface p-4">
                 <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
-                <div className="mt-3 mb-3 flex items-center justify-between gap-2">
+                <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
                   <strong>{spot.title}</strong>
-                  <label className="flex h-11 items-center gap-2 text-sm text-muted">
-                    <input
-                      type="checkbox"
-                      checked={hideRange}
-                      onChange={(e) => {
-                        setHideRange(e.target.checked);
-                        localStorage.setItem("spin-hide-range", e.target.checked ? "1" : "0");
-                      }}
-                    />
-                    Скрыть рендж
-                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTab("experiment")}
+                      className="h-11 rounded-full bg-fg px-4 text-sm font-medium text-bg"
+                    >
+                      Тренировать в GAME · {chartBb}bb
+                    </button>
+                    <label className="flex h-11 items-center gap-2 text-sm text-muted">
+                      <input
+                        type="checkbox"
+                        checked={hideRange}
+                        onChange={(e) => {
+                          setHideRange(e.target.checked);
+                          localStorage.setItem("spin-hide-range", e.target.checked ? "1" : "0");
+                        }}
+                      />
+                      Скрыть рендж
+                    </label>
+                  </div>
                 </div>
                 <Legend spot={{ ...spot, labels }} />
                 <div className="mt-3 flex items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
-                    <MixGrid range={range} paint={paint} bb={bb} selected={current} onPick={setSelected} />
+                    <MixGrid range={range} paint={paint} bb={chartBb} selected={current} onPick={setSelected} />
                   </div>
                   <StackRail bb={bb} onChange={tuneStack} />
                 </div>
-                <p className="mt-2 text-sm text-muted">{stackNote(bb)}</p>
+                <p className="mt-2 text-sm text-muted">{stackNote(chartBb)} Тот же спот и тот же стек, что в GAME и в Стратегии.</p>
               </section>
             )}
             <section className="flex items-stretch gap-2 rounded-2xl border border-border bg-surface p-4">
@@ -1100,7 +1116,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               ) : (
                 <>
                   {hideRange && <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />}
-                  {hideRange ? <p className="mb-2 text-sm text-muted">{stackNote(bb)}</p> : null}
+                  {hideRange ? <p className="mb-2 text-sm text-muted">{stackNote(chartBb)} Тот же спот и тот же стек, что в GAME и в Стратегии.</p> : null}
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <span className="font-mono text-sm text-muted">
                       Сессия {session.correct}/{session.total} <b className="text-fg">{sessPct}%</b>
@@ -1143,7 +1159,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                     {!lastGrade && "Выберите действие"}
                     {lastGrade === "correct" && "Верно"}
                     {lastGrade === "mix" && current && `Микс · чаще ${labels[primary(mixOf(range, current))]}`}
-                    {lastGrade === "wrong" && current && `Ошибка · нужно ${paint?.[current] ? sizeCaption(paint[current], bb) : labels[primary(mixOf(range, current))]}`}
+                    {lastGrade === "wrong" && current && `Ошибка · нужно ${paint?.[current] ? sizeCaption(paint[current], chartBb) : labels[primary(mixOf(range, current))]}`}
                   </p>
                   <p className="text-center font-mono text-sm text-muted">{current}</p>
                   <EquityHintLine hand={current} spotId={spot.id} />
@@ -1183,6 +1199,16 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                   </button>
                 </>
               )}
+              <button
+                type="button"
+                onClick={() => setTab("experiment")}
+                className="mt-3 h-14 w-full rounded-[10px] bg-fg text-sm font-semibold text-bg"
+              >
+                Тренировать в GAME
+              </button>
+              <p className="mt-1 text-center text-xs text-muted">
+                {spot.title} · {spot.hero} · {chartBb}bb. В GAME откроется этот спот и этот рейндж.
+              </p>
               </div>
               {hideRange ? <StackRail bb={bb} onChange={tuneStack} /> : null}
             </section>
@@ -1257,7 +1283,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                   Сбросить спот
                 </button>
               </div>
-              <MixGrid range={range} selected={selected} stats={st} onPick={setSelected} />
+              <MixGrid range={range} paint={paint} bb={chartBb} selected={selected} stats={st} onPick={setSelected} />
             </section>
             <aside className="rounded-2xl border border-border bg-surface p-4">
               <p className="font-mono text-lg font-semibold">{selected}</p>

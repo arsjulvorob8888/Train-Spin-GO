@@ -1,4 +1,5 @@
 import { MixGrid } from "@/components/spin-drill/mix-grid";
+import type { BbSize } from "@/lib/spin-drill/hu-bb-limp";
 import { PipCard, type Face } from "@/components/spin-drill/pip-card";
 import { handAt } from "@/lib/spin-drill/legacy-ranges";
 import { mixOf, type MixRange } from "@/lib/spin-drill/mix";
@@ -79,7 +80,7 @@ function streetCells(range: MixRange, board: Card[], hero: Card[]): { cells: Cel
   return { cells, counts };
 }
 
-export function HandReview({ hole, board, villains, range, heroHand }: { hole: string; board: string; villains: string; range: MixRange | null; heroHand: string }) {
+export function HandReview({ hole, board, villains, range, heroHand, paint }: { hole: string; board: string; villains: string; range: MixRange | null; heroHand: string; paint?: Record<string, BbSize> | null }) {
   const mine = faces(hole);
   const street = faces(board);
   const foes = villains.split("·").map((pair) => faces(pair)).filter((pair) => pair.length > 0);
@@ -132,7 +133,7 @@ export function HandReview({ hole, board, villains, range, heroHand }: { hole: s
               <h2 className="text-sm font-semibold">{stage.title}</h2>
               <p className="mt-1 text-sm text-muted">{stage.text}</p>
               <div className="mt-3">
-                <MixGrid range={range} selected={heroHand} compact />
+                <MixGrid range={range} paint={paint} selected={heroHand} compact />
               </div>
             </section>
           ) : (

@@ -1,7 +1,10 @@
 import type { Card } from "@/lib/poker/cards";
 import { evaluateBest, unpack } from "@/lib/poker/evaluate";
 import type { Mix, MixAction } from "@/lib/spin-drill/mix";
-import { handPower, rangeAtStack } from "@/lib/spin-drill/stack-ranges";
+import { primary } from "@/lib/spin-drill/mix";
+import { readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
+import { handPower } from "@/lib/spin-drill/stack-ranges";
+import { studyRange } from "@/lib/spin-drill/study-range";
 import { chartStrategy, type SimStrategy, type StyleId } from "@/lib/spin-drill/sim-strategy";
 
 export type PrizeRow = {
@@ -150,9 +153,11 @@ export function addTotals(into: SimTotals, part: SimTotals) {
 
 let prizeProtect = false;
 const stackCache = new Map<string, Record<string, Mix>>();
+let liveSnap: LiveStrategy | null = null;
 
 export function playBatch(strategy: SimStrategy, games: number, seed: number): SimTotals {
   stackCache.clear();
+  liveSnap = readLive();
   const rng = mulberry32(seed);
   const totals = emptyTotals();
   let bank = 0;
@@ -528,13 +533,16 @@ function chartLine(strategy: SimStrategy, player: Player, spot: string, depth: n
   const book = own ? strategy.ranges : BASE_RANGES;
   const base = book[spot];
   if (!base) return undefined;
+  const stored = base[player.hand];
+  const seed = BASE_RANGES[spot]?.[player.hand];
+  if (own && stored && seed && primary(stored) !== primary(seed)) return stored;
   const adapt = player.hero ? strategy.adaptStack : true;
-  const bb = Math.max(1, Math.min(30, Math.round(depth)));
-  if (!adapt || bb === 15) return base[player.hand];
+  const bb = adapt ? Math.max(1, Math.min(30, Math.round(depth))) : 15;
+  const live = own ? liveSnap : null;
   const key = `${own ? "h" : "v"}:${spot}:${bb}`;
   let shaped = stackCache.get(key);
   if (!shaped) {
-    shaped = rangeAtStack(base, spot, bb);
+    shaped = studyRange(spot, bb, live);
     stackCache.set(key, shaped);
   }
   return shaped[player.hand];

@@ -5,7 +5,8 @@ import { handClass, tryParseCard } from "@/lib/poker/cards";
 import { findCraft, groupGames, handMoney, placeText, placesFor, readBank, readCraft, removeCraft, removeSpins, setBankCash, setBankLine, spinNet, spinPayout, stakeRows, trackHands, updateCraft, updateSpin, type BankBook, type CraftHand, type GameGroup, type Place } from "@/lib/spin-drill/craft";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { findSpot } from "@/lib/spin-drill/spots";
-import { rangeAtStack } from "@/lib/spin-drill/stack-ranges";
+import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
+import { readLive, type LiveStrategy } from "@/lib/spin-drill/live-strategy";
 
 function when(at: number): { day: string; time: string } {
   const date = new Date(at);
@@ -654,9 +655,18 @@ export function CraftDetail({ id }: { id: string }) {
 }
 
 function Report({ hand }: { hand: CraftHand }) {
+  const [live, setLive] = useState<LiveStrategy | null>(null);
+  useEffect(() => {
+    const sync = () => setLive(readLive());
+    sync();
+    window.addEventListener("spin-live", sync);
+    return () => window.removeEventListener("spin-live", sync);
+  }, []);
   const stamp = when(hand.at);
   const spot = findSpot(hand.spotId);
-  const range = spot ? rangeAtStack(spot.range, spot.id, hand.bb) : null;
+  const depth = live?.adaptStack === false ? 15 : hand.bb;
+  const range = spot ? studyRange(spot.id, depth, live) : null;
+  const paint = spot ? studyPaint(spot.id, depth) : null;
   const klass = heroClass(hand.hole) || hand.klass;
   const mix = range && klass ? mixOf(range, klass) : null;
   const chart = mix ? spot?.labels[primary(mix)] : "";
@@ -724,7 +734,7 @@ function Report({ hand }: { hand: CraftHand }) {
         )}
       </section>
 
-      <HandReview hole={hand.hole} board={hand.board} villains={hand.villains} range={range} heroHand={klass} />
+      <HandReview hole={hand.hole} board={hand.board} villains={hand.villains} range={range} heroHand={klass} paint={paint} />
 
       <section className="rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed">
         <h2 className="font-semibold">Вскрытие</h2>
