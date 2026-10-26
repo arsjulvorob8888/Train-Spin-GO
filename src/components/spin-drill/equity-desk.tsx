@@ -885,6 +885,19 @@ export function EquityDesk() {
   const pickerWasOpen = useRef(false);
   if (queue.length > 0 && !pickerWasOpen.current) cardOpened.current = Date.now();
   pickerWasOpen.current = queue.length > 0;
+  useEffect(() => {
+    if (queue.length === 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      queueRef.current = [];
+      setQueue([]);
+      holdGuard();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [queue.length, holdGuard, queueRef, setQueue]);
   const trick = shown?.trick?.deviate && !facing ? shown.trick : null;
   const play = facing ? (facing === "fold" ? "Fold" : facing === "call" ? "Call" : "All-in") : trick ? trick.action : (shown?.verdict ?? "");
 
@@ -1001,10 +1014,24 @@ export function EquityDesk() {
             >
               {queue.length > 0 ? (
                 <div
-                  className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3"
+                  className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-3"
                   onPointerDown={(event) => event.stopPropagation()}
                 >
-                  <p className="text-sm font-medium">{pickerTitle(queue[0]!)}</p>
+                  <button
+                    type="button"
+                    aria-label="Закрыть"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      queueRef.current = [];
+                      setQueue([]);
+                      holdGuard();
+                    }}
+                    className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg"
+                  >
+                    ×
+                  </button>
+                  <p className="pr-8 text-sm font-medium">{pickerTitle(queue[0]!)}</p>
                   <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
                     {RANKS.map((glyph) => {
                       const value = RANK_CHARS.indexOf(glyph);

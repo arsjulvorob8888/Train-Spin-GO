@@ -223,7 +223,7 @@ function SpotPills({
   );
 }
 
-function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void }) {
+function StackPick({ bb, onPick, onClose }: { bb: number; onPick: (bb: number) => void; onClose: () => void }) {
   const [text, setText] = useState(String(bb));
   const field = useRef<HTMLInputElement>(null);
 
@@ -231,6 +231,17 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
     field.current?.focus();
     field.current?.select();
   }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
 
   function commit(raw: string) {
     const n = Number(raw.replace(",", "."));
@@ -241,9 +252,17 @@ function StackPick({ bb, onPick }: { bb: number; onPick: (bb: number) => void })
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-3 sm:items-center">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3">
-        <p className="text-sm font-medium">Стек, bb</p>
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-3 sm:items-center" onPointerDown={onClose}>
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onPointerDown={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          aria-label="Закрыть"
+          onClick={onClose}
+          className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg"
+        >
+          ×
+        </button>
+        <p className="pr-8 text-sm font-medium">Стек, bb</p>
         <p className="mt-1 text-xs text-muted">От 1 до 30. После выбора сразу откроются карты.</p>
         <form
           className="mt-2 flex gap-2"
@@ -1037,7 +1056,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                 onMine={setMine}
                 onAdvance={advanceSeat}
               />
-              {stackOpen ? <StackPick bb={bb} onPick={takeStack} /> : null}
+              {stackOpen ? <StackPick bb={bb} onPick={takeStack} onClose={() => setStackOpen(false)} /> : null}
               <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
                 <div className="flex w-full max-w-[440px] items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
