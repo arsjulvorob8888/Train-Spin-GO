@@ -460,6 +460,25 @@ export function RangeExperiment({
     };
   }, [music]);
 
+  function dismissSplash() {
+    if (splashTimer.current) window.clearTimeout(splashTimer.current);
+    splashTimer.current = null;
+    setSplash(null);
+  }
+
+  useEffect(() => {
+    if (!splash) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (splashTimer.current) window.clearTimeout(splashTimer.current);
+      setSplash(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [splash]);
+
   return (
     <div className="space-y-4">
       <div>
@@ -533,6 +552,9 @@ export function RangeExperiment({
       <Sapper key={`${spot.id}:${bb}`} spot={spot} bb={bb} range={range} onBb={onBb} autoplay={autoplay} onClear={cleared} />
       {splash ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg p-6">
+          <button type="button" aria-label="Закрыть" onClick={dismissSplash} className="absolute top-3 right-3 z-20 grid h-10 w-10 place-items-center rounded-full bg-surface text-2xl leading-none text-muted hover:text-fg">
+            ×
+          </button>
           <div className="range-veil" />
           <div className="strike-ring" />
           <div className="strike-ring strike-ring-late" />
@@ -741,6 +763,15 @@ function Sapper({
   useEffect(() => {
     const keys = ["a", "s", "d", "f", "g", "h", "j", "k"];
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && quiz) {
+        event.preventDefault();
+        event.stopPropagation();
+        setQuiz(null);
+        setCheer(null);
+        busy.current = false;
+        setPhase((current) => (current === "win" ? current : "play"));
+        return;
+      }
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === " " || event.code === "Space") {
         event.preventDefault();
@@ -1186,8 +1217,11 @@ function Sapper({
       ) : null}
       {quiz ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm">
-          <section className={cn("max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border bg-surface p-6 shadow-border sm:p-8", quiz.reason === "strike" ? "quiz-reward border-transparent" : "quiz-miss border-transparent", cheer && "range-blast")}>
-            <div className="flex items-start justify-between gap-4">
+          <section className={cn("relative max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border bg-surface p-6 shadow-border sm:p-8", quiz.reason === "strike" ? "quiz-reward border-transparent" : "quiz-miss border-transparent", cheer && "range-blast")}>
+            <button type="button" aria-label="Закрыть" onClick={finishQuiz} className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg">
+              ×
+            </button>
+            <div className="flex items-start justify-between gap-4 pr-12">
               <div>
                 <p className={cn("text-lg font-medium", quiz.reason === "strike" ? "text-fg" : "text-bad")}>
                   {quiz.reason === "strike" ? "Награда · 5 STRIKE" : "Ошибка · неверное действие"}

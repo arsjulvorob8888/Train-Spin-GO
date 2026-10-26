@@ -106,6 +106,19 @@ export function MttDesk() {
     };
   }, []);
 
+  useEffect(() => {
+    if (queue.length === 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      queueRef.current = [];
+      setQueue([]);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [queue.length]);
+
   const spots = useMemo(() => (pack ? spotsOf(pack) : []), [pack]);
   const depth = pack ? effectOf(stacks, hero, pick, pack.stacks) : { bb: 30, chart: 30, why: "" };
   const dealt = cards.h0 && cards.h1 ? handClass(cards.h0, cards.h1) : klass;
@@ -363,8 +376,21 @@ export function MttDesk() {
                 showQueue([]);
               }}
             >
-              <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onPointerDown={(event) => event.stopPropagation()}>
-                <p className="text-sm font-medium">{slotTitle(queue[0]!)}</p>
+              <div className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-3" onPointerDown={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  aria-label="Закрыть"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    queueRef.current = [];
+                    setQueue([]);
+                  }}
+                  className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg"
+                >
+                  ×
+                </button>
+                <p className="pr-8 text-sm font-medium">{slotTitle(queue[0]!)}</p>
                 <div className="mt-2 max-h-[70vh] space-y-1 overflow-auto">
                   {RANKS.map((glyph) => {
                     const rank = RANK_CHARS.indexOf(glyph);

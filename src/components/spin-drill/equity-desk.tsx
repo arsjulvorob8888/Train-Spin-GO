@@ -590,6 +590,30 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
       window.removeEventListener("spin-end-ask", askEnd);
     };
   }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (ending) {
+        event.preventDefault();
+        event.stopPropagation();
+        setEnding(false);
+        return;
+      }
+      if (seatAsk) {
+        event.preventDefault();
+        event.stopPropagation();
+        setSeatAsk(false);
+        return;
+      }
+      if (!status && !later) {
+        event.preventDefault();
+        event.stopPropagation();
+        setLater(true);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [ending, seatAsk, status, later]);
   function finish(place: Place) {
     const current = readPrize();
     const session = readBlind();
@@ -612,9 +636,12 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   const note = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("spin-settled-note") : null;
   const clock = status ? <BlindClock status={status} onShift={shiftBlind} onToggle={() => setEnding(true)} /> : null;
   const endModal = ending && status ? (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
-        <h2 className="text-lg font-semibold">Игра окончена</h2>
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4" onPointerDown={() => setEnding(false)}>
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" aria-label="Закрыть" onClick={() => setEnding(false)} className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg">
+          ×
+        </button>
+        <h2 className="pr-8 text-lg font-semibold">Игра окончена</h2>
         <p className="mt-1 text-sm text-muted">Отметьте место. Второе без денег — это не третье: для статистики они разные, даже если оба стоят бай-ин.</p>
         <div className="mt-3 flex flex-col gap-2">
           {(stake != null ? placesFor(stake, saved) : []).map((row) => (
@@ -635,9 +662,12 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   ) : null;
   if (!status && !later) {
     return (
-      <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-        <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-4">
-          <div className="flex items-start justify-between gap-3">
+      <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onPointerDown={() => setLater(true)}>
+        <div className="relative w-full max-w-lg rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
+          <button type="button" aria-label="Закрыть" onClick={() => setLater(true)} className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg">
+            ×
+          </button>
+          <div className="flex items-start justify-between gap-3 pr-8">
             <div>
               <h2 className="text-lg font-semibold">Какой турнир?</h2>
               {note ? <p className="mt-1 text-sm text-ok">{note}</p> : null}
@@ -698,9 +728,12 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
       <>
         {clock}
         {endModal}
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4">
-            <h2 className="text-lg font-semibold">Ваша позиция?</h2>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onPointerDown={() => setSeatAsk(false)}>
+          <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
+            <button type="button" aria-label="Закрыть" onClick={() => setSeatAsk(false)} className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg">
+              ×
+            </button>
+            <h2 className="pr-8 text-lg font-semibold">Ваша позиция?</h2>
             {stake != null ? <p className="mt-1 text-sm text-muted">Турнир {money(stake)} · банк {money(saved)}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {(["BTN", "SB", "BB", "HU"] as const).map((seat) => (
