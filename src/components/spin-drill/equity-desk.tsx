@@ -4,7 +4,7 @@ import { analyzeDraws, evaluateBest, unpack } from "@/lib/poker/evaluate";
 import { consult, priceFromRaise } from "@/lib/spin-drill/equity-calc";
 import { spinHabits, tableRead, type Trick } from "@/lib/spin-drill/reads";
 import { journalSummary, readJournal } from "@/lib/spin-drill/journal";
-import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, holeKlass, money, noteBlindHand, placesFor, prizesFor, quotePot, readBank, readBlind, readPrize, rememberPrize, saveCraft, settleSpin, shiftBlind, startBlind, type CraftHand, type Place } from "@/lib/spin-drill/craft";
+import { BUYINS, PRIZES, blindStatus, cardLabel, clearBlind, decideShowdown, hideBlind, holeKlass, money, noteBlindHand, pauseBlind, placesFor, prizesFor, quotePot, readBank, readBlind, readPrize, rememberPrize, resumeBlind, saveCraft, settleSpin, shiftBlind, showBlind, startBlind, type CraftHand, type Place } from "@/lib/spin-drill/craft";
 import { lineNote, FACING_ACTIONS, OPEN_ACTIONS, actionTitle, emptyLine, facingPrice, heroFacing, openStreet, potFate, preflopAllin, seatStack, seatsInHand, streetStatus, type Line, type LineAction, type Seat, type StreetId } from "@/lib/spin-drill/postflop-line";
 import type { MixRange } from "@/lib/spin-drill/mix";
 import type { SpotDef } from "@/lib/spin-drill/spots";
@@ -634,7 +634,12 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   if (!ready) return null;
   const stake = buy ?? PRIZES.find((prize) => prize.prize === saved)?.buy ?? null;
   const note = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("spin-settled-note") : null;
-  const clock = status ? <BlindClock status={status} onShift={shiftBlind} onToggle={() => setEnding(true)} /> : null;
+  const clock = status && !status.hidden ? <BlindClock status={status} onShift={shiftBlind} onToggle={() => setEnding(true)} /> : null;
+  const clockBack = status?.hidden ? (
+    <button type="button" onClick={showBlind} className="fixed top-3 right-3 z-[60] h-9 rounded-full border border-zinc-500 bg-black/80 px-3 text-xs font-semibold text-zinc-200">
+      Таймер · пауза
+    </button>
+  ) : null;
   const endModal = ending && status ? (
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 p-4" onPointerDown={() => setEnding(false)}>
       <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
@@ -727,6 +732,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
     return (
       <>
         {clock}
+        {clockBack}
         {endModal}
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onPointerDown={() => setSeatAsk(false)}>
           <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
@@ -759,6 +765,7 @@ export function StartBank({ onStack, onAuto, onStarted, onSeat }: { onStack: (bb
   return (
     <>
       {clock}
+      {clockBack}
       {endModal}
     </>
   );
@@ -781,7 +788,16 @@ function BlindClock({
     playBlindWarn();
   }, [status.level, status.soon]);
   return (
-    <div className={cn("fixed top-3 right-3 z-[60] flex w-44 items-stretch gap-1 rounded-xl border-2 bg-black/80 p-2 shadow-lg", status.soon ? "blind-hot border-red-500 text-red-400" : "border-emerald-400 text-emerald-400")}>
+    <div className={cn("fixed top-3 right-3 z-[60] flex w-48 items-stretch gap-1 rounded-xl border-2 bg-black/80 p-2 pr-7 shadow-lg", status.paused ? "border-zinc-500 text-zinc-300" : status.soon ? "blind-hot border-red-500 text-red-400" : "border-emerald-400 text-emerald-400")}>
+      <button
+        type="button"
+        aria-label="Остановить и закрыть таймер"
+        title="Остановить и закрыть таймер"
+        onClick={hideBlind}
+        className="absolute top-1 right-1 grid h-6 w-6 place-items-center rounded-full text-base leading-none text-current hover:bg-white/10"
+      >
+        ×
+      </button>
       <div className="flex flex-col justify-center">
         <button type="button" onClick={() => onShift(1)} aria-label="Блайнды выше, таймер сначала" title="Блайнды выше. Таймер начнётся заново" className="grid h-7 w-7 place-items-center rounded-md bg-white/10 text-sm leading-none">
           ▲
@@ -793,11 +809,17 @@ function BlindClock({
       <div className="min-w-0 flex-1">
         <p className="font-mono text-2xl font-semibold leading-none">{status.left.replace(/^ещё /, "")}</p>
         <p className="mt-1 text-xs">
+          {status.paused ? "пауза · " : ""}
           {status.sb}/{status.bb} · ур. {status.level}
         </p>
-        <button type="button" onClick={onToggle} className="mt-2 text-xs underline">
-          Спин окончен
-        </button>
+        <div className="mt-2 flex items-center gap-2">
+          <button type="button" onClick={status.paused ? resumeBlind : pauseBlind} className="text-xs font-semibold underline">
+            {status.paused ? "Пуск" : "Стоп"}
+          </button>
+          <button type="button" onClick={onToggle} className="text-xs underline">
+            Спин окончен
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -86,6 +86,10 @@ export type BlindSession = {
   hands: number;
   gameId?: string;
   buy?: number;
+  /** Clock is frozen at this timestamp. Absent while it is running. */
+  pausedAt?: number;
+  /** Floating clock is hidden. The spin itself stays open. */
+  hidden?: boolean;
 };
 
 const BLIND_KEY = "spin-blind-session";
@@ -109,6 +113,8 @@ export function readBlind(): BlindSession | null {
       hands: parsed.hands || 0,
       buy: typeof parsed.buy === "number" ? parsed.buy : undefined,
       gameId: typeof parsed.gameId === "string" ? parsed.gameId : undefined,
+      pausedAt: typeof parsed.pausedAt === "number" ? parsed.pausedAt : undefined,
+      hidden: parsed.hidden === true,
     };
   } catch {
     return null;
@@ -136,7 +142,8 @@ export function blindLevel(session: BlindSession, now = Date.now()): number {
 }
 
 export function stackFromBlinds(session: BlindSession, now = Date.now()): number {
-  const bb = BLIND_LEVELS[blindLevel(session, now)]?.[1] ?? 20;
+  const at = session.pausedAt ?? now;
+  const bb = BLIND_LEVELS[blindLevel(session, at)]?.[1] ?? 20;
   return Math.max(1, Math.round(session.chips / bb));
 }
 
@@ -151,7 +158,7 @@ export function startBlind(prize: number, buy = 1): number {
 export function retargetChips(stackBb: number) {
   const session = readBlind();
   if (!session || typeof sessionStorage === "undefined") return;
-  const bb = BLIND_LEVELS[blindLevel(session)]?.[1] ?? 20;
+  const bb = BLIND_LEVELS[blindLevel(session, session.pausedAt ?? Date.now())]?.[1] ?? 20;
   const chips = Math.max(bb, Math.round(stackBb * bb));
   if (chips === session.chips) return;
   writeBlind({ ...session, chips });
@@ -159,7 +166,7 @@ export function retargetChips(stackBb: number) {
 
 export function noteBlindHand() {
   const session = readBlind();
-  if (!session || typeof sessionStorage === "undefined") return;
+  if (!session || session.pausedAt || typeof sessionStorage === "undefined") return;
   writeBlind({ ...session, hands: session.hands + 1 });
 }
 
@@ -169,13 +176,41 @@ export function shiftBlind(delta: number) {
   if (!session || typeof sessionStorage === "undefined" || !delta) return;
   const spec = clockFor(session.prize, session.buy);
   if (!spec) return;
-  const now = Date.now();
+  const now = session.pausedAt ?? Date.now();
   const next = Math.max(0, Math.min(BLIND_LEVELS.length - 1, blindLevel(session, now) + delta));
   if (spec.clock.kind === "time") {
     writeBlind({ ...session, startedAt: now - next * spec.clock.seconds * 1000 });
     return;
   }
   writeBlind({ ...session, hands: next * spec.clock.hands });
+}
+
+export function pauseBlind() {
+  const session = readBlind();
+  if (!session || session.pausedAt) return;
+  writeBlind({ ...session, pausedAt: Date.now() });
+}
+
+export function resumeBlind() {
+  const session = readBlind();
+  if (!session?.pausedAt) return;
+  const frozen = Math.max(0, session.pausedAt - session.startedAt);
+  const next = { ...session, startedAt: Date.now() - frozen };
+  delete next.pausedAt;
+  writeBlind(next);
+}
+
+/** Freeze the clock and hide the widget. The spin and the bank stay as they are. */
+export function hideBlind() {
+  const session = readBlind();
+  if (!session) return;
+  writeBlind({ ...session, hidden: true, pausedAt: session.pausedAt ?? Date.now() });
+}
+
+export function showBlind() {
+  const session = readBlind();
+  if (!session) return;
+  writeBlind({ ...session, hidden: false });
 }
 
 export function clearBlind() {
@@ -342,28 +377,29 @@ export function settleSpin(prize: number, buy: number, place: Place, gameId?: st
   return next;
 }
 
-export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number; soon: boolean } | null {
+export function blindStatus(now = Date.now()): { level: number; sb: number; bb: number; stack: number; left: string; chips: number; soon: boolean; paused: boolean; hidden: boolean } | null {
   const session = readBlind();
   if (!session) return null;
   const spec = clockFor(session.prize, session.buy);
-  const level = blindLevel(session, now);
+  const at = session.pausedAt ?? now;
+  const level = blindLevel(session, at);
   const pair = BLIND_LEVELS[level] ?? BLIND_LEVELS[0]!;
   let left = "";
   let soon = false;
   if (spec?.clock.kind === "time") {
-    const elapsed = Math.max(0, (now - session.startedAt) / 1000);
+    const elapsed = Math.max(0, (at - session.startedAt) / 1000);
     const remain = spec.clock.seconds - (elapsed % spec.clock.seconds);
     const min = Math.floor(remain / 60);
     const sec = Math.floor(remain % 60);
     left = `ещё ${min}:${sec.toString().padStart(2, "0")}`;
-    soon = remain <= 15;
+    soon = !session.pausedAt && remain <= 15;
   } else if (spec?.clock.kind === "hands") {
     const into = session.hands % spec.clock.hands;
     const leftHands = spec.clock.hands - into;
     left = `ещё ${leftHands} раздач`;
-    soon = leftHands <= 2;
+    soon = !session.pausedAt && leftHands <= 2;
   }
-  return { level: level + 1, sb: pair[0], bb: pair[1], stack: stackFromBlinds(session, now), left, chips: session.chips, soon };
+  return { level: level + 1, sb: pair[0], bb: pair[1], stack: stackFromBlinds(session, at), left, chips: session.chips, soon, paused: session.pausedAt != null, hidden: session.hidden === true };
 }
 
 export type CraftBluff = {
