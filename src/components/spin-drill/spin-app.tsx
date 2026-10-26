@@ -559,6 +559,8 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
   const [practiceMode, setPracticeMode] = useState<"ranges" | "math">("ranges");
   const [mathDrill, setMathDrill] = useState<"odds" | "equity">("odds");
   const [bb, setBb] = useState(15);
+  const bbKey = useRef(15);
+  bbKey.current = bb;
   const depthRef = useRef(15);
   const blindRef = useRef(20);
   const [stacks, setStacks] = useState<TableStacks>({ BTN: 15, SB: 14.5, BB: 14 });
@@ -570,6 +572,8 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
+  const seatKey = useRef({ group, id: spot.id, hero: spot.hero });
+  seatKey.current = { group, id: spot.id, hero: spot.hero };
   const depth = useMemo(() => chartDepth(spot.id, spot.hero, stacks), [spot.id, spot.hero, stacks]);
   const chartBb = live?.adaptStack === false ? 15 : depth.bb;
   const range = useMemo(() => studyRange(spot.id, chartBb, live), [spot.id, chartBb, live]);
@@ -779,6 +783,59 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
     window.setTimeout(() => setCardAsk((n) => n + 1), 0);
   }
 
+  function nudgeStack(delta: number) {
+    const next = Math.min(30, Math.max(1, Math.round(bbKey.current) + delta));
+    if (next === bbKey.current) return;
+    bbKey.current = next;
+    tuneStack(next);
+  }
+
+  function hotSeat(dir: 1 | -1) {
+    const cur = seatKey.current;
+    if (cur.group === "HU") {
+      const id = dir > 0 && cur.hero === "SB" ? "hu_bb_raise" : dir < 0 && cur.hero === "BB" ? "hu_sb" : "";
+      if (!id) return;
+      const hero = id === "hu_sb" ? "SB" : "BB";
+      seatKey.current = { group: "HU", id, hero };
+      setSpotId(id);
+      setMine("");
+      setSelected("");
+      return;
+    }
+    const next = GROUPS[GROUPS.indexOf(cur.group) + dir];
+    const first = next ? spotsIn(next)[0] : undefined;
+    if (!first) return;
+    seatKey.current = { group: next, id: first.id, hero: first.hero };
+    setGroup(next);
+    setSpotId(first.id);
+    setMine("");
+    setSelected("");
+  }
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (tab !== "strategy" || mode !== "spin") return;
+      const shift = event.key === "Shift";
+      const ctrl = event.key === "Control";
+      if (shift || ctrl) {
+        if (event.repeat) return;
+        if (shift && (event.ctrlKey || event.metaKey || event.altKey)) return;
+        if (ctrl && (event.shiftKey || event.metaKey || event.altKey)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        hotSeat(shift ? 1 : -1);
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.code !== "KeyA" && event.code !== "KeyZ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      nudgeStack(event.code === "KeyA" ? 1 : -1);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
   function answer(a: MixAction) {
     if (quiz || !current || locked) return;
     if (!spot.actions.includes(a)) return;
@@ -941,6 +998,11 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                 onStarted={() => setCardAsk((n) => n + 1)}
               />
               <div className="mt-4">
+                <p className="mb-2 text-xs text-muted">
+                  {group === "HU"
+                    ? "Shift и Ctrl — кто ходит первым, SB или BB. С хедз-апа ими не уйти. A — стек выше, Z — ниже. Работает и поверх выбора карт."
+                    : "Shift — следующая позиция, Ctrl — предыдущая. A — стек выше, Z — ниже. Работает и поверх выбора карт."}
+                </p>
                 <SpotPills
                   compact
                   showQuick={false}
@@ -953,7 +1015,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                       <StackType bb={bb} onChange={tuneStack} />
                       <NewHand onAdvance={advanceSeat} />
                       <SeatStacks hero={spot.hero} stacks={stacks} pins={pinView} onChange={correctStack} />
-                      <div className="grid h-11 min-w-[4.5rem] place-items-center rounded-xl border-2 border-ok bg-ok/15 px-2" title={depth.why}>
+                      <div className="grid h-11 min-w-[4.5rem] place-items-center rounded-xl border-2 border-ok bg-ok/15 px-2" title={`A — стек выше, Z — ниже. ${depth.why}`}>
                         <span className="text-[9px] font-medium uppercase leading-none text-ok">Эфф.</span>
                         <span className="font-mono text-lg font-semibold leading-none">{depth.bb}</span>
                       </div>
