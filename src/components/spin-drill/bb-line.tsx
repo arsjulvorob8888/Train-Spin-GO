@@ -333,7 +333,7 @@ export function ActionLine({
         ) : live ? null : waiting ? (
           <p className="w-32 shrink-0 self-center text-xs leading-snug text-muted">Сначала ходы оппонентов. Флоп откроется после них.</p>
         ) : null}
-        {live || waiting || answerCol ? null : <StreetClose onAdvance={goNext} />}
+        <StreetClose onAdvance={goNext} />
       </div>
       {live ? <BoardLine openBoard onAdvance={goNext} runout={runout} /> : null}
       {won ? <ResultBanner kind="win" detail="Все сбросили. Банк ваш, флопа нет." /> : null}
