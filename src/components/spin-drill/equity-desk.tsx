@@ -1397,7 +1397,7 @@ export function StreetClose({ onAdvance, quiet = false }: { onAdvance?: () => vo
   const [open, setOpen] = useState(false);
   const rivals = seatsInHand(spot.id).filter((seat) => seat !== spot.hero);
   const names = ["hero", ...rivals, "split"];
-  const label = (id: string) => (id === "hero" ? "Я выиграл · Q" : id === "split" ? "Ничья · У" : id === rivals[0] ? `${id} · W` : id);
+  const label = (id: string) => (id === "hero" ? "Я выиграл · Q" : id === "split" ? "Ничья · E" : id === rivals[0] ? `${id} · W` : id);
   const winner = award === "hero" || award === spot.hero ? "Вы" : award === "split" ? "Ничья" : award;
   const lost = award === "split" ? [] : award === "hero" || award === spot.hero ? rivals : award ? ["Вы", ...rivals.filter((seat) => seat !== award)] : [];
   const eq = shown?.equity != null ? `${Math.round(shown.equity * 100)}%` : "считается по рейнджу";
