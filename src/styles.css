@@ -455,3 +455,14 @@
 .blind-hot {
   animation: blind-hot 0.8s ease-in-out infinite;
 }
+
+@keyframes chart-fx {
+  0% { opacity: 0; transform: scale(0.86); filter: brightness(1.8); }
+  14% { opacity: 1; transform: scale(1.04); filter: brightness(1.2); }
+  28% { transform: scale(1); filter: brightness(1); }
+  68% { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.98); }
+}
+.chart-fx {
+  animation: chart-fx 1.35s ease forwards;
+}

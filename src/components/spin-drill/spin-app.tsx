@@ -308,39 +308,49 @@ function StackPick({ bb, onPick, onClose }: { bb: number; onPick: (bb: number) =
 function ChartPop({ id, bb, onClose }: { id: string; bb: number; onClose: () => void }) {
   const spot = findSpot(id);
   const fact = SPOT_CHART[id];
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+    if (!fact) return;
+    playChartPing(fact.exact);
+    const timer = window.setTimeout(() => closeRef.current(), 1400);
+    return () => window.clearTimeout(timer);
+  }, [fact]);
   if (!fact) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[75] flex items-end justify-center bg-black/60 p-3 sm:items-center" onPointerDown={onClose}>
-      <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
-        <button type="button" aria-label="Закрыть" onClick={onClose} className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg">
-          ×
-        </button>
-        <p className="pr-8 text-[11px] font-medium uppercase tracking-wide text-subtle">{fact.exact ? "Свой чарт" : "Ближайший чарт"}</p>
-        <h2 className="mt-1 pr-8 text-lg font-semibold">{spot.vs}</h2>
-        <p className="mt-2 text-sm text-fg">{spot.line}</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted">{fact.note}</p>
-        <p className="mt-2 text-sm leading-relaxed">
-          Стратегия, тренировка и GAME показывают рейндж <span className="font-medium">«{fact.chart}»</span>.
-          {fact.exact ? " Это отдельная сетка этого спота, не соседний." : " Отдельной сетки нет, на экране именно этот ближайший чарт."}
-          {bb === 15 ? " Глубина 15bb, без сдвига." : ` Глубина ${bb}bb: те же руки, сдвинутые под стек.`}
-        </p>
-        <button type="button" onClick={onClose} className="mt-3 h-10 rounded-full bg-fg px-4 text-sm font-semibold text-bg">
-          Понятно
-        </button>
+    <div className="pointer-events-none fixed top-16 left-1/2 z-[80] w-[min(92vw,28rem)] -translate-x-1/2">
+      <div className={cn("chart-fx rounded-2xl border-2 px-4 py-3 text-center shadow-lg", fact.exact ? "border-emerald-400 bg-emerald-950/90 text-emerald-50" : "border-amber-400 bg-amber-950/90 text-amber-50")}>
+        <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">{fact.exact ? "Свой чарт" : "Ближайший чарт"}</p>
+        <p className="mt-1 text-xl font-semibold leading-tight">{spot.vs}</p>
+        <p className="mt-1 text-sm">{fact.chart}{bb === 15 ? " · 15bb" : ` · ${bb}bb`}</p>
       </div>
     </div>,
     document.body,
   );
+}
+
+let chartAudio: AudioContext | null = null;
+function playChartPing(exact: boolean) {
+  const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return;
+  chartAudio = chartAudio ?? new Ctx();
+  void chartAudio.resume();
+  const now = chartAudio.currentTime;
+  const notes = exact ? [659, 880] : [349, 294];
+  notes.forEach((freq, index) => {
+    const osc = chartAudio!.createOscillator();
+    const gain = chartAudio!.createGain();
+    osc.type = exact ? "triangle" : "sine";
+    osc.frequency.value = freq;
+    const start = now + index * 0.06;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.07, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+    osc.connect(gain);
+    gain.connect(chartAudio!.destination);
+    osc.start(start);
+    osc.stop(start + 0.18);
+  });
 }
 
 function SeatStacks({
@@ -1010,7 +1020,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
-      {chartPop && SPOT_CHART[chartPop] ? <ChartPop id={chartPop} bb={chartBb} onClose={() => setChartPop(null)} /> : null}
+      {chartPop && SPOT_CHART[chartPop] ? <ChartPop key={chartPop} id={chartPop} bb={chartBb} onClose={() => setChartPop(null)} /> : null}
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 sm:px-5">
         <div className="mr-auto">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">
