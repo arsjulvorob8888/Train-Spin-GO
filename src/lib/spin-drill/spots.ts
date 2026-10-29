@@ -646,6 +646,65 @@ export function findSpot(id: string): SpotDef {
   return SPOTS.find((s) => s.id === id) ?? SPOTS[0]!;
 }
 
+/** Non-standard lines. exact=false means Strategy shows the nearest real chart, not a made-up mix. */
+export const SPOT_CHART: Record<string, { exact: boolean; chart: string; note: string }> = {
+  btn_vs_3bet: {
+    exact: true,
+    chart: "BTN vs 3-bet",
+    note: "Свой чарт ответа на 3-бет, не олл-ин. Это не рейндж открытия баттона и не колл пуша.",
+  },
+  btn_vs_jam: {
+    exact: true,
+    chart: "btn_vs_jam",
+    note: "Свой чарт колла 3-бет пуша. Только фолд или колл.",
+  },
+  sb_iso: {
+    exact: true,
+    chart: "sb_vs_bb_iso",
+    note: "Свой чарт: баттон фолд, вы уже лимпнули, BB сделал изолейт. Это не рейндж открытия SB.",
+  },
+  sb_vs_bb_jam: {
+    exact: true,
+    chart: "SB vs BB jam",
+    note: "Свой чарт колла пуша BB после вашего лимпа. Это не изолейт и не сквиз.",
+  },
+  sb_vs_squeeze_jam: {
+    exact: true,
+    chart: "SB vs squeeze jam",
+    note: "Свой чарт: BTN рейз 2, вы колл, BB олл-ин. 75s и дырявые одномасные сюда не входят.",
+  },
+  bb_squeeze: {
+    exact: true,
+    chart: "bb_vs_btn_raise_sb_call",
+    note: "Свой чарт сквиза: BTN открыл 2bb и SB коллировал. Это не защита BB против одного рейза баттона.",
+  },
+  bb_vs_reshove: {
+    exact: true,
+    chart: "bb_vs_btn_raise_sb_jam",
+    note: "Свой чарт решова: BTN 2bb, SB олл-ин поверх. Только фолд или колл. Баттон ещё может войти.",
+  },
+  bb_vs_limp_call: {
+    exact: false,
+    chart: "BB vs BTN limp",
+    note: "Отдельного чарта на два лимпа нет. Показан ближайший: BB против лимпа баттона. Изолейт здесь уже, чем против одного.",
+  },
+  bb_vs_limp_iso: {
+    exact: false,
+    chart: "BB vs SB raise",
+    note: "Отдельного чарта нет. Показана защита BB против рейза SB. Живой баттон делает рейз и колл чуть тайтовее.",
+  },
+  bb_vs_limp_jam: {
+    exact: false,
+    chart: "BB vs SB jam",
+    note: "Отдельного чарта нет. Показан колл пуша SB. Баттон ещё не ответил на пуш.",
+  },
+  bb_vs_jam_call: {
+    exact: false,
+    chart: "BB vs BTN jam",
+    note: "Отдельного чарта нет. Показан колл пуша баттона. Колл SB делает цену чуть лучше, поэтому колл можно чуть шире.",
+  },
+};
+
 export function spotContinue(spot: SpotDef): number {
   return continuePct(spot.range, ALL);
 }

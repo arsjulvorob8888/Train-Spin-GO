@@ -291,6 +291,7 @@ export function HandProvider({
     setCallTextState("");
     setStreetBetState("");
     setPlace("");
+    placeRef.current = "";
     setAwardState("");
     setPlayed("");
     setSavedId("");
@@ -353,10 +354,9 @@ export function HandProvider({
   const awardHeard = useRef("");
   function setAward(next: string) {
     setAwardState(next);
-    if (!next) setPlace("");
-    else if (next === "split") setPlace("split");
-    else if (next === "hero" || next === spot.hero) setPlace("hero");
-    else setPlace("villain");
+    const kind = !next ? "" : next === "split" ? "split" : next === "hero" || next === spot.hero ? "hero" : "villain";
+    placeRef.current = kind;
+    setPlace(kind);
   }
   useEffect(() => {
     if (!award) {
@@ -393,7 +393,7 @@ export function HandProvider({
       cards.w0 && cards.w1 ? [cards.w0, cards.w1] : [],
     ].filter((pair) => pair.length === 2);
     const auto = decideShowdown(hole, villains, known);
-    const settled = place || (result === "win" ? "win" : result === "fold" ? "fold" : auto);
+    const settled = placeRef.current || (result === "win" ? "win" : result === "fold" ? "fold" : auto);
     const prize = readPrize();
     const id = kept.current || `${Date.now()}`;
     const fresh = !kept.current;
@@ -1397,7 +1397,7 @@ export function StreetClose({ onAdvance, quiet = false }: { onAdvance?: () => vo
   const [open, setOpen] = useState(false);
   const rivals = seatsInHand(spot.id).filter((seat) => seat !== spot.hero);
   const names = ["hero", ...rivals, "split"];
-  const label = (id: string) => (id === "hero" ? "Я выиграл" : id === "split" ? "Ничья" : id);
+  const label = (id: string) => (id === "hero" ? "Я выиграл · Q" : id === "split" ? "Ничья · У" : id === rivals[0] ? `${id} · W` : id);
   const winner = award === "hero" || award === spot.hero ? "Вы" : award === "split" ? "Ничья" : award;
   const lost = award === "split" ? [] : award === "hero" || award === spot.hero ? rivals : award ? ["Вы", ...rivals.filter((seat) => seat !== award)] : [];
   const eq = shown?.equity != null ? `${Math.round(shown.equity * 100)}%` : "считается по рейнджу";

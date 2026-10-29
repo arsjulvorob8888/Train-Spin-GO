@@ -59,7 +59,7 @@ export function ActionLine({
     if (spot.group === "BB") setSbAct((prev) => (prev === "fold" && spot.id.startsWith("bb_vs_sb") ? prev : ""));
   }, [spot.id, mine, spot.group]);
   const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
-  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard, setFacing } = useHand();
+  const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard, setFacing, setAward } = useHand();
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -118,6 +118,23 @@ export function ActionLine({
     onAdvance();
     openHole();
   }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      const el = event.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (event.code !== "KeyQ" && event.code !== "KeyW" && event.code !== "KeyE") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rivals = seatsInHand(spot.id).filter((seat) => seat !== spot.hero);
+      if (event.code === "KeyQ") setAward("hero");
+      else if (event.code === "KeyW") setAward(rivals[0] ?? "villain");
+      else setAward("split");
+      goNext();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
   const runout =
     board.length < 3 &&
     result !== "win" &&

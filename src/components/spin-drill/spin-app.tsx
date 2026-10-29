@@ -28,6 +28,7 @@ import {
   findSpot,
   spotContinue,
   spotsIn,
+  SPOT_CHART,
   type SpotDef,
   type SpotGroup,
 } from "@/lib/spin-drill/spots";
@@ -298,6 +299,44 @@ function StackPick({ bb, onPick, onClose }: { bb: number; onPick: (bb: number) =
             </button>
           ))}
         </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ChartPop({ id, bb, onClose }: { id: string; bb: number; onClose: () => void }) {
+  const spot = findSpot(id);
+  const fact = SPOT_CHART[id];
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+  if (!fact) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[75] flex items-end justify-center bg-black/60 p-3 sm:items-center" onPointerDown={onClose}>
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-4" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" aria-label="Закрыть" onClick={onClose} className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg">
+          ×
+        </button>
+        <p className="pr-8 text-[11px] font-medium uppercase tracking-wide text-subtle">{fact.exact ? "Свой чарт" : "Ближайший чарт"}</p>
+        <h2 className="mt-1 pr-8 text-lg font-semibold">{spot.vs}</h2>
+        <p className="mt-2 text-sm text-fg">{spot.line}</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">{fact.note}</p>
+        <p className="mt-2 text-sm leading-relaxed">
+          Стратегия, тренировка и GAME показывают рейндж <span className="font-medium">«{fact.chart}»</span>.
+          {fact.exact ? " Это отдельная сетка этого спота, не соседний." : " Отдельной сетки нет, на экране именно этот ближайший чарт."}
+          {bb === 15 ? " Глубина 15bb, без сдвига." : ` Глубина ${bb}bb: те же руки, сдвинутые под стек.`}
+        </p>
+        <button type="button" onClick={onClose} className="mt-3 h-10 rounded-full bg-fg px-4 text-sm font-semibold text-bg">
+          Понятно
+        </button>
       </div>
     </div>,
     document.body,
@@ -588,11 +627,13 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
   const [live, setLive] = useState<LiveStrategy | null>(null);
   const [cardAsk, setCardAsk] = useState(0);
   const [stackOpen, setStackOpen] = useState(false);
+  const [chartPop, setChartPop] = useState<string | null>(null);
   const advanceRef = useRef<number | null>(null);
 
   const spot = useMemo(() => findSpot(spotId), [spotId]);
   const seatKey = useRef({ group, id: spot.id, hero: spot.hero });
   seatKey.current = { group, id: spot.id, hero: spot.hero };
+  const returnSeat = useRef<SpotGroup>("BTN");
   const depth = useMemo(() => chartDepth(spot.id, spot.hero, stacks), [spot.id, spot.hero, stacks]);
   const chartBb = live?.adaptStack === false ? 15 : depth.bb;
   const range = useMemo(() => studyRange(spot.id, chartBb, live), [spot.id, chartBb, live]);
@@ -702,6 +743,8 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
     setSpotId(id);
     setGroup(next.group);
     setMine("");
+    setSelected("");
+    if (SPOT_CHART[id]) setChartPop(id);
   }
 
   function changeSpot(id: string) {
@@ -710,6 +753,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
     setSpotId(id);
     setMine("");
     setGroup(s.group);
+    if (id !== spot.id && SPOT_CHART[id]) setChartPop(id);
     setSession({ total: 0, correct: 0, streak: 0 });
     setLocked(false);
     setLastGrade(null);
@@ -821,8 +865,10 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
       setSelected("");
       return;
     }
-    const next = GROUPS[GROUPS.indexOf(cur.group) + dir];
-    const first = next ? spotsIn(next)[0] : undefined;
+    const table: SpotGroup[] = ["BTN", "SB", "BB"];
+    const index = table.indexOf(cur.group);
+    const next = table[(index + dir + table.length) % table.length] ?? "BTN";
+    const first = spotsIn(next)[0];
     if (!first) return;
     seatKey.current = { group: next, id: first.id, hero: first.hero };
     setGroup(next);
@@ -831,9 +877,38 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
     setSelected("");
   }
 
+  function toggleHu() {
+    const cur = seatKey.current;
+    if (cur.group === "HU") {
+      const back = returnSeat.current === "HU" ? "BTN" : returnSeat.current;
+      const first = spotsIn(back)[0];
+      if (!first) return;
+      seatKey.current = { group: back, id: first.id, hero: first.hero };
+      setGroup(back);
+      setSpotId(first.id);
+      setMine("");
+      setSelected("");
+      return;
+    }
+    returnSeat.current = cur.group;
+    seatKey.current = { group: "HU", id: "hu_sb", hero: "SB" };
+    setGroup("HU");
+    setSpotId("hu_sb");
+    setMine("");
+    setSelected("");
+  }
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (tab !== "strategy" || mode !== "spin") return;
+      const typing = event.target instanceof HTMLElement && (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.isContentEditable);
+      if (event.code === "CapsLock") {
+        if (event.repeat || typing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleHu();
+        return;
+      }
       const shift = event.key === "Shift";
       const ctrl = event.key === "Control";
       if (shift || ctrl) {
@@ -845,7 +920,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
         hotSeat(shift ? 1 : -1);
         return;
       }
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || typing) return;
       if (event.code !== "KeyA" && event.code !== "KeyZ") return;
       event.preventDefault();
       event.stopPropagation();
@@ -935,6 +1010,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
+      {chartPop && SPOT_CHART[chartPop] ? <ChartPop id={chartPop} bb={chartBb} onClose={() => setChartPop(null)} /> : null}
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 sm:px-5">
         <div className="mr-auto">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">
@@ -1019,8 +1095,8 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               <div className="mt-4">
                 <p className="mb-2 text-xs text-muted">
                   {group === "HU"
-                    ? "Shift и Ctrl — кто ходит первым, SB или BB. С хедз-апа ими не уйти. A — стек выше, Z — ниже. Работает и поверх выбора карт."
-                    : "Shift — следующая позиция, Ctrl — предыдущая. A — стек выше, Z — ниже. Работает и поверх выбора карт."}
+                    ? "Caps Lock — выйти из хедз-апа. Shift и Ctrl здесь только меняют, кто ходит первым. A — стек выше, Z — ниже. Q — вы выиграли, W — выиграл оппонент, У — ничья."
+                    : "Shift — следующая позиция, Ctrl — предыдущая. Только BTN, SB и BB, без хедз-апа. Caps Lock — войти в хедз-ап. A — стек выше, Z — ниже. Q — вы выиграли, W — выиграл оппонент, У — ничья."}
                 </p>
                 <SpotPills
                   compact
@@ -1076,7 +1152,9 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                 <p className="mt-2 text-sm text-muted">Постфлоп без блефа: воздух чек, пара и сильнее — ставка, если пот-оддс не велят сбрасывать.</p>
               ) : null}
               <p className="mt-2 text-sm text-muted">
-                {spot.id === "hu_bb_limp"
+                {SPOT_CHART[spot.id]
+                  ? `${SPOT_CHART[spot.id]!.exact ? "Свой чарт" : "Ближайший чарт"} «${SPOT_CHART[spot.id]!.chart}». ${SPOT_CHART[spot.id]!.note}`
+                  : spot.id === "hu_bb_limp"
                   ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."
                   : spot.id === "hu_bb_raise"
                     ? "BB против рейза SB до 2. Один цвет — действие с наибольшей долей. Цифра — размер 3-бета."
