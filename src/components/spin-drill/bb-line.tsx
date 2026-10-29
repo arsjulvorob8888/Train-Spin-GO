@@ -6,6 +6,7 @@ import { chartRaiseTo, sizedRaise } from "@/lib/spin-drill/equity-calc";
 import { potFate, preflopAllin, seatsInHand, streetStatus } from "@/lib/spin-drill/postflop-line";
 import { BoardLine, Hole, ResultBanner, StreetClose, useHand } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
+import { hotCode } from "@/lib/spin-drill/hotkey";
 
 type Pick = { spot?: string; mine?: MixAction };
 type Blind = "" | "fold" | "call" | "3bet" | "allin";
@@ -123,12 +124,13 @@ export function ActionLine({
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
       const el = event.target as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-      if (event.code !== "KeyQ" && event.code !== "KeyW" && event.code !== "KeyE") return;
+      const code = hotCode(event);
+      if (code !== "KeyQ" && code !== "KeyW" && code !== "KeyE") return;
       event.preventDefault();
       event.stopPropagation();
       const rivals = seatsInHand(spot.id).filter((seat) => seat !== spot.hero);
-      if (event.code === "KeyQ") setAward("hero");
-      else if (event.code === "KeyW") setAward(rivals[0] ?? "villain");
+      if (code === "KeyQ") setAward("hero");
+      else if (code === "KeyW") setAward(rivals[0] ?? "villain");
       else setAward("split");
       goNext();
     };

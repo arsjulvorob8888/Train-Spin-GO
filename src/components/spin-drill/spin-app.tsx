@@ -54,6 +54,7 @@ import { MICRO_NAME, microStrategy } from "@/lib/spin-drill/micro-plan";
 import { sizedRaise } from "@/lib/spin-drill/equity-calc";
 import { chartDepth, postBlinds, splitStacks, stackNote, type TableStacks } from "@/lib/spin-drill/stack-ranges";
 import { cn } from "@/lib/utils";
+import { hotCode } from "@/lib/spin-drill/hotkey";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -61,14 +62,10 @@ export type Tab = "practice" | "strategy" | "table" | "experiment" | "sim" | "ha
 export type AppPane = "lesson" | "anchors" | "drill";
 
 const KEYS: Record<string, MixAction> = {
-  f: "fold",
-  F: "fold",
-  c: "call",
-  C: "call",
-  r: "raise",
-  R: "raise",
-  a: "allin",
-  A: "allin",
+  KeyF: "fold",
+  KeyC: "call",
+  KeyR: "raise",
+  KeyA: "allin",
 };
 
 const SUITS = ["s", "h", "d", "c"] as const;
@@ -912,15 +909,16 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
     const onKey = (event: KeyboardEvent) => {
       if (tab !== "strategy" || mode !== "spin") return;
       const typing = event.target instanceof HTMLElement && (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.isContentEditable);
-      if (event.code === "CapsLock") {
+      const code = hotCode(event);
+      if (code === "CapsLock" || event.key === "CapsLock") {
         if (event.repeat || typing) return;
         event.preventDefault();
         event.stopPropagation();
         toggleHu();
         return;
       }
-      const shift = event.key === "Shift";
-      const ctrl = event.key === "Control";
+      const shift = code === "ShiftLeft" || code === "ShiftRight" || event.key === "Shift";
+      const ctrl = code === "ControlLeft" || code === "ControlRight" || event.key === "Control";
       if (shift || ctrl) {
         if (event.repeat) return;
         if (shift && (event.ctrlKey || event.metaKey || event.altKey)) return;
@@ -931,10 +929,10 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || typing) return;
-      if (event.code !== "KeyA" && event.code !== "KeyZ") return;
+      if (code !== "KeyA" && code !== "KeyZ") return;
       event.preventDefault();
       event.stopPropagation();
-      nudgeStack(event.code === "KeyA" ? 1 : -1);
+      nudgeStack(code === "KeyA" ? 1 : -1);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -968,7 +966,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (tab !== "practice" || quiz || practiceMode !== "ranges") return;
-      const a = KEYS[e.key];
+      const a = KEYS[hotCode(e)];
       if (a) answer(a);
       if ((e.key === " " || e.key === "Enter") && locked) {
         e.preventDefault();
@@ -1105,8 +1103,8 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               <div className="mt-4">
                 <p className="mb-2 text-xs text-muted">
                   {group === "HU"
-                    ? "Caps Lock — выйти из хедз-апа. Shift и Ctrl здесь только меняют, кто ходит первым. A — стек выше, Z — ниже. Q — вы выиграли, W — выиграл оппонент, E — ничья."
-                    : "Shift — следующая позиция, Ctrl — предыдущая. Только BTN, SB и BB, без хедз-апа. Caps Lock — войти в хедз-ап. A — стек выше, Z — ниже. Q — вы выиграли, W — выиграл оппонент, E — ничья."}
+                    ? "Caps Lock — выйти из хедз-апа. Shift и Ctrl здесь только меняют, кто ходит первым. A — стек выше, Z — ниже. Q — вы выиграли, W — выиграл оппонент, E — ничья. Те же клавиши на русской и английской раскладке."
+                    : "Shift — следующая позиция, Ctrl — предыдущая. Только BTN, SB и BB, без хедз-апа. Caps Lock — войти в хедз-ап. A — стек выше, Z — ниже. Q — вы выиграли, W — выиграл оппонент, E — ничья. Те же клавиши на русской и английской раскладке."}
                 </p>
                 <SpotPills
                   compact

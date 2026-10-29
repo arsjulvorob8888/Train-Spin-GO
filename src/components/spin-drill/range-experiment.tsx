@@ -12,6 +12,7 @@ import { readLive } from "@/lib/spin-drill/live-strategy";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { cn } from "@/lib/utils";
+import { hotCode } from "@/lib/spin-drill/hotkey";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const ACT: Record<MixAction, string> = {
@@ -761,7 +762,7 @@ function Sapper({
   }, [tick, paused, quiz, phase]);
 
   useEffect(() => {
-    const keys = ["a", "s", "d", "f", "g", "h", "j", "k"];
+    const codes = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH", "KeyJ", "KeyK"];
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && quiz) {
         event.preventDefault();
@@ -795,7 +796,7 @@ function Sapper({
         setPaused((on) => !on);
         return;
       }
-      const index = keys.indexOf(event.key.toLowerCase());
+      const index = codes.indexOf(hotCode(event));
       if (index < 0 || index >= actions.length) return;
       event.preventDefault();
       setArmed(actions[index]!);
