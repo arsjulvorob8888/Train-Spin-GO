@@ -204,8 +204,8 @@ export function sizedRaise(spotId: string, fallback: string, bb: number, paintSi
   if (paintSize && /^\d+(?:\.\d+)?$/.test(paintSize)) return `Raise ${paintSize}`;
   if (spotId === "btn") return "Raise 2";
   if (spotId === "sb_fold") {
-    if (bb <= 15) return "Raise 2";
-    if (bb <= 22) return "Raise 2.5";
+    if (bb <= 13) return "Raise 2";
+    if (bb <= 20) return "Raise 2.5";
     return "Raise 3";
   }
   if (spotId === "bb_vs_btn_raise") {
