@@ -618,7 +618,16 @@ export function RangeExperiment({
 
 function actionLabel(spot: SpotDef, action: MixAction, bb: number): string {
   if (action === "allin") return `All-in ${bb}`;
-  if (action === "raise") return bb >= 20 ? "Raise 2.5" : "Raise 2";
+  if (action === "raise") {
+    if (spot.id === "bb_vs_btn_raise") {
+      if (bb <= 11) return "Raise 2";
+      if (bb <= 13) return "Raise 4";
+      if (bb <= 18) return "Raise 4.5";
+      if (bb <= 20) return "Raise 5";
+      return "Raise 5.5";
+    }
+    return bb >= 20 ? "Raise 2.5" : "Raise 2";
+  }
   if (action === "call" && (spot.id === "sb_fold" || spot.id === "hu_sb")) return "Limp";
   return spot.labels[action];
 }

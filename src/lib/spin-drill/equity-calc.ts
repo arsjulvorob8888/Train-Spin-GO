@@ -202,7 +202,15 @@ export function chartRaiseTo(spotId: string, bb: number): number | null {
 /** The raise written on the button and in the solver. Same number in both places. */
 export function sizedRaise(spotId: string, fallback: string, bb: number, paintSize?: string | null): string {
   if (paintSize && /^\d+(?:\.\d+)?$/.test(paintSize)) return `Raise ${paintSize}`;
-  if (spotId === "btn" || spotId === "hu_sb" || spotId === "sb_raise" || spotId === "bb_vs_btn_raise") {
+  if (spotId === "bb_vs_btn_raise") {
+    // GTOBase BTNvsBB: non-allin raise size by depth
+    if (bb <= 11) return "Raise 2"; // shallow: raise is all-in
+    if (bb <= 13) return "Raise 4";
+    if (bb <= 18) return "Raise 4.5";
+    if (bb <= 20) return "Raise 5";
+    return "Raise 5.5";
+  }
+  if (spotId === "btn" || spotId === "hu_sb" || spotId === "sb_raise") {
     return bb >= 20 ? "Raise 2.5" : "Raise 2";
   }
   const found = fallback.match(/(\d+(?:\.\d+)?)/);

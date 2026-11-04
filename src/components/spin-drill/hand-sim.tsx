@@ -97,7 +97,9 @@ export function HandSim() {
     const labels = {
       ...spot.labels,
       allin: `All-in ${depth}`,
-      raise: depth >= 20 ? "Raise 2.5" : spot.labels.raise,
+      raise: spot.id === "bb_vs_btn_raise"
+        ? (depth <= 11 ? "Raise 2" : depth <= 13 ? "Raise 4" : depth <= 18 ? "Raise 4.5" : depth <= 20 ? "Raise 5" : "Raise 5.5")
+        : (depth >= 20 ? "Raise 2.5" : spot.labels.raise),
       call: spot.id === "sb_fold" || spot.id === "hu_sb" ? "Limp" : spot.labels.call,
     };
     const klass = handClass(heroCards[0], heroCards[1]);
