@@ -1,0 +1,41 @@
+import { ALL } from "./legacy-ranges";
+import { emptyMix, type MixRange } from "./mix";
+
+/** BTN first-in open. One color: the biggest slice on the GTOBase chart. */
+const DEPTHS = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 25];
+
+const KNOWN: Record<number, Record<string, "f" | "r" | "ai">> = {
+  8: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"ai","77":"ai","88":"ai","99":"ai",AA:"ai",JJ:"ai",KK:"ai",QQ:"ai",TT:"ai","65s":"ai","76s":"ai","86s":"ai","87s":"ai","97s":"ai","98s":"ai",A2o:"ai",A2s:"ai",A3o:"ai",A3s:"ai",A4o:"ai",A4s:"ai",A5o:"ai",A5s:"ai",A6o:"ai",A6s:"ai",A7o:"ai",A7s:"ai",A8o:"ai",A8s:"ai",A9o:"ai",A9s:"ai",AJo:"ai",AJs:"ai",AKo:"ai",AKs:"ai",AQo:"ai",AQs:"ai",ATo:"ai",ATs:"ai",J8s:"ai",J9s:"ai",JTo:"ai",JTs:"ai",K4s:"ai",K5s:"ai",K6s:"ai",K7s:"ai",K8s:"ai",K9o:"ai",K9s:"ai",KJo:"ai",KJs:"ai",KQo:"ai",KQs:"ai",KTo:"ai",KTs:"ai",Q8s:"ai",Q9s:"ai",QJo:"ai",QJs:"ai",QTo:"ai",QTs:"ai",T7s:"ai",T8s:"ai",T9s:"ai"},
+  9: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"ai","77":"ai","88":"ai","99":"ai",AA:"r",JJ:"ai",KK:"r",QQ:"r",TT:"ai","76s":"ai","86s":"ai","87s":"ai","97s":"ai","98s":"ai",A2o:"ai",A2s:"ai",A3o:"ai",A3s:"ai",A4o:"ai",A4s:"ai",A5o:"ai",A5s:"ai",A6o:"ai",A6s:"ai",A7o:"ai",A7s:"ai",A8o:"ai",A8s:"ai",A9o:"ai",A9s:"ai",AJo:"ai",AJs:"ai",AKo:"ai",AKs:"ai",AQo:"ai",AQs:"r",ATo:"ai",ATs:"ai",J8s:"ai",J9s:"ai",JTo:"ai",JTs:"r",K5s:"ai",K6s:"ai",K7s:"ai",K8s:"ai",K9o:"r",K9s:"ai",KJo:"ai",KJs:"ai",KQo:"ai",KQs:"ai",KTo:"ai",KTs:"ai",Q7s:"r",Q8s:"ai",Q9s:"ai",QJo:"ai",QJs:"ai",QTo:"ai",QTs:"ai",T7s:"ai",T8s:"ai",T9s:"ai"},
+  10: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"ai","77":"ai","88":"ai","99":"ai",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","76s":"ai","87s":"ai","97s":"ai","98s":"ai",A2o:"ai",A2s:"ai",A3o:"ai",A3s:"ai",A4o:"ai",A4s:"ai",A5o:"ai",A5s:"ai",A6o:"ai",A6s:"r",A7o:"ai",A7s:"ai",A8o:"ai",A8s:"r",A9o:"ai",A9s:"ai",AJo:"ai",AJs:"r",AKo:"ai",AKs:"r",AQo:"ai",AQs:"r",ATo:"ai",ATs:"ai",J7s:"r",J8s:"ai",J9s:"ai",JTo:"ai",JTs:"ai",K4s:"r",K5s:"r",K6s:"ai",K7s:"r",K8s:"ai",K9o:"r",K9s:"ai",KJo:"ai",KJs:"ai",KQo:"ai",KQs:"ai",KTo:"ai",KTs:"ai",Q7s:"r",Q8s:"r",Q9s:"ai",QJo:"ai",QJs:"ai",QTo:"ai",QTs:"ai",T8s:"ai",T9s:"ai"},
+  11: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"ai","77":"ai","88":"ai","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","87s":"ai","98s":"ai",A2o:"r",A2s:"ai",A3o:"ai",A3s:"ai",A4o:"ai",A4s:"ai",A5o:"ai",A5s:"ai",A6o:"ai",A6s:"r",A7o:"ai",A7s:"ai",A8o:"ai",A8s:"ai",A9o:"ai",A9s:"ai",AJo:"ai",AJs:"r",AKo:"ai",AKs:"r",AQo:"ai",AQs:"r",ATo:"ai",ATs:"r",J7s:"r",J8s:"ai",J9s:"ai",JTo:"ai",JTs:"ai",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"ai",KJo:"ai",KJs:"r",KQo:"ai",KQs:"ai",KTo:"ai",KTs:"r",Q8s:"r",Q9s:"ai",QJo:"ai",QJs:"ai",QTo:"r",QTs:"ai",T8s:"ai",T9s:"ai"},
+  12: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"ai","77":"ai","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","87s":"ai","98s":"ai",A2o:"r",A2s:"ai",A3o:"r",A3s:"ai",A4o:"ai",A4s:"ai",A5o:"ai",A5s:"ai",A6o:"ai",A6s:"r",A7o:"ai",A7s:"ai",A8o:"ai",A8s:"ai",A9o:"ai",A9s:"r",AJo:"ai",AJs:"r",AKo:"ai",AKs:"r",AQo:"ai",AQs:"r",ATo:"ai",ATs:"r",J8s:"r",J9s:"ai",JTo:"ai",JTs:"ai",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"ai",KJo:"ai",KJs:"r",KQo:"ai",KQs:"r",KTo:"ai",KTs:"ai",Q8s:"r",Q9s:"ai",QJo:"ai",QJs:"r",QTo:"r",QTs:"ai",T8s:"ai",T9s:"ai"},
+  13: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"ai","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","87s":"r","97s":"r","98s":"ai",A2s:"ai",A3o:"r",A3s:"ai",A4o:"r",A4s:"ai",A5o:"ai",A5s:"ai",A6o:"ai",A6s:"ai",A7o:"ai",A7s:"ai",A8o:"ai",A8s:"r",A9o:"ai",A9s:"r",AJo:"ai",AJs:"r",AKo:"r",AKs:"r",AQo:"ai",AQs:"r",ATo:"ai",ATs:"r",J8s:"r",J9s:"ai",JTo:"r",JTs:"ai",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"ai",KJo:"ai",KJs:"r",KQo:"ai",KQs:"r",KTo:"r",KTs:"r",Q8s:"r",Q9s:"ai",QJo:"ai",QJs:"r",QTo:"r",QTs:"ai",T8s:"ai",T9s:"ai"},
+  14: {"22":"ai","33":"ai","44":"ai","55":"ai","66":"r","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","87s":"r","97s":"r","98s":"r",A2s:"ai",A3s:"ai",A4o:"r",A4s:"ai",A5o:"r",A5s:"ai",A6o:"r",A6s:"ai",A7o:"ai",A7s:"r",A8o:"ai",A8s:"r",A9o:"ai",A9s:"r",AJo:"r",AJs:"r",AKo:"r",AKs:"r",AQo:"ai",AQs:"r",ATo:"ai",ATs:"r",J8s:"r",J9s:"ai",JTo:"r",JTs:"ai",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"ai",KJo:"ai",KJs:"r",KQo:"ai",KQs:"r",KTo:"r",KTs:"r",Q7s:"r",Q8s:"r",Q9s:"r",QJo:"r",QJs:"r",QTo:"r",QTs:"ai",T8s:"r",T9s:"ai"},
+  16: {"22":"ai","33":"ai","44":"ai","55":"r","66":"r","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","65s":"r","76s":"r","86s":"r","87s":"r","97s":"r","98s":"r",A2s:"r",A3s:"r",A4s:"ai",A5o:"r",A5s:"ai",A6o:"r",A6s:"ai",A7o:"r",A7s:"r",A8o:"ai",A8s:"r",A9o:"ai",A9s:"r",AJo:"r",AJs:"r",AKo:"r",AKs:"r",AQo:"r",AQs:"r",ATo:"r",ATs:"r",J7s:"r",J8s:"r",J9s:"r",JTo:"r",JTs:"ai",K4s:"r",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"r",KJo:"r",KJs:"r",KQo:"r",KQs:"r",KTo:"r",KTs:"r",Q7s:"r",Q8s:"r",Q9s:"r",QJo:"r",QJs:"r",QTo:"r",QTs:"ai",T7s:"r",T8s:"r",T9s:"r"},
+  18: {"33":"ai","44":"r","55":"r","66":"r","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","65s":"r","76s":"r","86s":"r","87s":"r","96s":"r","97s":"r","98s":"r",A2s:"r",A3s:"r",A4s:"r",A5o:"r",A5s:"r",A6s:"r",A7o:"r",A7s:"r",A8o:"r",A8s:"r",A9o:"r",A9s:"r",AJo:"r",AJs:"r",AKo:"r",AKs:"r",AQo:"r",AQs:"r",ATo:"r",ATs:"r",J7s:"r",J8s:"r",J9s:"r",JTo:"r",JTs:"r",K4s:"r",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"r",KJo:"r",KJs:"r",KQo:"r",KQs:"r",KTo:"r",KTs:"r",Q5s:"r",Q6s:"r",Q7s:"r",Q8s:"r",Q9o:"r",Q9s:"r",QJo:"r",QJs:"r",QTo:"r",QTs:"r",T7s:"r",T8s:"r",T9o:"r",T9s:"r"},
+  20: {"44":"r","55":"r","66":"r","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","54s":"r","65s":"r","75s":"r","76s":"r","86s":"r","87s":"r","96s":"r","97s":"r","98s":"r",A2s:"r",A3s:"r",A4s:"r",A5o:"r",A5s:"r",A6s:"r",A7o:"r",A7s:"r",A8o:"r",A8s:"r",A9o:"r",A9s:"r",AJo:"r",AJs:"r",AKo:"r",AKs:"r",AQo:"r",AQs:"r",ATo:"r",ATs:"r",J7s:"r",J8s:"r",J9s:"r",JTo:"r",JTs:"r",K3s:"r",K4s:"r",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"r",KJo:"r",KJs:"r",KQo:"r",KQs:"r",KTo:"r",KTs:"r",Q5s:"r",Q6s:"r",Q7s:"r",Q8s:"r",Q9o:"r",Q9s:"r",QJo:"r",QJs:"r",QTo:"r",QTs:"r",T7s:"r",T8s:"r",T9o:"r",T9s:"r"},
+  22: {"33":"r","44":"r","55":"r","66":"r","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","54s":"r","65s":"r","75s":"r","76s":"r","85s":"r","86s":"r","87s":"r","96s":"r","97s":"r","98s":"r",A2s:"r",A3s:"r",A4s:"r",A5o:"r",A5s:"r",A6o:"r",A6s:"r",A7o:"r",A7s:"r",A8o:"r",A8s:"r",A9o:"r",A9s:"r",AJo:"r",AJs:"r",AKo:"r",AKs:"r",AQo:"r",AQs:"r",ATo:"r",ATs:"r",J6s:"r",J7s:"r",J8s:"r",J9o:"r",J9s:"r",JTo:"r",JTs:"r",K3s:"r",K4s:"r",K5s:"r",K6s:"r",K7s:"r",K8s:"r",K9o:"r",K9s:"r",KJo:"r",KJs:"r",KQo:"r",KQs:"r",KTo:"r",KTs:"r",Q5s:"r",Q6s:"r",Q7s:"r",Q8s:"r",Q9o:"r",Q9s:"r",QJo:"r",QJs:"r",QTo:"r",QTs:"r",T7s:"r",T8s:"r",T9o:"r",T9s:"r"},
+  25: {"33":"r","44":"r","55":"r","66":"r","77":"r","88":"r","99":"r",AA:"r",JJ:"r",KK:"r",QQ:"r",TT:"r","54s":"r","64s":"r","65s":"r","75s":"r","76s":"r","85s":"r","86s":"r","87s":"r","96s":"r","97s":"r","98s":"r",A2s:"r",A3s:"r",A4s:"r",A5o:"r",A5s:"r",A6o:"r",A6s:"r",A7o:"r",A7s:"r",A8o:"r",A8s:"r",A9o:"r",A9s:"r",AJo:"r",AJs:"r",AKo:"r",AKs:"r",AQo:"r",AQs:"r",ATo:"r",ATs:"r",J5s:"r",J6s:"r",J7s:"r",J8s:"r",J9o:"r",J9s:"r",JTo:"r",JTs:"r",K3s:"r",K4s:"r",K5s:"r",K6s:"r",K7s:"r",K8o:"r",K8s:"r",K9o:"r",K9s:"r",KJo:"r",KJs:"r",KQo:"r",KQs:"r",KTo:"r",KTs:"r",Q4s:"r",Q5s:"r",Q6s:"r",Q7s:"r",Q8s:"r",Q9o:"r",Q9s:"r",QJo:"r",QJs:"r",QTo:"r",QTs:"r",T6s:"r",T7s:"r",T8s:"r",T9o:"r",T9s:"r"},
+};
+
+export function btnOpenRange(bb: number): MixRange {
+  const depth = Math.max(1, Math.min(30, Math.round(bb)));
+  let best = DEPTHS[0]!;
+  for (const key of DEPTHS) {
+    const gap = Math.abs(key - depth);
+    const bestGap = Math.abs(best - depth);
+    if (gap < bestGap || (gap === bestGap && key > best)) best = key;
+  }
+  const src = KNOWN[best]!;
+  const out: MixRange = {};
+  for (const hand of ALL) {
+    const mix = emptyMix();
+    const act = src[hand] ?? "f";
+    if (act === "ai") mix.allin = 100;
+    else if (act === "r") mix.raise = 100;
+    else mix.fold = 100;
+    out[hand] = mix;
+  }
+  return out;
+}

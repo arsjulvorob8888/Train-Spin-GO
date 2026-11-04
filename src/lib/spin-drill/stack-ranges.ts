@@ -5,6 +5,7 @@ import { huBbJamRange } from "./hu-bb-jam";
 import { sbVsBtnRaiseRange } from "./sb-vs-btn-raise";
 import { bbVsBtnRaiseRange } from "./bb-vs-btn-raise";
 import { sbFoldRange } from "./sb-fold";
+import { btnOpenRange } from "./btn-open";
 import { ALL, handAt } from "./legacy-ranges";
 import { emptyMix, mixOf, primary, type MixAction, type MixRange } from "./mix";
 
@@ -292,7 +293,7 @@ export function rangeAtStack(base: MixRange, spotId: string, bb: number): MixRan
   if (spotId === "sb_raise") return sbVsBtnRaiseRange(depth);
   if (spotId === "bb_vs_btn_raise") return bbVsBtnRaiseRange(depth);
   if (depth === 15) return base;
-  if (spotId === "btn") return openRange(base, depth, false);
+  if (spotId === "btn") return btnOpenRange(depth);
   if (spotId === "sb_fold") return sbFoldRange(depth);
   if (spotId.includes("jam") || spotId === "sb_push") return callRange(base, depth);
   return shiftRange(base, depth);

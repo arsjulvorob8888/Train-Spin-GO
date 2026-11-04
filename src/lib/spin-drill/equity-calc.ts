@@ -202,6 +202,7 @@ export function chartRaiseTo(spotId: string, bb: number): number | null {
 /** The raise written on the button and in the solver. Same number in both places. */
 export function sizedRaise(spotId: string, fallback: string, bb: number, paintSize?: string | null): string {
   if (paintSize && /^\d+(?:\.\d+)?$/.test(paintSize)) return `Raise ${paintSize}`;
+  if (spotId === "btn") return "Raise 2";
   if (spotId === "sb_fold") {
     if (bb <= 15) return "Raise 2";
     if (bb <= 22) return "Raise 2.5";
