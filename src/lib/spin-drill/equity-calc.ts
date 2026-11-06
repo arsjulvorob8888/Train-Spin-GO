@@ -216,8 +216,16 @@ export function sizedRaise(spotId: string, fallback: string, bb: number, paintSi
     if (bb <= 20) return "Raise 5";
     return "Raise 5.5";
   }
-  if (spotId === "btn" || spotId === "hu_sb" || spotId === "sb_raise") {
+  if (spotId === "btn" || spotId === "hu_sb") {
     return bb >= 20 ? "Raise 2.5" : "Raise 2";
+  }
+  if (spotId === "sb_raise") {
+    // GTOBase BTNvsSB: SB 3-bet size by depth
+    if (bb <= 11) return "Raise 2"; // shallow: raise is all-in
+    if (bb <= 14) return "Raise 4";
+    if (bb <= 18) return "Raise 4";
+    if (bb <= 22) return "Raise 5";
+    return "Raise 5.5";
   }
   const found = fallback.match(/(\d+(?:\.\d+)?)/);
   if (found) return `Raise ${found[1]}`;
