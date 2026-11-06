@@ -393,6 +393,18 @@ export function RangeExperiment({
   const [autoplay, setAutoplay] = useState(false);
   const [splash, setSplash] = useState<Splash | null>(null);
   const [doneSpots, setDoneSpots] = useState<string[]>([]);
+  const [selectedSpots, setSelectedSpots] = useState<string[]>(() => {
+    const saved = localStorage.getItem("spin-game-spots");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  function toggleSpot(id: string) {
+    setSelectedSpots((prev) => {
+      const next = prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id];
+      localStorage.setItem("spin-game-spots", JSON.stringify(next));
+      return next;
+    });
+  }
   const spot = SPOTS.find((s) => s.id === spotId) ?? SPOTS[0]!;
   const spotRef = useRef(spotId);
   const bbRef = useRef(bb);
@@ -412,7 +424,9 @@ export function RangeExperiment({
   function cleared() {
     const depth = bbRef.current;
     const current = SPOTS.find((s) => s.id === spotRef.current) ?? SPOTS[0]!;
-    const mates = spotsIn(current.group);
+    const mates = selectedSpots.length > 0
+      ? SPOTS.filter((s) => selectedSpots.includes(s.id))
+      : spotsIn(current.group);
     const mark = `${depth}:${current.id}`;
     const owned = doneSpots.includes(mark) ? doneSpots : [...doneSpots, mark];
     setDoneSpots(owned);
@@ -534,21 +548,39 @@ export function RangeExperiment({
           </button>
         ))}
       </div>
-      <div className="flex gap-1.5 overflow-x-auto">
+      <div className="flex flex-wrap gap-1.5">
         {spotsIn(group).map((s) => (
-          <button
+          <label
             key={s.id}
-            type="button"
-            onClick={() => onSpot(s.id)}
             className={cn(
-              "h-11 shrink-0 rounded-full border px-3 text-sm",
+              "flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm",
               s.id === spot.id ? "border-fg bg-fg text-bg" : "border-border bg-surface-2 text-muted",
             )}
           >
-            {s.title}
-          </button>
+            <input
+              type="checkbox"
+              checked={selectedSpots.includes(s.id)}
+              onChange={() => toggleSpot(s.id)}
+              className="accent-current"
+            />
+            <button type="button" onClick={() => onSpot(s.id)} className="text-left">
+              {s.title}
+            </button>
+          </label>
         ))}
       </div>
+      {selectedSpots.length > 0 && (
+        <p className="text-sm text-muted">
+          Выбрано для тренировки: {selectedSpots.length} спот{selectedSpots.length > 1 ? "а" : ""}
+          <button
+            type="button"
+            onClick={() => { setSelectedSpots([]); localStorage.removeItem("spin-game-spots"); }}
+            className="ml-2 text-fg underline"
+          >
+            сбросить
+          </button>
+        </p>
+      )}
       <p className="text-sm text-muted">{stackNote(bb)}</p>
       <Sapper key={`${spot.id}:${bb}`} spot={spot} bb={bb} range={range} onBb={onBb} autoplay={autoplay} onClear={cleared} />
       {splash ? (
