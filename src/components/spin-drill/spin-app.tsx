@@ -854,9 +854,9 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
   }
 
   function nudgeStack(delta: number) {
-    const next = Math.min(30, Math.max(1, Math.round(bbKey.current) + delta));
-    if (next === bbKey.current) return;
-    bbKey.current = next;
+    const shown = Math.round(depth.bb);
+    const next = Math.min(30, Math.max(1, shown + delta));
+    if (next === shown) return;
     tuneStack(next);
   }
 

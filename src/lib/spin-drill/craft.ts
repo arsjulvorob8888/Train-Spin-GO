@@ -621,6 +621,7 @@ export function quotePot(opts: {
   bb: number;
   raiseTo: number | null;
   streetBet: number | null;
+  customBets?: Record<string, number>;
   line: Line;
   boardLength: number;
   hero: Seat;
@@ -632,19 +633,25 @@ export function quotePot(opts: {
   const streets = (["flop", "turn", "river"] as const).slice(0, opts.boardLength >= 5 ? 3 : opts.boardLength === 4 ? 2 : 1);
   for (const street of streets) {
     let bet = 0;
-    for (const act of opts.line[street]) {
+    const acts = opts.line[street];
+    for (let i = 0; i < acts.length; i++) {
+      const act = acts[i]!;
       if (act.action === "check" || act.action === "fold") continue;
       if (act.action === "call") {
         pot = round(pot + bet);
         bet = 0;
         continue;
       }
-      const sized = opts.streetBet != null && opts.streetBet > 0 && act === opts.line[street][opts.line[street].length - 1] ? opts.streetBet : null;
+      const key = `${street}-${i}`;
+      const custom = opts.customBets?.[key];
+      const sized = custom != null && custom > 0
+        ? custom
+        : (opts.streetBet != null && opts.streetBet > 0 && i === acts.length - 1 ? opts.streetBet : null);
       const add = sized ?? (act.action === "allin" ? seatStack(act.seat, opts.bb) : (callSize(act.action, pot, seatStack(act.seat, opts.bb)) ?? 0));
       pot = round(pot + add);
       bet = add;
     }
-    const last = opts.line[street][opts.line[street].length - 1];
+    const last = acts[acts.length - 1];
     toCall = last && last.seat !== opts.hero && AGG.has(last.action) ? bet : 0;
   }
   return { pot, toCall };

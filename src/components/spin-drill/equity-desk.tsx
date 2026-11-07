@@ -28,7 +28,8 @@ type HandApi = {
   callText: string;
   setCallText: (value: string) => void;
   streetBet: string;
-  setStreetBet: (value: string) => void;
+  streetBets: Record<string, string>;
+  setStreetBet: (value: string, key: string) => void;
   place: "" | "hero" | "villain" | "split";
   setPlace: (value: "" | "hero" | "villain" | "split") => void;
   award: string;
@@ -130,7 +131,8 @@ export function HandProvider({
   const [guard, setGuard] = useState(false);
   const [potText, setPotTextState] = useState("");
   const [callText, setCallTextState] = useState("");
-  const [streetBet, setStreetBetState] = useState("");
+  const [streetBets, setStreetBetsState] = useState<Record<string, string>>({});
+  const streetBet = Object.values(streetBets).find((v) => v.trim()) ?? "";
   const [place, setPlace] = useState<"" | "hero" | "villain" | "split">("");
   const [award, setAwardState] = useState("");
   const [played, setPlayed] = useState("");
@@ -169,9 +171,9 @@ export function HandProvider({
     manual.current = true;
     setCallTextState(value);
   }
-  function setStreetBet(value: string) {
+  function setStreetBet(value: string, key: string) {
     manual.current = false;
-    setStreetBetState(value);
+    setStreetBetsState((prev) => ({ ...prev, [key]: value }));
   }
 
   useEffect(() => {
@@ -206,18 +208,24 @@ export function HandProvider({
 
   useEffect(() => {
     if (manual.current) return;
+    const customBets: Record<string, number> = {};
+    for (const [key, val] of Object.entries(streetBets)) {
+      const n = parseBb(val);
+      if (n != null && n > 0) customBets[key] = n;
+    }
     const quote = quotePot({
       spotId: spot.id,
       bb,
       raiseTo: parseBb(sizeText),
       streetBet: parseBb(streetBet),
+      customBets,
       line,
       boardLength: board.length,
       hero: spot.hero,
     });
     setPotTextState(trimNum(quote.pot));
     setCallTextState(quote.toCall > 0 ? trimNum(quote.toCall) : "");
-  }, [spot.id, bb, sizeText, streetBet, line, board.length, handNonce]);
+  }, [spot.id, bb, sizeText, streetBets, line, board.length, handNonce]);
 
   const shown = useMemo(() => {
     if (!hero) return null;
@@ -289,7 +297,7 @@ export function HandProvider({
     setLine(emptyLine());
     setPotTextState("");
     setCallTextState("");
-    setStreetBetState("");
+    setStreetBetsState({});
     setPlace("");
     placeRef.current = "";
     setAwardState("");
@@ -373,15 +381,7 @@ export function HandProvider({
 
   function syncPrice(next: Line) {
     manual.current = false;
-    const order = seatsInHand(spot.id, out);
-    const jammed = preflopAllin(spot.id);
-    const face = heroFacing(next, spot.hero, board.length, order, jammed);
-    if (!face) {
-      setStreetBetState("");
-      return;
-    }
-    const priced = facingPrice(face, spot.hero, bb, pot, stacks);
-    setStreetBetState(trimNum(priced.toCall));
+    // Raise sizes stay independent per action. Pot/toCall recompute from the current streetBets.
   }
 
   function archiveHand(acted = "") {
@@ -507,6 +507,7 @@ export function HandProvider({
     callText,
     setCallText,
     streetBet,
+    streetBets,
     setStreetBet,
     place,
     setPlace,
@@ -1260,7 +1261,7 @@ function StreetColumns({
   const jammed = preflopAllin(spotId);
   const acts = line[only];
   const status = streetStatus(seats, line, only, jammed);
-  const { potText, setStreetBet, streetBet, stacks } = useHand();
+  const { potText, setStreetBet, streetBets, stacks } = useHand();
   const raiseSized = (action: LineAction | null) => action === "bet33" || action === "bet66" || action === "betpot" || action === "raise";
   const cols: { seat: Seat; selected: LineAction | null; live: boolean }[] = acts.map((act) => ({
     seat: act.seat,
@@ -1316,7 +1317,7 @@ function StreetColumns({
                                 : "text-muted",
                       )}
                     >
-                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, streetBet, hint)}
+                      {bluffWanted ? hint : streetActionLabel(item.id, index === sizeAt, streetBets[`${only}-${index}`] ?? "", hint)}
                       {bluffWanted ? "" : wanted && !on ? " · солвер" : ""}
                     </button>
                   );
@@ -1332,13 +1333,14 @@ function StreetColumns({
               <div className="w-[11.5rem] shrink-0 rounded-lg border border-ok/60 bg-ok/5 p-1 text-[11px]">
                 <span className="block px-1 font-medium">Рейз {col.seat}, bb</span>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {[2, 2.5, 3, 4, 6, 8].map((size) => {
-                    const on = Number(streetBet.replace(",", ".")) === size;
+                  {[1, 2, 2.5, 3, 4, 6, 8].map((size) => {
+                    const key = `${only}-${index}`;
+                    const on = Number((streetBets[key] ?? "").replace(",", ".")) === size;
                     return (
                       <button
                         key={size}
                         type="button"
-                        onClick={() => setStreetBet(String(size))}
+                        onClick={() => setStreetBet(String(size), key)}
                         className={cn("h-8 rounded px-2 font-mono text-xs", on ? "bg-fg font-semibold text-bg" : "bg-surface-2 text-muted")}
                       >
                         {size}
@@ -1348,10 +1350,10 @@ function StreetColumns({
                 </div>
                 <input
                   inputMode="decimal"
-                  value={streetBet}
+                  value={streetBets[`${only}-${index}`] ?? ""}
                   placeholder="2"
                   aria-label={`Размер рейза ${col.seat}, bb`}
-                  onChange={(event) => setStreetBet(event.target.value)}
+                  onChange={(event) => setStreetBet(event.target.value, `${only}-${index}`)}
                   className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 font-mono text-sm text-fg"
                 />
                 <span className="mt-1 block px-1 leading-tight text-muted">Это рейз {col.seat}. Меняет цену колла и его диапазон.</span>
