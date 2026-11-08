@@ -6,7 +6,8 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
 import { continuePct, type MixAction } from "@/lib/spin-drill/mix";
 import { actionWord, spotsOf, type MttPack } from "@/lib/mtt/charts";
-import { bluffLine, chartOpenSize, chartThreeSize, nashLine, playAction, pricedAction, resolveLive, SEATS, sizeLine, type LiveNode, type MttSeat } from "@/lib/mtt/live";
+import { bluffLine, chartOpenSize, chartThreeSize, nashLine, playAction, pricedAction, resolveLive, SEATS, sizeLine, DEFAULT_ANTE, withAnte, type LiveNode, type MttSeat } from "@/lib/mtt/live";
+import { MTT_SPOTS, findMttSpot, seatLabel, type MttSpotDef } from "@/lib/mtt/spots";
 import { playBluffSting, playDrawSting, playHandSting } from "@/components/spin-drill/equity-desk";
 import { cn } from "@/lib/utils";
 
@@ -25,18 +26,18 @@ function chipsOf(n: number): number {
   return Math.max(0, Math.round(n * 10) / 10);
 }
 
-function freshStacks(depth: number): Stacks {
-  const next = Object.fromEntries(SEATS.map((seat) => [seat, depth])) as Stacks;
-  next.SB = chipsOf(depth - 0.5);
-  next.BB = chipsOf(depth - 1);
+function freshStacks(depth: number, ante = DEFAULT_ANTE): Stacks {
+  const next = Object.fromEntries(SEATS.map((seat) => [seat, withAnte(depth, ante)])) as Stacks;
+  next.SB = chipsOf(next.SB - 0.5);
+  next.BB = chipsOf(next.BB - 1);
   return next;
 }
 
-function rotateStacks(stacks: Stacks): Stacks {
+function rotateStacks(stacks: Stacks, ante = DEFAULT_ANTE): Stacks {
   const next = {} as Stacks;
   SEATS.forEach((seat, index) => {
     const from = SEATS[(index + SEATS.length - 1) % SEATS.length]!;
-    next[seat] = stacks[from];
+    next[seat] = withAnte(stacks[from], ante);
   });
   next.SB = chipsOf(next.SB - 0.5);
   next.BB = chipsOf(next.BB - 1);
@@ -74,6 +75,7 @@ export function MttDesk() {
   const [stacks, setStacks] = useState<Stacks>(() => freshStacks(30));
   const [tableBb, setTableBb] = useState(30);
   const [hero, setHero] = useState<MttSeat>("UTG");
+  const [catalogSpot, setCatalogSpot] = useState<string>("");
   const [pick, setPick] = useState<Record<string, Act>>({});
   const [klass, setKlass] = useState("");
   const [cards, setCards] = useState<Partial<Record<SlotId, Card>>>({});
@@ -295,6 +297,33 @@ export function MttDesk() {
         <button type="button" onClick={nextHand} className="h-11 rounded-full bg-ok px-4 text-sm font-semibold text-bg">
           Новая раздача
         </button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {(["RFI", "vsOpen", "vs3bet", "limp", "cold"] as const).map((g) => (
+          <button
+            key={g}
+            type="button"
+            onClick={() => setCatalogSpot("")}
+            className={cn("h-8 rounded-full border px-2 text-xs", !catalogSpot ? "border-fg bg-fg text-bg" : "border-border text-muted")}
+          >
+            {g}
+          </button>
+        ))}
+        {MTT_SPOTS.filter((s) => !catalogSpot || s.group === MTT_SPOTS.find((x) => x.id === catalogSpot)?.group).slice(0, 8).map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => {
+              setCatalogSpot(s.id);
+              setHero(s.hero);
+              setPick({});
+            }}
+            className={cn("h-8 rounded-full border px-2 text-xs", catalogSpot === s.id ? "border-ok bg-ok/15 text-ok" : "border-border text-muted")}
+            title={s.detail}
+          >
+            {s.title}
+          </button>
+        ))}
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-1">
         {SEATS.map((seat) => {

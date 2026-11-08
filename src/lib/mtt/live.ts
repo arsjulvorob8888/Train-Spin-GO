@@ -4,6 +4,19 @@ import { chartKey, type MttPack, type MttSpot } from "@/lib/mtt/charts";
 export const SEATS = ["UTG", "UTG1", "LJ", "HJ", "CO", "BTN", "SB", "BB"] as const;
 export type MttSeat = (typeof SEATS)[number];
 
+/** Typical MTT ante as fraction of BB. 0 = no ante. */
+export const DEFAULT_ANTE = 0.1;
+
+export function withAnte(stack: number, ante = DEFAULT_ANTE): number {
+  return Math.max(0, Math.round((stack - ante) * 10) / 10);
+}
+
+export function effectiveStack(stacks: Record<MttSeat, number>, seats: MttSeat[]): number {
+  if (!seats.length) return 0;
+  return Math.min(...seats.map((s) => stacks[s]));
+}
+
+
 export type LiveKind = "walk" | "open" | "defend" | "limp" | "three" | "cold";
 
 export type LiveNode = {
