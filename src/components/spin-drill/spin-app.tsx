@@ -388,7 +388,8 @@ function SeatStacks({
   );
 }
 
-function EndSpin() {
+function GameControl({ onStart }: { onStart: () => void }) {
+  const { resetHand } = useHand();
   const [live, setLive] = useState(false);
   useEffect(() => {
     const sync = () => setLive(Boolean(readBlind()));
@@ -396,25 +397,11 @@ function EndSpin() {
     window.addEventListener("spin-blind", sync);
     return () => window.removeEventListener("spin-blind", sync);
   }, []);
-  if (!live) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => window.dispatchEvent(new Event("spin-end-ask"))}
-      className="h-11 shrink-0 rounded-full border-2 border-orange-500 bg-orange-500/20 px-3 text-sm font-semibold text-orange-300"
-    >
-      Спин окончен
-    </button>
-  );
-}
-
-function NewGame({ onStart }: { onStart: () => void }) {
-  const { resetHand } = useHand();
   return (
     <button
       type="button"
       onClick={() => {
-        if (readBlind()) {
+        if (live) {
           window.dispatchEvent(new Event("spin-end-ask"));
           return;
         }
@@ -423,9 +410,14 @@ function NewGame({ onStart }: { onStart: () => void }) {
         window.dispatchEvent(new Event("spin-new-game"));
         onStart();
       }}
-      className="h-11 shrink-0 rounded-full border border-fg px-3 text-sm font-semibold text-fg"
+      className={cn(
+        "h-11 shrink-0 rounded-full px-3 text-sm font-semibold",
+        live
+          ? "border-2 border-orange-500 bg-orange-500/20 text-orange-300"
+          : "border border-fg text-fg",
+      )}
     >
-      Новая игра
+      {live ? "Спин окончен" : "Новая игра"}
     </button>
   );
 }
@@ -1147,8 +1139,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                         <span className="text-[9px] font-medium uppercase leading-none text-ok">Эфф.</span>
                         <span className="font-mono text-lg font-semibold leading-none">{depth.bb}</span>
                       </div>
-                      <NewGame onStart={beginSpin} />
-                      <EndSpin />
+                      <GameControl onStart={beginSpin} />
                     </>
                   }
                 />
