@@ -8,6 +8,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
+// @ts-expect-error JS module alongside the TS vite config
+import { connectOwnerGate } from "./server/owner-gate.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
@@ -30,6 +32,16 @@ function hasGlobbedMigrations(root: string): boolean {
  * migrations — no schema to apply — skips it entirely rather than paying for a
  * PGLite instance it never queries.
  */
+function ownerGatePlugin(): Plugin {
+  return {
+    name: "app-builder:owner-gate",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(connectOwnerGate());
+    },
+  };
+}
+
 function pgliteBootstrapPlugin(): Plugin {
   return {
     name: "app-builder:pglite-bootstrap",
@@ -158,6 +170,7 @@ export default defineConfig(({ command, isPreview }) => ({
   },
   resolve: { tsconfigPaths: true },
   plugins: [
+    ownerGatePlugin(),
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
@@ -173,6 +186,10 @@ export default defineConfig(({ command, isPreview }) => ({
             // Grok/Vercel production + `vite preview` stay on the vercel preset.
             // Render sets NITRO_PRESET=node-server (see render.yaml / build:render).
             preset: isPreview ? "vercel" : process.env.NITRO_PRESET || "vercel",
+            // Public files and client bundles must not be sent before the owner
+            // gate. The gate serves them after the session checks.
+            serveStatic: false,
+            serverAssets: [{ baseName: "owner-private", dir: "./server/private" }],
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

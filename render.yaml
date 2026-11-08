@@ -11,7 +11,8 @@ services:
     autoDeployTrigger: commit
     buildCommand: npm install && npm run build:render
     startCommand: node .output/server/index.mjs
-    healthCheckPath: /
+    # / is the private app. Render must probe /healthz or a 401 fails the deploy.
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -19,3 +20,9 @@ services:
         value: node-server
       - key: HOST
         value: "0.0.0.0"
+      # Set both in the Render dashboard. Do not commit the values.
+      # node scripts/owner-auth-setup.mjs prints them on your machine.
+      - key: OWNER_PASSWORD_HASH
+        sync: false
+      - key: OWNER_SESSION_SECRET
+        sync: false

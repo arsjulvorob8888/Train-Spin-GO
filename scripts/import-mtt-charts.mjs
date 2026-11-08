@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { applyCapture, auditPack, planCapture } from "./mtt-pack.mjs";
 
-const packPath = new URL("../public/mtt-8max.json", import.meta.url);
+const packPath = new URL("../server/private/mtt-8max.json", import.meta.url);
 
 function arg(name) {
   const index = process.argv.indexOf(name);
