@@ -1,6 +1,13 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+if (!process.argv.includes("--replace-pack")) {
+  console.error(
+    "Refusing to overwrite public/mtt-8max.json. This rebuilds every chart from poker-hand-review and drops the GTObase partial. Add a verified capture with scripts/import-mtt-charts.mjs.",
+  );
+  process.exit(1);
+}
+
 const root = "/tmp/phr/gto-preflop/mtt/8max/charts";
 const index = JSON.parse(readFileSync(join(root, "index.json"), "utf8"));
 const charts = {};

@@ -1,0 +1,22 @@
+{
+  "library": "MTT 8-max",
+  "viewerId": 110,
+  "query": 40,
+  "antePerPlayer": 0.12,
+  "sb": 0.5,
+  "bb": 1,
+  "model": null,
+  "mode": "clipboard",
+  "semantics": "unverified",
+  "charts": [
+    {
+      "key": "40:rfi:UTG",
+      "hero": "UTG",
+      "line": "raise first in",
+      "actions": [
+        { "label": "Raise to 2.00", "aggregatePct": 17.07, "clipboard": "" },
+        { "label": "Fold", "aggregatePct": 82.93, "clipboard": "" }
+      ]
+    }
+  ]
+}
