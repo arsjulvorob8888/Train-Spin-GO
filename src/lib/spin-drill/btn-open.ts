@@ -4,6 +4,12 @@ import { emptyMix, type MixRange } from "./mix";
 /** BTN first-in open. One color: the biggest slice on the GTOBase chart. */
 const DEPTHS = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 25];
 
+/** 
+ * Updated: 2026-11-08
+ * Source: GTOBase dominant action (bot pixel classification from screenshots)
+ * Data: spin_go_HU_3max_dominant_TEXT.zip (IMAGE_DOMINANT status only)
+ * Calibration: 92.86% match vs verified exact rows
+ */
 const KNOWN: Record<number, Record<string, "f" | "r" | "ai">> = {
   8: {"AA":"ai","AKs":"ai","AQs":"ai","AJs":"ai","ATs":"ai","A9s":"ai","A8s":"ai","A7s":"ai","A6s":"ai","A5s":"ai","A4s":"ai","A3s":"ai","A2s":"ai","AKo":"ai","KK":"ai","KQs":"ai","KJs":"ai","KTs":"ai","K9s":"ai","K8s":"ai","K7s":"ai","K6s":"ai","K5s":"ai","K4s":"ai","AQo":"ai","KQo":"ai","QQ":"ai","QJs":"ai","QTs":"ai","Q9s":"ai","Q8s":"ai","AJo":"ai","KJo":"ai","QJo":"ai","JJ":"ai","JTs":"ai","J9s":"ai","J8s":"ai","ATo":"ai","KTo":"ai","QTo":"ai","JTo":"ai","TT":"ai","T9s":"ai","T8s":"ai","T7s":"ai","A9o":"ai","K9o":"ai","99":"ai","98s":"ai","97s":"ai","A8o":"ai","88":"ai","87s":"ai","86s":"ai","A7o":"ai","77":"ai","76s":"ai","A6o":"ai","66":"ai","65s":"ai","A5o":"ai","55":"ai","A4o":"ai","44":"ai","A3o":"ai","33":"ai","A2o":"ai","22":"ai"},
   9: {"AA":"r","AKs":"ai","AQs":"r","AJs":"ai","ATs":"ai","A9s":"ai","A8s":"ai","A7s":"ai","A6s":"ai","A5s":"ai","A4s":"ai","A3s":"ai","A2s":"ai","AKo":"ai","KK":"r","KQs":"ai","KJs":"ai","KTs":"ai","K9s":"ai","K8s":"ai","K7s":"ai","K6s":"ai","K5s":"ai","AQo":"ai","KQo":"ai","QJs":"ai","QTs":"ai","Q9s":"ai","Q8s":"ai","Q7s":"r","AJo":"ai","KJo":"ai","QJo":"ai","JJ":"ai","JTs":"r","J9s":"ai","J8s":"ai","ATo":"ai","KTo":"ai","QTo":"ai","JTo":"ai","TT":"ai","T8s":"ai","T7s":"ai","A9o":"ai","K9o":"r","99":"ai","98s":"ai","97s":"ai","A8o":"ai","88":"ai","87s":"ai","86s":"ai","A7o":"ai","77":"ai","76s":"ai","A6o":"ai","66":"ai","A5o":"ai","55":"ai","A4o":"ai","44":"ai","A3o":"ai","33":"ai","A2o":"ai","22":"ai"},

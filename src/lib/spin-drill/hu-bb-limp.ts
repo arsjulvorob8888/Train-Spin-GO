@@ -58,6 +58,11 @@ export const SIZE_HEX: Record<BbSize, string> = {
 
 const DEPTHS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 25, 30];
 
+/** 
+ * Updated: 2026-11-08 (metadata only; ranges from previous GTOBase extraction)
+ * Source: GTOBase dominant action (earlier pixel classification)
+ * Note: New full extraction available in spin_go_HU_3max_dominant_TEXT.zip
+ */
 const KNOWN: Record<number, Record<string, BbSize>> = {
   5: {AKs:"ai",AQs:"ai",ATs:"ai",A9s:"ai",A8s:"ai",A7s:"ai",A6s:"ai",A5s:"ai",A4s:"ai",A3s:"ai",A2s:"ai",AKo:"ai",KQs:"ai",KJs:"ai",KTs:"ai",K9s:"ai",K8s:"ai",K7s:"ai",K6s:"ai",K5s:"ai",K4s:"ai",K3s:"ai",K2s:"ai",AQo:"ai",KQo:"ai",QJs:"2",Q9s:"ai",Q8s:"ai",Q7s:"ai",Q6s:"ai",Q5s:"ai",Q4s:"ai",Q3s:"ai",Q2s:"ai",AJo:"ai",KJo:"ai",QJo:"ai",JJ:"2",J8s:"ai",J7s:"ai",J6s:"ai",J5s:"ai",J4s:"ai",J3s:"ai",J2s:"ai",ATo:"ai",KTo:"ai",QTo:"ai",TT:"2",T7s:"ai",A9o:"ai",K9o:"ai",Q9o:"ai",A8o:"ai",K8o:"ai",Q8o:"ai",J8o:"ai",A7o:"ai",K7o:"ai",Q7o:"ai",J7o:"ai",T7o:"ai",A6o:"ai",K6o:"ai",Q6o:"ai",J6o:"ai",A5o:"ai",K5o:"ai",Q5o:"ai",J5o:"ai",A4o:"ai",K4o:"ai",Q4o:"ai",J4o:"ai",A3o:"ai",K3o:"ai",Q3o:"ai",J3o:"ai",A2o:"ai",K2o:"ai",Q2o:"ai",J2o:"ai","22":"ai"},
   6: {AA:"2",ATs:"2",A9s:"ai",A8s:"ai",A7s:"ai",A2s:"ai",AKo:"ai",KK:"2",K8s:"ai",K7s:"ai",K3s:"ai",K2s:"ai",AQo:"ai",KQo:"ai",Q7s:"ai",Q2s:"ai",AJo:"ai",KJo:"ai",J2s:"ai",ATo:"ai",KTo:"ai",QTo:"ai",TT:"2",T2s:"ai",A9o:"ai",K9o:"ai",Q9o:"ai","99":"2",A8o:"ai",K8o:"ai",Q8o:"ai",A7o:"ai",K7o:"ai",Q7o:"ai",A6o:"ai",K6o:"ai",Q6o:"ai",A5o:"ai",K5o:"ai",Q5o:"ai",J5o:"ai",T5o:"ai",A4o:"ai",K4o:"ai",Q4o:"ai",J4o:"ai",T4o:"ai",A3o:"ai",K3o:"ai",Q3o:"ai",J3o:"ai",T3o:"ai",A2o:"ai",K2o:"ai",Q2o:"ai",J2o:"ai",T2o:"ai"},

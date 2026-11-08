@@ -4,6 +4,12 @@ import { emptyMix, type MixRange } from "./mix";
 /** SB facing a BTN open to 2bb. One color: the biggest slice on the GTOBase chart. */
 const DEPTHS = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 25];
 
+/** 
+ * Updated: 2026-11-08
+ * Source: GTOBase dominant action (bot pixel classification from screenshots)
+ * Data: spin_go_HU_3max_dominant_TEXT.zip (IMAGE_DOMINANT status only)
+ * Calibration: 92.86% match vs verified exact rows
+ */
 const KNOWN: Record<number, Record<string, "f" | "c" | "r" | "ai">> = {
   8: {"AA":"ai","AKs":"ai","AQs":"ai","AJs":"ai","ATs":"ai","A9s":"ai","A8s":"ai","A7s":"ai","A6s":"ai","A5s":"ai","A4s":"ai","A3s":"ai","A2s":"ai","AKo":"ai","KK":"ai","KQs":"ai","KJs":"ai","KTs":"ai","K9s":"ai","AQo":"ai","KQo":"ai","QQ":"ai","QJs":"ai","QTs":"ai","AJo":"ai","KJo":"ai","JJ":"ai","ATo":"ai","KTo":"ai","TT":"ai","A9o":"ai","99":"ai","A8o":"ai","88":"ai","A7o":"ai","77":"ai","A6o":"ai","66":"ai","A5o":"ai","55":"ai","44":"ai"},
   9: {"AA":"ai","AKs":"ai","AQs":"ai","AJs":"ai","ATs":"ai","A9s":"ai","A8s":"ai","A7s":"ai","A6s":"ai","A5s":"ai","A4s":"ai","A3s":"ai","A2s":"ai","AKo":"ai","KK":"ai","KQs":"ai","KJs":"ai","KTs":"ai","AQo":"ai","KQo":"ai","QQ":"ai","QJs":"ai","QTs":"ai","AJo":"ai","KJo":"ai","JJ":"ai","ATo":"ai","TT":"ai","A9o":"ai","99":"ai","A8o":"ai","88":"ai","A7o":"ai","77":"ai","66":"ai","A5o":"ai","55":"ai","A4o":"ai","A3o":"ai"},
