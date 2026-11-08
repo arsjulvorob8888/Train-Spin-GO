@@ -76,6 +76,7 @@ export function MttDesk() {
   const [tableBb, setTableBb] = useState(30);
   const [hero, setHero] = useState<MttSeat>("UTG");
   const [catalogSpot, setCatalogSpot] = useState<string>("");
+  const [spotGroup, setSpotGroup] = useState<"RFI" | "vsOpen" | "vs3bet" | "limp" | "cold">("RFI");
   const [pick, setPick] = useState<Record<string, Act>>({});
   const [klass, setKlass] = useState("");
   const [cards, setCards] = useState<Partial<Record<SlotId, Card>>>({});
@@ -303,13 +304,18 @@ export function MttDesk() {
           <button
             key={g}
             type="button"
-            onClick={() => setCatalogSpot("")}
-            className={cn("h-8 rounded-full border px-2 text-xs", !catalogSpot ? "border-fg bg-fg text-bg" : "border-border text-muted")}
+            onClick={() => {
+              setSpotGroup(g);
+              setCatalogSpot("");
+            }}
+            className={cn("h-8 rounded-full border px-2 text-xs", spotGroup === g ? "border-fg bg-fg text-bg" : "border-border text-muted")}
           >
             {g}
           </button>
         ))}
-        {MTT_SPOTS.filter((s) => !catalogSpot || s.group === MTT_SPOTS.find((x) => x.id === catalogSpot)?.group).slice(0, 8).map((s) => (
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {MTT_SPOTS.filter((s) => s.group === spotGroup).map((s) => (
           <button
             key={s.id}
             type="button"
