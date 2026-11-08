@@ -17,3 +17,5 @@ attachments
 .node_modules.lock
 *.local
 AGENTS.md
+# Local GTObase clipboard captures. Keep account data and unverified dumps out of git.
+tmp/gtobase/

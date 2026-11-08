@@ -464,7 +464,7 @@ export function MttDesk() {
         <div className="flex w-full max-w-[560px] items-stretch gap-2 select-none">
           <div className="min-w-0 flex-1">
             {node ? <MixGrid compact range={node.range} selected={dealt || null} onPick={setKlass} bb={depth.chart} /> : <p className="text-sm text-muted">Рейндж появится, когда ход дойдёт до вас.</p>}
-            {node ? <p className="mt-2 text-xs text-muted">В игре {continuePct(node.range, ALL).toFixed(1)}% рук. Один цвет — преобладающее действие. {node.exact ? `Чарт ${node.stackUsed}bb.` : `Приближение, ближайший чарт ${node.stackUsed}bb.`} Источник: GTObase.com (dominant, 2026-11-08).</p> : null}
+            {node ? <p className="mt-2 text-xs text-muted">В игре {continuePct(node.range, ALL).toFixed(1)}% рук. Один цвет — преобладающее действие. {node.exact ? `Чарт ${node.stackUsed}bb.` : `Приближение, ближайший чарт ${node.stackUsed}bb.`}</p> : null}
           </div>
           <MttRail
             bb={tableBb}
