@@ -22,7 +22,8 @@ export function rangeMeta(spotId: string): RangeMeta {
   return META[spotId] ?? DEFAULT;
 }
 
+/** Date under the chart title. The source name stays on `rangeMeta()` and is not printed. */
 export function rangeMetaText(spotId: string): string {
   const m = rangeMeta(spotId);
-  return `Обновлено ${m.updated} · ${m.source}`;
+  return `Обновлено ${m.updated}`;
 }
