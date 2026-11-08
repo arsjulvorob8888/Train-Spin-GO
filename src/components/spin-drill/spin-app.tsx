@@ -1070,11 +1070,6 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
             <button type="button" className="text-sm text-muted underline" onClick={() => saveDoc("/spin-go-anchors.docx", "spin-go-anchors.docx")}>
               Скачать якоря
             </button>
-            <form method="post" action="/api/owner/logout" className="inline">
-              <button type="submit" className="text-sm text-muted underline">
-                Выйти
-              </button>
-            </form>
           </div>
         </div>
         <nav className="flex flex-wrap rounded-lg bg-surface p-1">

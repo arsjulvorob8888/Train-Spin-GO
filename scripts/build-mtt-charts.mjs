@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 if (!process.argv.includes("--replace-pack")) {
   console.error(
-    "Refusing to overwrite server/private/mtt-8max.json. This rebuilds every chart from poker-hand-review and drops the GTObase partial. Add a verified capture with scripts/import-mtt-charts.mjs.",
+    "Refusing to overwrite public/mtt-8max.json. This rebuilds every chart from poker-hand-review and drops the GTObase partial. Add a verified capture with scripts/import-mtt-charts.mjs.",
   );
   process.exit(1);
 }
@@ -44,5 +44,5 @@ const out = {
   stacks,
   charts,
 };
-writeFileSync(new URL("../server/private/mtt-8max.json", import.meta.url), JSON.stringify(out));
+writeFileSync(new URL("../public/mtt-8max.json", import.meta.url), JSON.stringify(out));
 console.log("charts", Object.keys(charts).length, "stacks", stacks.join(","));

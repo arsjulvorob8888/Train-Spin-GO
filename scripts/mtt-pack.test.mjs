@@ -16,7 +16,7 @@ import {
   planCapture,
 } from "./mtt-pack.mjs";
 
-const packPath = new URL("../server/private/mtt-8max.json", import.meta.url);
+const packPath = new URL("../public/mtt-8max.json", import.meta.url);
 const pack = JSON.parse(readFileSync(packPath, "utf8"));
 const PACK_HASH = chartsHash(pack.charts);
 
