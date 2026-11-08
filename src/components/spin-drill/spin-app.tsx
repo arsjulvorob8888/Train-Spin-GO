@@ -43,7 +43,7 @@ import {
   spotStat,
   type Store,
 } from "@/lib/spin-drill/stats";
-import { sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
+import { sizeCaption, paintHex, SIZE_ORDER, type BbSize } from "@/lib/spin-drill/hu-bb-limp";
 import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
 import { rangeMetaText } from "@/lib/spin-drill/range-meta";
 import { Consultants } from "@/components/spin-drill/consultants";
@@ -501,7 +501,31 @@ function StackType({ bb, onChange }: { bb: number; onChange: (bb: number) => voi
   );
 }
 
-function Legend({ spot }: { spot: SpotDef }) {
+function Legend({ spot, paint, bb }: { spot: SpotDef; paint?: Record<string, string> | null; bb?: number }) {
+  // When the chart uses size paint, show one legend with the actual cell colors.
+  if (paint && bb != null) {
+    const used = new Set(Object.values(paint));
+    const sizes = SIZE_ORDER.filter((s) => used.has(s));
+    if (sizes.length) {
+      return (
+        <div className="flex flex-wrap gap-3 text-xs text-muted">
+          {sizes.map((size) => {
+            const hex = paintHex(size);
+            return (
+              <span key={size} className="inline-flex items-center gap-1.5">
+                <i
+                  className="size-2.5 rounded-sm"
+                  style={hex ? { background: hex } : undefined}
+                />
+                {sizeCaption(size, bb)}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+  }
+  // Standard action legend
   return (
     <div className="flex flex-wrap gap-3 text-xs text-muted">
       {spot.actions.map((a) => (
@@ -1270,7 +1294,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                     </label>
                   </div>
                 </div>
-                <Legend spot={{ ...spot, labels }} />
+                <Legend spot={{ ...spot, labels }} paint={paint} bb={chartBb} />
                 <div className="mt-3 flex items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
                     <MixGrid range={range} paint={paint} bb={chartBb} selected={current} onPick={setSelected} />
