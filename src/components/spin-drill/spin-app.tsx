@@ -45,6 +45,7 @@ import {
 } from "@/lib/spin-drill/stats";
 import { sizeCaption } from "@/lib/spin-drill/hu-bb-limp";
 import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
+import { rangeMetaText } from "@/lib/spin-drill/range-meta";
 import { Consultants } from "@/components/spin-drill/consultants";
 import { CraftTable } from "@/components/spin-drill/craft-view";
 import { clearBlind, readBlind, retargetChips } from "@/lib/spin-drill/craft";
@@ -1244,7 +1245,10 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               <section className="rounded-2xl border border-border bg-surface p-4">
                 <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
                 <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <strong>{spot.title}</strong>
+                  <div>
+                    <strong>{spot.title}</strong>
+                    <p className="mt-0.5 text-xs text-muted">{rangeMetaText(spot.id)}</p>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -1374,7 +1378,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                 Тренировать в GAME
               </button>
               <p className="mt-1 text-center text-xs text-muted">
-                {spot.title} · {spot.hero} · {chartBb}bb. В GAME откроется этот спот и этот рейндж.
+                {spot.title} · {spot.hero} · {chartBb}bb. {rangeMetaText(spot.id)}. В GAME откроется этот спот и этот рейндж.
               </p>
               </div>
               {hideRange ? <StackRail bb={bb} onChange={tuneStack} /> : null}
@@ -1426,7 +1430,7 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               <SpotPills group={group} spot={spot} onGroup={changeGroup} onSpot={changeSpot} />
               <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <strong>Точность · {spot.title}</strong>
+                  <strong>Точность · {spot.title}</strong><span className="ml-2 text-xs text-muted">{rangeMetaText(spot.id)}</span>
                   <p className="text-sm text-muted">
                     Всего {st.overall.total} · верно {st.overall.correct} ·{" "}
                     {st.overall.total ? ((st.overall.correct / st.overall.total) * 100).toFixed(1) : "—"}%

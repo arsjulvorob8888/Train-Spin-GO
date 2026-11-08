@@ -8,6 +8,7 @@ import { drawQuiz, type QuizQ } from "@/lib/spin-drill/quiz-bank";
 import { paintHex, sizeCaption, sizeMark, SIZE_ORDER } from "@/lib/spin-drill/hu-bb-limp";
 import { cellDistance, nearestOpen, stackNote } from "@/lib/spin-drill/stack-ranges";
 import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
+import { rangeMetaText } from "@/lib/spin-drill/range-meta";
 import { readLive } from "@/lib/spin-drill/live-strategy";
 import { GROUPS, SPOTS, spotsIn, type SpotDef, type SpotGroup } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
@@ -1186,6 +1187,7 @@ function Sapper({
           <span className="mt-1 block font-mono text-sm opacity-60">пробел</span>
         </button>
       ) : null}
+      <div className="mb-2 text-xs text-muted">{rangeMetaText(spot.id)}</div>
       <div className="flex items-stretch gap-2 select-none">
       <div className="relative min-w-0 flex-1">
       <div className={cn("grid grid-cols-13 gap-px select-none", live && !paused && tick === 1 && freeze === 0 && "range-urgent", (phase === "wave" || peek) && "range-flash range-peek", (!live || paused) && phase !== "time" && "range-live")}>
@@ -1292,7 +1294,7 @@ function Sapper({
             {quiz.reason === "strike" ? (
               <div className="mt-4">
                 <p className="text-lg">
-                  {spot.title}. Сейчас {bb}bb, это тот же спот на {rewardBb}bb.
+                  {spot.title}. {rangeMetaText(spot.id)}. Сейчас {bb}bb, это тот же спот на {rewardBb}bb.
                 </p>
                 <p className="mt-1 text-sm text-muted">Обводка — действие другое, чем на твоём стеке. {stackNote(rewardBb)}</p>
                 <div className="relative mt-3">

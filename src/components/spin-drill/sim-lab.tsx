@@ -2,7 +2,8 @@
 
 import { MixGrid } from "@/components/spin-drill/mix-grid";
 import { primary, type MixAction, type MixRange } from "@/lib/spin-drill/mix";
-import { studyPaint, studyRange } from "@/lib/spin-drill/study-range";
+import { studyPaint, studyRange } from "@/lib/spin-drill/study-range"
+import { rangeMetaText } from "@/lib/spin-drill/range-meta";;
 import { addTotals, commonEdge, emptyTotals, fieldRoi, playBatch, PRIZES, thinCurve, type SimTotals } from "@/lib/spin-drill/sim-engine";
 import {
   chartStrategy,
@@ -520,6 +521,7 @@ export function SimLab({
       <section className="rounded-2xl border border-border bg-surface p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h3 className="font-medium">Все рейнджи, {spots.length}</h3>
+          <span className="text-xs text-muted">{rangeMetaText(spotId)}</span>
           <span className="text-xs text-muted">Сейчас открыт один спот для правки. Клик по названию открывает другой. В симуляцию входят все.</span>
         </div>
         <div className="mb-3 flex flex-wrap gap-1.5">
