@@ -1160,7 +1160,11 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
               <div className="mt-3 grid items-start gap-4 lg:grid-cols-[auto_minmax(300px,1fr)]">
                 <div className="flex w-full max-w-[440px] items-stretch gap-2 select-none">
                   <div className="min-w-0 flex-1">
-                    <MixGrid compact range={range} paint={paint} bb={chartBb} selected={selected} onPick={setSelected} />
+                    {spot.unsolved ? (
+                      <p className="rounded-xl border border-border bg-surface-2 p-4 text-sm">Нет чарта солвера для этой линии. Кнопки выше — легальные действия, частоты не показаны.</p>
+                    ) : (
+                      <MixGrid compact range={range} paint={paint} bb={chartBb} selected={selected} onPick={setSelected} />
+                    )}
                   </div>
                   <StackRail bb={bb} onChange={tuneStack} />
                 </div>
@@ -1176,7 +1180,9 @@ export function SpinApp({ tab, pane, mode }: { tab: Tab; pane: AppPane; mode: "s
                 <p className="mt-2 text-sm text-muted">Постфлоп без блефа: воздух чек, пара и сильнее — ставка, если пот-оддс не велят сбрасывать.</p>
               ) : null}
               <p className="mt-2 text-sm text-muted">
-                {SPOT_CHART[spot.id]
+                {SPOT_CHART[spot.id]?.missing
+                  ? SPOT_CHART[spot.id]!.note
+                  : SPOT_CHART[spot.id]
                   ? `${SPOT_CHART[spot.id]!.exact ? "Свой чарт" : "Ближайший чарт"} «${SPOT_CHART[spot.id]!.chart}». ${SPOT_CHART[spot.id]!.note}`
                   : spot.id === "hu_bb_limp"
                   ? "BB против лимпа SB. Один цвет — действие с наибольшей долей. Цифра на клетке — размер рейза, он меняется вместе со стеком."

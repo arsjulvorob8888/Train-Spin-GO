@@ -56,6 +56,8 @@ export type SpotDef = {
   actions: MixAction[];
   labels: Record<MixAction, string>;
   range: MixRange;
+  /** True when no solved range exists. The grid must not be shown as a strategy. */
+  unsolved?: boolean;
 };
 
 export const SEAT_NAME: Record<HeroSeat, string> = {
@@ -462,6 +464,27 @@ export const SPOTS: SpotDef[] = [
     range: RANGE_BB_VS_RESHOVE,
   },
   {
+    id: "bb_vs_sb_3bet",
+    group: "BB",
+    hero: "BB",
+    title: "BB vs SB 3-bet",
+    detail: "BTN рейз · SB 3-бет не олл-ин",
+    line: "BTN Raise · SB 3-bet",
+    vs: "SB 3-bet",
+    players: 3,
+    steps: [
+      { label: "BTN", did: "Raise", kind: "acted" },
+      { label: "SB", did: "3-bet", kind: "acted" },
+      { label: "вы · BB", did: "ваш ход", kind: "hero" },
+    ],
+    story:
+      "Баттон открыл, малый блайнд сделал 3-бет меньше олл-ина. Отдельного чарта солвера на этот ответ большого блайнда нет: кнопки только легальные действия, частоты не показаны.",
+    actions: FOUR,
+    labels: L({ call: "Call", raise: "Raise 8", allin: "All-in 15" }),
+    range: {},
+    unsolved: true,
+  },
+  {
     id: "hu_sb",
     group: "HU",
     hero: "SB",
@@ -621,7 +644,9 @@ export const SPOTS: SpotDef[] = [
 
 export const GROUPS: SpotGroup[] = ["BTN", "SB", "BB", "HU"];
 
-for (const spot of SPOTS) spot.range = solidRange(spot.range, spot.actions);
+for (const spot of SPOTS) {
+  if (!spot.unsolved) spot.range = solidRange(spot.range, spot.actions);
+}
 
 function solidRange(range: MixRange, actions: MixAction[]): MixRange {
   const out: MixRange = {};
@@ -647,7 +672,7 @@ export function findSpot(id: string): SpotDef {
 }
 
 /** Non-standard lines. exact=false means Strategy shows the nearest real chart, not a made-up mix. */
-export const SPOT_CHART: Record<string, { exact: boolean; chart: string; note: string }> = {
+export const SPOT_CHART: Record<string, { exact: boolean; chart: string; note: string; missing?: boolean }> = {
   btn_vs_3bet: {
     exact: true,
     chart: "BTN vs 3-bet",
@@ -682,6 +707,12 @@ export const SPOT_CHART: Record<string, { exact: boolean; chart: string; note: s
     exact: true,
     chart: "bb_vs_btn_raise_sb_jam",
     note: "Свой чарт решова: BTN 2bb, SB олл-ин поверх. Только фолд или колл. Баттон ещё может войти.",
+  },
+  bb_vs_sb_3bet: {
+    exact: false,
+    missing: true,
+    chart: "",
+    note: "Нет чарта солвера для этой линии. BTN открыл, SB 3-бетнул не олл-ином. Частоты не показаны.",
   },
   bb_vs_limp_call: {
     exact: false,
