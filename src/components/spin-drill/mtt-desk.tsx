@@ -6,6 +6,7 @@ import { analyzeDraws, evaluateBest } from "@/lib/poker/evaluate";
 import { ALL } from "@/lib/spin-drill/legacy-ranges";
 import { continuePct, type MixAction } from "@/lib/spin-drill/mix";
 import { actionWord, spotsOf, type MttPack } from "@/lib/mtt/charts";
+import { legalOffers, type Offer } from "@/lib/spin-drill/action-menu";
 import { bluffLine, chartOpenSize, chartThreeSize, nashLine, playAction, pricedAction, resolveLive, SEATS, sizeLine, DEFAULT_ANTE, withAnte, type LiveNode, type MttSeat } from "@/lib/mtt/live";
 import { MTT_SPOTS, findMttSpot, seatLabel, type MttSpotDef } from "@/lib/mtt/spots";
 import { playBluffSting, playDrawSting, playHandSting } from "@/components/spin-drill/equity-desk";
@@ -523,7 +524,7 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
 
   for (const seat of SEATS.slice(0, idx)) {
     const facing = Boolean(opener);
-    const actions = facing ? faceBtns(depth) : openBtns(seat, depth);
+    const actions = facing ? faceBtns(depth, seat) : openBtns(seat, depth);
     const selected = pick[`pre:${seat}`] ?? "";
     cols.push({ key: `pre:${seat}`, seat, hero: false, title: seat === "UTG1" ? "UTG+1" : seat, chips: trim(stacks[seat]), actions, selected, wanted: "" });
     if (!selected) return stop(null, null, "pending");
@@ -580,7 +581,7 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
         hero: false,
         title: seat === "UTG1" ? "UTG+1" : seat,
         chips: trim(stacks[seat]),
-        actions: aggressor ? jamBtns(depth) : faceBtns(depth),
+        actions: aggressor ? jamBtns(depth, seat) : faceBtns(depth, seat),
         selected,
         wanted: "",
       });
@@ -612,7 +613,7 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
       hero: true,
       title: "Вы · на 3-бет",
       chips: trim(stacks[hero]),
-      actions: jamBtns(depth),
+      actions: jamBtns(depth, hero),
       selected: back,
       wanted: backAdvice ? asAct(backAdvice, "three") : "",
     });
@@ -623,7 +624,7 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
 
   if (opener && (heroSelected === "3bet" || heroSelected === "allin")) {
     const selected = pick[`ans:${opener}`] ?? "";
-    cols.push({ key: `ans:${opener}`, seat: opener, hero: false, title: `${opener} · на 3-бет`, chips: trim(stacks[opener]), actions: jamBtns(depth), selected, wanted: "" });
+    cols.push({ key: `ans:${opener}`, seat: opener, hero: false, title: `${opener} · на 3-бет`, chips: trim(stacks[opener]), actions: jamBtns(depth, opener), selected, wanted: "" });
     if (!selected) return stop(node, advice, "pending");
     if (selected === "fold") return stop(node, advice, "win");
     return stop(node, advice, "flop");
@@ -632,33 +633,82 @@ function buildLine(pack: MttPack, spots: ReturnType<typeof spotsOf>, depth: numb
   return stop(node, advice, "flop");
 }
 
+function postedBlind(seat: MttSeat): number {
+  if (seat === "SB") return 0.5;
+  if (seat === "BB") return 1;
+  return 0;
+}
+
+function fromOffers(offers: Offer[], kind: "open" | "face", table: number): Btn[] {
+  return offers.map((offer) => {
+    if (offer.id === "allin") return { id: "allin" as Act, label: `All-in ${table}` };
+    if (offer.id === "raise") return { id: (kind === "open" ? "raise" : "3bet") as Act, label: offer.label };
+    if (offer.id === "limp") return { id: "limp" as Act, label: "Limp" };
+    if (offer.id === "check" || offer.id === "call") return { id: "call" as Act, label: offer.id === "check" ? "Check" : "Call" };
+    return { id: "fold" as Act, label: "Fold" };
+  });
+}
+
 function openBtns(seat: MttSeat, stack: number): Btn[] {
-  const jam = { id: "allin" as Act, label: `All-in ${stack}` };
-  if (seat === "SB") return [{ id: "fold", label: "Fold" }, { id: "limp", label: "Limp" }, { id: "raise", label: "Raise" }, jam];
-  return [{ id: "fold", label: "Fold" }, { id: "raise", label: "Raise" }, jam];
+  const posted = postedBlind(seat);
+  return fromOffers(
+    legalOffers({
+      stack: Math.max(0, stack - posted),
+      posted,
+      betTo: 1,
+      lastRaise: 1,
+      preferTo: seat === "SB" ? Math.max(2, chartOpenSize(stack)) : chartOpenSize(stack),
+      canLimp: seat === "SB",
+      canCheck: seat === "BB",
+    }),
+    "open",
+    stack,
+  );
 }
 
-function faceBtns(stack: number): Btn[] {
-  return [
-    { id: "fold", label: "Fold" },
-    { id: "call", label: "Call" },
-    { id: "3bet", label: "3-bet" },
-    { id: "allin", label: `All-in ${stack}` },
-  ];
+function faceBtns(stack: number, seat: MttSeat): Btn[] {
+  const posted = postedBlind(seat);
+  const open = chartOpenSize(stack);
+  return fromOffers(
+    legalOffers({
+      stack: Math.max(0, stack - posted),
+      posted,
+      betTo: open,
+      lastRaise: Math.max(1, open - 1),
+      preferTo: chartThreeSize(stack),
+    }),
+    "face",
+    stack,
+  );
 }
 
-function jamBtns(stack: number): Btn[] {
-  return [
-    { id: "fold", label: "Fold" },
-    { id: "call", label: "Call" },
-    { id: "allin", label: `All-in ${stack}` },
-  ];
+function jamBtns(stack: number, seat: MttSeat): Btn[] {
+  const posted = postedBlind(seat);
+  const open = chartOpenSize(stack);
+  const three = chartThreeSize(stack);
+  return fromOffers(
+    legalOffers({
+      stack: Math.max(0, stack - Math.max(posted, open)),
+      posted: Math.max(posted, open),
+      betTo: three,
+      lastRaise: Math.max(1, three - open),
+      preferTo: Math.round(three * 22) / 10,
+    }),
+    "face",
+    stack,
+  );
 }
 
 function heroBtns(hero: MttSeat, stack: number, facing: string): Btn[] {
-  if (facing === "three") return jamBtns(stack);
-  if (facing === "limp") return [{ id: "call", label: "Check" }, { id: "raise", label: "Raise" }, { id: "allin", label: `All-in ${stack}` }];
-  if (facing === "raise") return faceBtns(stack);
+  if (facing === "three") return jamBtns(stack, hero);
+  if (facing === "limp") {
+    return fromOffers(
+      legalOffers({ stack: Math.max(0, stack - 1), posted: 1, betTo: 1, lastRaise: 1, preferTo: 4, canCheck: true }),
+      "open",
+      stack,
+    );
+  }
+  if (facing === "raise") return faceBtns(stack, hero);
   return openBtns(hero, stack);
 }
 

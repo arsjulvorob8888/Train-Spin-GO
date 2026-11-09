@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { legalOffers, raiseToOf, sbFacingBtnOpen } from "@/lib/spin-drill/action-menu";
 import type { SpotDef } from "@/lib/spin-drill/spots";
+import { SPOT_CHART } from "@/lib/spin-drill/spots";
 import type { MixAction, MixRange } from "@/lib/spin-drill/mix";
 import { mixOf, primary } from "@/lib/spin-drill/mix";
 import { chartRaiseTo, sizedRaise } from "@/lib/spin-drill/equity-calc";
@@ -59,8 +61,10 @@ export function ActionLine({
     if (spot.group === "SB" || spot.group === "HU") setBbAct("");
     if (spot.group === "BB") setSbAct((prev) => (prev === "fold" && spot.id.startsWith("bb_vs_sb") ? prev : ""));
   }, [spot.id, mine, spot.group]);
-  const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back);
   const { sizeText, setSizeText, shown, board, line, setResult, handNonce, setOut, hero, out, resetHand, archiveHand, result, setPlayed, stacks, openHole, dropBoard, setFacing, setAward } = useHand();
+  const typedOpen = Number(sizeText.replace(",", "."));
+  const openTo = Number.isFinite(typedOpen) && typedOpen > 1 ? typedOpen : (chartRaiseTo(spot.id, bb) ?? 2);
+  const cols = columns(spot, bb, labels, mine, sbAct, bbAct, btnAct, back, openTo);
   const stamped = useRef("");
   useEffect(() => {
     if (!hero || !selected || board.length > 0) return;
@@ -68,6 +72,7 @@ export function ActionLine({
     if (/jam|push|reshove/.test(spot.id) || spot.id === "sb_iso") return;
     const key = `${spot.id}:${spot.hero}:${selected}:${bb}:${hero[0].rank}.${hero[0].suit}.${hero[1].rank}.${hero[1].suit}`;
     if (stamped.current === key) return;
+    if (spot.unsolved || SPOT_CHART[spot.id]?.missing) return;
     const action = playable(spot, primary(mixOf(range, selected)));
     if (!spot.actions.includes(action)) return;
     stamped.current = key;
@@ -474,11 +479,11 @@ function actionMatches(spot: SpotDef, mine: MixAction | "", hand: string, range:
   return wantedAction(spot, hand, range, sizeText, verdict) === mine;
 }
 
-function columns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind): Column[] {
+function columns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, bbAct: Blind, btnAct: Blind, back: Blind, openTo: number): Column[] {
   if (spot.group === "BTN") return btnColumns(spot, bb, labels, mine, sbAct, bbAct);
   if (spot.group === "SB") return sbColumns(spot, bb, labels, mine, btnAct, bbAct, back);
   if (spot.group === "HU") return huColumns(spot, bb, labels, mine, sbAct, bbAct, back, btnAct);
-  return bbColumns(spot, bb, labels, mine, sbAct, btnAct, back);
+  return bbColumns(spot, bb, labels, mine, sbAct, btnAct, back, openTo);
 }
 
 function blindChart(sb: Blind, bb: Blind): string {
@@ -574,7 +579,7 @@ function sbFlop(id: string, mine: MixAction | "", btnAct: Blind, bbAct: Blind, b
   const plan = sbReplies(id, mine);
   if (!plan) return false;
   const pressed = (plan.btn && (btnAct === "3bet" || btnAct === "allin")) || (plan.bb && (bbAct === "3bet" || bbAct === "allin"));
-  if (pressed && mine !== "allin") return back === "call" || back === "allin";
+  if (pressed && mine !== "allin") return back === "call" || back === "allin" || back === "3bet";
   if (plan.btn && btnAct !== "fold" && btnAct !== "call") return false;
   if (plan.bb && bbAct !== "fold" && bbAct !== "call") return false;
   const open = sbOpener(id);
@@ -657,15 +662,38 @@ function sbColumns(spot: SpotDef, stack: number, labels: SpotDef["labels"], mine
       title: "SB · ответ",
       stack: stack - 0.5,
       hero: true,
-      actions: [
-        { label: "Fold", pick: {}, back: "fold" },
-        { label: "Call", pick: {}, back: "call" },
-        { label: `All-in ${stack}`, pick: {}, back: "allin" },
-      ],
-      selected: back === "fold" ? "Fold" : back === "call" ? "Call" : back === "allin" ? `All-in ${stack}` : "",
+      actions: reraiseButtons(stack, 2, sizedRaise("btn_vs_3bet", "Raise 5", stack)),
+      selected: reraiseSelected(back, stack, sizedRaise("btn_vs_3bet", "Raise 5", stack)),
     });
   }
   return cols;
+}
+
+function reraiseButtons(stack: number, openTo: number, threeLabel: string): { label: string; pick: Pick; back: Blind }[] {
+  const threeTo = raiseToOf(threeLabel) ?? 5;
+  const offers = legalOffers({
+    stack: Math.max(0, stack - openTo),
+    posted: openTo,
+    betTo: threeTo,
+    lastRaise: Math.max(1, threeTo - openTo),
+    preferTo: Math.round(threeTo * 22) / 10,
+  });
+  const buttons: { label: string; pick: Pick; back: Blind }[] = [];
+  for (const offer of offers) {
+    if (offer.id === "fold") buttons.push({ label: "Fold", pick: {}, back: "fold" });
+    else if (offer.id === "call") buttons.push({ label: "Call", pick: {}, back: "call" });
+    else if (offer.id === "raise") buttons.push({ label: offer.label, pick: {}, back: "3bet" });
+    else if (offer.id === "allin") buttons.push({ label: `All-in ${stack}`, pick: {}, back: "allin" });
+  }
+  return buttons;
+}
+
+function reraiseSelected(back: Blind, stack: number, threeLabel: string): string {
+  if (back === "fold") return "Fold";
+  if (back === "call") return "Call";
+  if (back === "allin") return `All-in ${stack}`;
+  if (back === "3bet") return reraiseButtons(stack, 2, threeLabel).find((item) => item.back === "3bet")?.label ?? "";
+  return "";
 }
 
 function huBbFlop(mine: MixAction | "", reply: Blind, back: Blind): boolean {
@@ -673,7 +701,7 @@ function huBbFlop(mine: MixAction | "", reply: Blind, back: Blind): boolean {
   if (mine === "allin") return reply === "call";
   if (mine !== "raise") return false;
   if (reply === "call") return true;
-  if (reply === "3bet" || reply === "allin") return back === "call" || back === "allin";
+  if (reply === "3bet" || reply === "allin") return back === "call" || back === "allin" || back === "3bet";
   return false;
 }
 
@@ -682,7 +710,7 @@ function huFlop(mine: MixAction | "", bbAct: Blind, back: Blind, answer: Blind):
   if (mine === "allin") return bbAct === "call";
   if (bbAct === "call") return true;
   if (bbAct !== "3bet" && bbAct !== "allin") return false;
-  if (back === "call") return true;
+  if (back === "call" || back === "3bet") return true;
   if (back === "allin") return answer === "call";
   return false;
 }
@@ -705,7 +733,7 @@ function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
       stack: bb - 0.5,
       hero: heroSb,
       actions: heroSb
-        ? heroButtons(spot, labels)
+        ? heroButtons(spot, labels, bb)
         : [
             { label: "Fold", pick: {}, blind: { seat: "SB", act: "fold" } },
             { label: "Limp", pick: { spot: "hu_bb_limp" } },
@@ -769,12 +797,8 @@ function huColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
       title: "SB · ответ",
       stack: bb - 0.5,
       hero: true,
-      actions: [
-        { label: "Fold", pick: {}, back: "fold" },
-        { label: "Call", pick: {}, back: "call" },
-        { label: `All-in ${bb}`, pick: {}, back: "allin" },
-      ],
-      selected: back === "fold" ? "Fold" : back === "call" ? "Call" : back === "allin" ? `All-in ${bb}` : "",
+      actions: reraiseButtons(bb, 2, threeBet),
+      selected: reraiseSelected(back, bb, threeBet),
     });
     if (back === "allin") {
       cols.push({
@@ -826,6 +850,7 @@ const BB_BTN: { label: string; spot: string; sb: { label: string; spot: string }
     sb: [
       { label: "Fold", spot: "bb_vs_btn_raise" },
       { label: "Call", spot: "bb_squeeze" },
+      { label: "Raise", spot: "bb_vs_sb_3bet" },
       { label: "All-in", spot: "bb_vs_reshove" },
     ],
   },
@@ -842,7 +867,7 @@ const BB_BTN: { label: string; spot: string; sb: { label: string; spot: string }
 function bbVillains(id: string): ("SB" | "BTN")[] {
   if (id === "bb_vs_sb_limp" || id === "bb_vs_sb_raise") return ["SB"];
   if (id === "bb_vs_btn_limp" || id === "bb_vs_btn_raise") return ["BTN"];
-  if (id === "bb_squeeze" || id === "bb_vs_limp_call" || id === "bb_vs_limp_iso") return ["SB", "BTN"];
+  if (id === "bb_squeeze" || id === "bb_vs_limp_call" || id === "bb_vs_limp_iso" || id === "bb_vs_sb_3bet") return ["SB", "BTN"];
   return [];
 }
 
@@ -864,13 +889,20 @@ function bbTook(id: string, mine: MixAction | "", sbAct: Blind, btnAct: Blind): 
   return seats.every((seat) => (seat === "SB" ? sbAct : btnAct) === "fold");
 }
 
-function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, btnAct: Blind, back: Blind): Column[] {
+function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: MixAction | "", sbAct: Blind, btnAct: Blind, back: Blind, openTo: number): Column[] {
   const branch = BB_BTN.find((item) => item.sb.some((leaf) => leaf.spot === spot.id)) ?? BB_BTN[2]!;
-  const leaf = branch.sb.find((item) => item.spot === spot.id) ?? branch.sb[0]!;
+  const facingOpen = sbFacingBtnOpen(bb, branch.label === "Raise 2" ? openTo : 2);
+  const sbLeaves = branch.label === "Raise 2"
+    ? facingOpen.map((item) => ({ label: item.label, spot: item.spot }))
+    : branch.sb;
+  const leaf = sbLeaves.find((item) => item.spot === spot.id) ?? sbLeaves[0]!;
   const dress = (label: string, kind: "btn" | "sb") => {
     if (label === "All-in") return `All-in ${bb}`;
+    if (label.startsWith("All-in")) return label;
+    if (label.startsWith("Raise") && kind === "sb" && branch.label === "Raise 2") return label;
     if (label === "Raise 2") return kind === "sb" ? sizedRaise("sb_fold", "Raise 2.5", bb) : sizedRaise("btn", "Raise 2", bb);
     if (label === "Raise 4") return sizedRaise("bb_vs_limp_iso", "Raise 4", bb);
+    if (label === "Raise") return sizedRaise("sb_raise", "Raise 4", bb);
     return label;
   };
   const cols: Column[] = [
@@ -888,10 +920,22 @@ function bbColumns(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: M
       stack: bb - 0.5,
       actions: [
         ...(branch.label === "Fold" ? [{ label: "Fold", pick: {}, blind: { seat: "SB" as const, act: "fold" as const } }] : []),
-        ...branch.sb.map((item) => ({
-          label: dress(item.label, "sb"),
-          pick: { spot: item.spot },
-        })),
+        ...sbLeaves.flatMap((item) => {
+          const label = dress(item.label, "sb");
+          if (branch.label !== "Raise 2" && label.startsWith("Raise")) {
+            const to = raiseToOf(label);
+            const betTo = branch.label === "Limp" ? 1 : 1;
+            const fits = to != null && legalOffers({
+              stack: bb - 0.5,
+              posted: 0.5,
+              betTo,
+              lastRaise: 1,
+              preferTo: to,
+            }).some((offer) => offer.id === "raise");
+            if (!fits) return [];
+          }
+          return [{ label, pick: { spot: item.spot } }];
+        }),
       ],
       selected: branch.label === "Fold" && sbAct === "fold" ? "Fold" : dress(leaf.label, "sb"),
     },
@@ -926,13 +970,15 @@ function heroColumn(spot: SpotDef, bb: number, labels: SpotDef["labels"], mine: 
     seat: spot.hero,
     stack: spot.hero === "SB" ? bb - 0.5 : spot.hero === "BB" ? bb - 1 : bb,
     hero: true,
-    actions: heroButtons(spot, labels),
+    actions: heroButtons(spot, labels, bb),
     selected: chosen(labels, mine),
   };
 }
 
-function heroButtons(spot: SpotDef, labels: SpotDef["labels"]): { label: string; pick: Pick }[] {
-  return spot.actions.map((action) => ({
+function heroButtons(spot: SpotDef, labels: SpotDef["labels"], bb: number): { label: string; pick: Pick }[] {
+  const raiseTo = raiseToOf(labels.raise ?? "");
+  const actions = spot.actions.filter((action) => action !== "raise" || (raiseTo != null && raiseTo < bb - 0.05));
+  return actions.map((action) => ({
     label: labels[action],
     pick: { mine: action },
   }));
